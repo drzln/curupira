@@ -26,7 +26,7 @@
     "build:shared": "cd shared && npm run build",
     "build:server": "cd mcp-server && npm run build",
     "build:extension": "cd chrome-extension && npm run build",
-    "build:docker": "docker build -t curupira:latest .",
+    "package:extension": "cd chrome-extension && npm run package",
     "docker:build": "docker buildx build --platform linux/amd64,linux/arm64 -t drzzln/curupira:latest .",
     "docker:push": "./scripts/docker-build.sh",
     "build:staging": "NODE_ENV=staging npm run build",
