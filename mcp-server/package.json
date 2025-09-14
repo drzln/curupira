@@ -1,5 +1,5 @@
 {
-  "name": "@curupira/mcp-server",
+  "name": "curupira-mcp-server",
   "version": "1.0.0",
   "description": "Curupira MCP Server - AI debugging for React apps",
   "type": "module",
@@ -23,7 +23,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@curupira/shared": "^1.0.0",
+    "@curupira/shared": "file:../shared",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "fastify": "^4.26.0",
     "@fastify/websocket": "^8.3.1",

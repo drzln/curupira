@@ -51,6 +51,7 @@
   "bugs": {
     "url": "https://github.com/drzln/curupira/issues"
   },
+  "private": true,
   "publishConfig": {
     "access": "public"
   },
