@@ -1,6 +1,6 @@
 {
   "name": "curupira-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Curupira MCP Server - AI debugging for React apps",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,7 +8,9 @@
   "bin": {
     "curupira-mcp": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && chmod +x dist/cli.js",
     "dev": "tsx src/cli.ts dev",
@@ -72,3 +74,4 @@
     "node": ">=20.0.0"
   }
 }
+
