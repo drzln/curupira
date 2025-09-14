@@ -1,6 +1,6 @@
 {
   "name": "curupira",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP Frontend Debugging Tool - AI-powered debugging for React applications",
   "private": false,
   "type": "module",
@@ -20,7 +20,6 @@
     "dev:extension": "cd chrome-extension && npm run dev",
     "dev:shared": "cd shared && npm run dev",
     "dev:docker": "docker-compose up -d && docker-compose logs -f curupira",
-    
     "// Building": "===============================================",
     "build": "tsx build.ts",
     "build:clean": "tsx build.ts --clean",
@@ -29,7 +28,6 @@
     "build:extension": "cd chrome-extension && npm run build",
     "build:docker": "docker build -t curupira:latest .",
     "build:staging": "NODE_ENV=staging npm run build",
-    
     "// Testing": "================================================",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "vitest run",
@@ -38,7 +36,6 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:mcp": "./scripts/test-mcp.sh",
-    
     "// Code Quality": "===========================================",
     "lint": "npm run lint:check -- --fix",
     "lint:check": "eslint . --ext .ts,.tsx,.js,.jsx",
@@ -47,18 +44,15 @@
     "type-check": "tsc --noEmit",
     "quality": "npm run lint:check && npm run format:check && npm run type-check",
     "quality:fix": "npm run lint && npm run format",
-    
     "// Installation & Setup": "====================================",
     "install:all": "npm install && npm run install:workspaces",
     "install:workspaces": "npm install --workspaces",
     "setup": "npm run install:all && npm run build:shared && cp .env.example .env",
     "setup:dev": "npm run setup && npm run chrome:extension:load",
-    
     "// Chrome Extension": "========================================",
     "chrome:dev": "google-chrome --load-extension=./chrome-extension/dist --user-data-dir=/tmp/curupira-dev",
     "chrome:extension:load": "echo 'Load unpacked extension from: chrome-extension/dist'",
     "chrome:inspect": "google-chrome chrome://inspect",
-    
     "// Docker Operations": "=======================================",
     "docker:build": "docker build -t curupira:latest .",
     "docker:run": "docker-compose up -d",
@@ -66,23 +60,19 @@
     "docker:logs": "docker-compose logs -f curupira",
     "docker:shell": "docker-compose exec curupira sh",
     "docker:restart": "npm run docker:stop && npm run docker:run",
-    
     "// Deployment": "==============================================",
     "deploy:staging": "npm run build:staging && npm run docker:build && ./scripts/deploy-staging.sh",
     "deploy:infrastructure:staging": "npx heimdizzy deploy staging",
     "deploy:check": "kubectl -n novaskyn-staging get pods -l app=curupira",
-    
     "// Utilities": "===============================================",
     "clean": "npm run clean:dist && npm run clean:deps",
     "clean:dist": "rm -rf dist */dist *.tsbuildinfo */*.tsbuildinfo",
     "clean:deps": "rm -rf node_modules */node_modules",
     "clean:all": "npm run clean && rm -rf .env coverage",
     "reset": "npm run clean:all && npm run setup:dev",
-    
     "// Documentation": "===========================================",
     "docs:serve": "cd docs && python -m http.server 8000",
     "docs:check": "ls -la docs/",
-    
     "// Publishing": "===============================================",
     "prepublish:check": "npm run quality && npm run test && npm run build",
     "publish:prepare": "npm run prepublish:check",
@@ -125,3 +115,4 @@
     "vitest": "^1.2.0"
   }
 }
+
