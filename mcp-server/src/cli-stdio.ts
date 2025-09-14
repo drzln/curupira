@@ -5,16 +5,31 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/node/stdio.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { WebSocketServer } from 'ws'
 import { createLogger } from '@curupira/shared/logging'
 import { setupMCPHandlers } from './mcp/index.js'
 import type { 
   ConsoleMessage, 
   NetworkRequest, 
-  DOMSnapshot,
-  ComponentState 
+  DOMElement
 } from '@curupira/shared/types'
+
+// Define missing types locally
+interface DOMSnapshot {
+  timestamp: number
+  url: string
+  html: string
+  elements: DOMElement[]
+}
+
+interface ComponentState {
+  componentId: string
+  name: string
+  props: Record<string, any>
+  state: Record<string, any>
+  hooks?: any[]
+}
 
 const logger = createLogger({ level: 'debug', name: 'curupira-mcp' })
 
