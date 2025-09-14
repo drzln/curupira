@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "curupira-local": {
+      "command": "node",
+      "args": ["mcp-server/dist/cli.js", "start"],
+      "env": {
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug",
+        "PORT": "8080",
+        "HOST": "0.0.0.0"
+      }
+    }
+  }
+}
