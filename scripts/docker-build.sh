@@ -4,7 +4,7 @@
 set -e
 
 # Configuration
-DOCKER_REPO="${DOCKER_REPO:-luisatpleme/curupira}"
+DOCKER_REPO="${DOCKER_REPO:-drzzln/curupira}"
 VERSION="${VERSION:-$(node -p "require('./mcp-server/package.json').version")}"
 
 echo "Building Docker image: ${DOCKER_REPO}:${VERSION}"
