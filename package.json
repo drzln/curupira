@@ -56,7 +56,6 @@
     "chrome:extension:load": "echo 'Load unpacked extension from: chrome-extension/dist'",
     "chrome:inspect": "google-chrome chrome://inspect",
     "// Docker Operations": "=======================================",
-    "docker:build": "docker build -t curupira:latest .",
     "docker:run": "docker-compose up -d",
     "docker:stop": "docker-compose down",
     "docker:logs": "docker-compose logs -f curupira",

@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   curupira:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     image: curupira:dev
     container_name: curupira-mcp-server
     ports:
-      - "8080:8080"
+      - '8080:8080'
     environment:
       - NODE_ENV=development
       - CURUPIRA_PORT=8080
@@ -25,7 +25,7 @@ services:
       - /app/mcp-server/node_modules
       - /app/shared/node_modules
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -35,24 +35,24 @@ services:
     restart: unless-stopped
 
   # Optional: Chrome with pre-loaded extension for testing
-  chrome:
-    image: selenium/standalone-chrome:latest
-    container_name: curupira-chrome-test
-    ports:
-      - "4444:4444"
-      - "7900:7900"  # VNC port for viewing
-      - "5900:5900"  # noVNC web interface
-    environment:
-      - SE_NODE_MAX_SESSIONS=1
-      - SE_VNC_VIEW_ONLY=0
-      - SE_SCREEN_WIDTH=1920
-      - SE_SCREEN_HEIGHT=1080
-    volumes:
-      - ./chrome-extension/dist:/home/seluser/extension:ro
-    networks:
-      - curupira-net
-    profiles:
-      - testing
+  # chrome:
+  #   image: selenium/standalone-chrome:latest
+  #   container_name: curupira-chrome-test
+  #   ports:
+  #     - '4444:4444'
+  #     - '7900:7900' # VNC port for viewing
+  #     - '5900:5900' # noVNC web interface
+  #   environment:
+  #     - SE_NODE_MAX_SESSIONS=1
+  #     - SE_VNC_VIEW_ONLY=0
+  #     - SE_SCREEN_WIDTH=1920
+  #     - SE_SCREEN_HEIGHT=1080
+  #   volumes:
+  #     - ./chrome-extension/dist:/home/seluser/extension:ro
+  #   networks:
+  #     - curupira-net
+  #   profiles:
+  #     - testing
 
 networks:
   curupira-net:
@@ -60,3 +60,4 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+
