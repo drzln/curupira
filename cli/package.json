@@ -23,7 +23,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc --noEmit",
     "clean": "rimraf dist",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "echo 'Skipping build for private package'"
   },
   "dependencies": {
     "@curupira/shared": "^1.0.0",
