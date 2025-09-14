@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react(), crx({ manifest })],
   resolve: {
     alias: {
-      '@curupira/shared': path.resolve(__dirname, '../shared/src'),
+      '@curupira/shared': path.resolve(__dirname, '../shared/src/browser.ts'),
     },
   },
   build: {
