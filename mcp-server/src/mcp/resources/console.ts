@@ -1,18 +1,17 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { CircularBuffer } from '@curupira/shared'
+import type { ConsoleMessage } from '@curupira/shared/types'
 import { logger } from '../../config/logger.js'
 
-// Console log resource type
-interface ConsoleLogResource {
-  timestamp: number
-  level: string
-  message: string
-  args?: unknown[]
-  stackTrace?: string
+// Access browser state from global
+declare global {
+  var curupiraBrowserState: {
+    consoleLogs: ConsoleMessage[]
+    networkRequests: any[]
+    domSnapshot: any
+    componentStates: Map<string, any>
+  }
 }
-
-const consoleBuffer = new CircularBuffer<ConsoleLogResource>(1000)
 
 export function setupConsoleResource(server: Server) {
   // List available console resources
@@ -42,7 +41,8 @@ export function setupConsoleResource(server: Server) {
     const level = url.searchParams.get('level')
     const limit = parseInt(url.searchParams.get('limit') || '100', 10)
 
-    let logs = consoleBuffer.getAll()
+    // Get logs from browser state
+    let logs = global.curupiraBrowserState?.consoleLogs || []
 
     // Filter by level if specified
     if (level) {
@@ -64,10 +64,4 @@ export function setupConsoleResource(server: Server) {
       ],
     }
   })
-}
-
-// Export function to add logs (called from Chrome extension)
-export function addConsoleLog(log: ConsoleLogResource) {
-  consoleBuffer.push(log)
-  logger.debug({ level: log.level }, 'Added console log')
 }
