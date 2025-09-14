@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+*/dist/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Chrome extension
+chrome-extension/dist/
+*.crx
+*.pem
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Docker
+.dockerignore
+
+# Secrets and sensitive files
+*.pem
+*.key
+*.cert
+*.p12
+secrets/
+.secrets/
+
+# Build artifacts
+build/
+out/
+
+# Local configuration
+*.local
+.env.*
+!.env.example
+
+# Editor directories
+*.sublime-*
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+
+# Debugging
+debug.log
+*.stackdump
+
+# Package manager locks (optional - uncomment if not tracking)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

@@ -1,0 +1,53 @@
+# Documentation
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+
+# Chrome extension (separate distribution)
+chrome-extension/
+
+# E2E tests
+e2e/
+
+# Integration tests
+integration/
+
+# Auth module (not published separately)
+auth/
+
+# Kubernetes configs
+k8s/
+
+# Scripts
+scripts/
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+
+# CI/CD
+.github/
+
+# Config files
+heimdizzy.yml
+curupira.yml
+
+# Development files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test coverage
+coverage/

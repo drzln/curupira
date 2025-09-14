@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  curupira:
+    image: drzln/curupira:latest
+    container_name: curupira-mcp-server
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - CURUPIRA_PORT=8080
+      - CURUPIRA_HOST=0.0.0.0
+      - CURUPIRA_LOG_LEVEL=info
+      - CURUPIRA_WS_URL=ws://localhost:8080/mcp
+      - CURUPIRA_AUTH_ENABLED=false
+      - CURUPIRA_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      - CURUPIRA_RATE_LIMIT_MAX=100
+      - CURUPIRA_RATE_LIMIT_WINDOW=60000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - curupira-network
+
+networks:
+  curupira-network:
+    driver: bridge

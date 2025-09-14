@@ -1,0 +1,36 @@
+{
+  "name": "@curupira/integration",
+  "version": "1.0.0",
+  "description": "Curupira integration layer - WebSocket management, CDP, messaging, and storage",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@curupira/shared": "file:../shared",
+    "chrome-remote-interface": "^0.33.0",
+    "eventemitter3": "^5.0.1",
+    "p-queue": "^8.0.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/chrome-remote-interface": "^0.31.13",
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}

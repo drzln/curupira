@@ -1,0 +1,74 @@
+{
+  "name": "@curupira/mcp-server",
+  "version": "1.0.0",
+  "description": "Curupira MCP Server - AI debugging for React apps",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "curupira-mcp": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc && chmod +x dist/cli.js",
+    "dev": "tsx src/cli.ts dev",
+    "start": "node dist/cli.js start",
+    "test": "vitest",
+    "test:watch": "vitest watch",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "cli": "tsx src/cli.ts",
+    "cli:dev": "tsx src/cli.ts dev",
+    "cli:start": "tsx src/cli.ts start",
+    "cli:health": "tsx src/cli.ts health",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@curupira/shared": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "fastify": "^4.26.0",
+    "@fastify/websocket": "^8.3.1",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/helmet": "^11.1.1",
+    "ws": "^8.16.0",
+    "chrome-remote-interface": "^0.33.0",
+    "devtools-protocol": "^0.0.1260888",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "zod": "^3.22.4",
+    "dotenv": "^16.4.1",
+    "commander": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "@types/chrome-remote-interface": "^0.31.11",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "debugging",
+    "react",
+    "ai",
+    "websocket"
+  ],
+  "author": "Nexus Team",
+  "license": "MIT",
+  "homepage": "https://github.com/drzln/curupira#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drzln/curupira.git"
+  },
+  "bugs": {
+    "url": "https://github.com/drzln/curupira/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,317 @@
+# Curupira MCP Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: curupira-mcp-server
+  namespace: tools
+  labels:
+    app: curupira
+    component: mcp-server
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: curupira
+      component: mcp-server
+  template:
+    metadata:
+      labels:
+        app: curupira
+        component: mcp-server
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: curupira
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: mcp-server
+        image: curupira/mcp-server:v1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        - name: websocket
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 3001
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: PORT
+          value: "3000"
+        - name: WEBSOCKET_PORT
+          value: "8080"
+        - name: METRICS_PORT
+          value: "3001"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: curupira-secrets
+              key: redis-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: curupira-secrets
+              key: jwt-secret
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: curupira-config
+              key: cors-origins
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: temp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: curupira-config
+      - name: temp
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "tools"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: curupira-mcp-server
+  namespace: tools
+  labels:
+    app: curupira
+    component: mcp-server
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: websocket
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: curupira
+    component: mcp-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: curupira-mcp-server-metrics
+  namespace: tools
+  labels:
+    app: curupira
+    component: mcp-server
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 3001
+    targetPort: 3001
+    protocol: TCP
+  selector:
+    app: curupira
+    component: mcp-server
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: curupira-config
+  namespace: tools
+  labels:
+    app: curupira
+data:
+  cors-origins: "https://localhost:3000,https://staging.plo.quero.local,https://novaskyn.com"
+  rate-limit-max: "1000"
+  rate-limit-window: "900000"
+  websocket-heartbeat: "30000"
+  max-connections: "1000"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: curupira-secrets
+  namespace: tools
+  labels:
+    app: curupira
+type: Opaque
+stringData:
+  redis-url: "redis://redis:6379"
+  jwt-secret: "your-jwt-secret-here"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: curupira
+  namespace: tools
+  labels:
+    app: curupira
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: curupira-network-policy
+  namespace: tools
+spec:
+  podSelector:
+    matchLabels:
+      app: curupira
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app: curupira
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 3001
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: curupira-pdb
+  namespace: tools
+  labels:
+    app: curupira
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: curupira
+      component: mcp-server
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: curupira-hpa
+  namespace: tools
+  labels:
+    app: curupira
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: curupira-mcp-server
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60

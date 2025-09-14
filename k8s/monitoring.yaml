@@ -1,0 +1,387 @@
+# Curupira Monitoring Configuration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: curupira-metrics
+  namespace: tools
+  labels:
+    app: curupira
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: curupira
+      component: mcp-server
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: curupira-alerts
+  namespace: tools
+  labels:
+    app: curupira
+    component: monitoring
+spec:
+  groups:
+  - name: curupira-mcp-server
+    rules:
+    - alert: CurupiraMCPServerDown
+      expr: up{job="curupira-mcp-server"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Curupira MCP Server is down"
+        description: "Curupira MCP Server has been down for more than 1 minute"
+    
+    - alert: CurupiraHighErrorRate
+      expr: |
+        (
+          rate(curupira_http_requests_total{status=~"5.."}[5m]) /
+          rate(curupira_http_requests_total[5m])
+        ) * 100 > 5
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate in Curupira MCP Server"
+        description: "Error rate is {{ $value }}% over the last 5 minutes"
+    
+    - alert: CurupiraHighLatency
+      expr: |
+        histogram_quantile(0.95,
+          rate(curupira_http_request_duration_seconds_bucket[5m])
+        ) > 0.5
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High latency in Curupira MCP Server"
+        description: "95th percentile latency is {{ $value }}s over the last 5 minutes"
+    
+    - alert: CurupiraHighMemoryUsage
+      expr: |
+        (
+          container_memory_usage_bytes{pod=~"curupira-mcp-server-.*"} /
+          container_spec_memory_limit_bytes{pod=~"curupira-mcp-server-.*"}
+        ) * 100 > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage in Curupira MCP Server"
+        description: "Memory usage is {{ $value }}% of limit"
+    
+    - alert: CurupiraWebSocketConnectionsHigh
+      expr: curupira_websocket_connections > 800
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High WebSocket connections in Curupira"
+        description: "WebSocket connections: {{ $value }} (threshold: 800)"
+    
+    - alert: CurupiraDebugSessionsHigh
+      expr: curupira_debug_sessions_active > 50
+      for: 5m
+      labels:
+        severity: info
+      annotations:
+        summary: "High number of active debug sessions"
+        description: "Active debug sessions: {{ $value }} (threshold: 50)"
+
+  - name: curupira-performance
+    rules:
+    - alert: CurupiraSlowTimeTravel
+      expr: |
+        histogram_quantile(0.95,
+          rate(curupira_time_travel_operation_duration_seconds_bucket[5m])
+        ) > 2.0
+      for: 3m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Slow time-travel operations in Curupira"
+        description: "95th percentile time-travel operation time is {{ $value }}s"
+    
+    - alert: CurupiraSnapshotStorageHigh
+      expr: curupira_snapshots_storage_bytes > 1073741824 # 1GB
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High snapshot storage usage"
+        description: "Snapshot storage usage: {{ $value | humanizeBytes }}"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-curupira-dashboard
+  namespace: monitoring
+  labels:
+    app: grafana
+    component: dashboard
+data:
+  curupira-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Curupira MCP Debugging",
+        "tags": ["curupira", "debugging", "mcp"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(curupira_http_requests_total[5m])",
+                "legendFormat": "{{ method }} {{ status }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, rate(curupira_http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "50th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.95, rate(curupira_http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.99, rate(curupira_http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "99th percentile"
+              }
+            ],
+            "yAxes": [
+              {
+                "unit": "s"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 8,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "WebSocket Connections",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "curupira_websocket_connections",
+                "legendFormat": "Active Connections"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 500
+                    },
+                    {
+                      "color": "red",
+                      "value": 800
+                    }
+                  ]
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 8,
+              "x": 16,
+              "y": 0
+            }
+          },
+          {
+            "id": 4,
+            "title": "Debug Sessions",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "curupira_debug_sessions_active",
+                "legendFormat": "Active Sessions"
+              },
+              {
+                "expr": "curupira_debug_sessions_total",
+                "legendFormat": "Total Sessions"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 5,
+            "title": "Time Travel Operations",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(curupira_time_travel_operations_total[5m])",
+                "legendFormat": "{{ operation }}"
+              }
+            ],
+            "yAxes": [
+              {
+                "unit": "ops"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "id": 6,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{pod=~\"curupira-mcp-server-.*\"}",
+                "legendFormat": "{{ pod }}"
+              }
+            ],
+            "yAxes": [
+              {
+                "unit": "bytes"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "id": 7,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\"curupira-mcp-server-.*\"}[5m]) * 100",
+                "legendFormat": "{{ pod }}"
+              }
+            ],
+            "yAxes": [
+              {
+                "unit": "percent"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 16
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+
+---
+apiVersion: logging.coreos.com/v1
+kind: ClusterLogForwarder
+metadata:
+  name: curupira-logs
+  namespace: openshift-logging
+spec:
+  outputs:
+  - name: curupira-es
+    type: elasticsearch
+    url: http://elasticsearch:9200
+    elasticsearch:
+      index: curupira-logs-{+yyyy.MM.dd}
+  pipelines:
+  - name: curupira-logs
+    inputRefs:
+    - application
+    filterRefs:
+    - curupira-filter
+    outputRefs:
+    - curupira-es
+
+---
+apiVersion: logging.coreos.com/v1
+kind: ClusterLogForwarder
+metadata:
+  name: curupira-log-filter
+  namespace: openshift-logging
+spec:
+  filters:
+  - name: curupira-filter
+    type: json
+    json:
+      javascript: |
+        const log = record.log;
+        if (log && log.kubernetes && log.kubernetes.labels) {
+          const labels = log.kubernetes.labels;
+          if (labels.app === "curupira") {
+            // Add custom fields for Curupira logs
+            log.curupira = {
+              component: labels.component,
+              version: labels.version,
+              environment: process.env.NODE_ENV || 'development'
+            };
+            
+            // Parse structured logs
+            if (typeof log.message === 'string') {
+              try {
+                const parsed = JSON.parse(log.message);
+                log.structured = parsed;
+              } catch (e) {
+                // Keep as string if not JSON
+              }
+            }
+          }
+        }
+        return log;

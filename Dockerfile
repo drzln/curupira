@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1
+# Multi-stage Dockerfile for Curupira MCP Server
+# Optimized for production deployment to Docker Hub
+
+# Build stage
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ git
+
+WORKDIR /app
+
+# Copy package files for better caching
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY shared/package*.json ./shared/
+COPY mcp-server/package*.json ./mcp-server/
+
+# Install all dependencies
+RUN npm ci --workspaces
+
+# Copy source code
+COPY shared/ ./shared/
+COPY mcp-server/ ./mcp-server/
+
+# Build shared and server packages
+RUN npm run build:shared && npm run build:server
+
+# Production stage
+FROM --platform=$TARGETPLATFORM node:20-alpine AS production
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+WORKDIR /app
+
+# Copy package files
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/shared/package*.json ./shared/
+COPY --from=builder /app/mcp-server/package*.json ./mcp-server/
+
+# Install production dependencies only
+RUN npm ci --workspaces --omit=dev && \
+    npm cache clean --force
+
+# Copy built files
+COPY --from=builder --chown=nodejs:nodejs /app/shared/dist ./shared/dist
+COPY --from=builder --chown=nodejs:nodejs /app/mcp-server/dist ./mcp-server/dist
+
+# Switch to non-root user
+USER nodejs
+
+# Expose MCP server port
+EXPOSE 8080
+
+# Set production environment
+ENV NODE_ENV=production
+ENV CURUPIRA_PORT=8080
+ENV CURUPIRA_HOST=0.0.0.0
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:8080/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
+
+# Metadata
+LABEL org.opencontainers.image.source="https://github.com/drzln/curupira"
+LABEL org.opencontainers.image.description="Curupira MCP Server - AI-powered debugging for React applications"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "mcp-server/dist/cli.js", "start"]
