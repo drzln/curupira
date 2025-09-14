@@ -126,7 +126,11 @@ export class CurupiraServer {
       name: 'curupira',
       version: '1.0.0',
       protocol: 'mcp',
-      capabilities: this.mcpServer.capabilities,
+      capabilities: {
+        resources: true,
+        tools: true,
+        prompts: true,
+      },
     }))
   }
 
@@ -135,12 +139,17 @@ export class CurupiraServer {
       fastify.get('/mcp', { websocket: true }, (socket, request) => {
         logger.info({ ip: request.ip }, 'WebSocket connection established')
 
-        const transport = new WebSocketTransport(socket)
+        const transport = new WebSocketTransport(socket as any)
         
         // Connect MCP server to transport
         this.mcpServer.connect(transport).catch((error) => {
           logger.error({ error }, 'Failed to connect MCP server')
-          socket.close()
+          // Close the socket if available
+          if ('close' in socket && typeof socket.close === 'function') {
+            socket.close()
+          } else if ('end' in socket && typeof socket.end === 'function') {
+            (socket as any).end()
+          }
         })
 
         socket.on('error', (error) => {

@@ -11,9 +11,9 @@ import { createServerBuilder, createDevServer, createProductionServer } from './
 import { loadConfig } from '@curupira/shared/config'
 import { createLogger } from '@curupira/shared/logging'
 import type { LogLevel } from '@curupira/shared/config'
-import type { Server } from './server/types.js'
+import type { CurupiraServer } from './server/server.js'
 
-const logger = createLogger({ name: 'cli' })
+const logger = createLogger({ level: 'info', name: 'cli' })
 
 /**
  * Parse log level string
@@ -55,7 +55,7 @@ program
     try {
       logger.info({ options }, 'Starting Curupira MCP server')
 
-      let server: Server
+      let server: CurupiraServer
 
       // Load config from file if provided
       if (options.config) {

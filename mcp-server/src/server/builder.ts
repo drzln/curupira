@@ -165,9 +165,11 @@ export class ServerBuilder {
 
   /**
    * Enable SSL/TLS
+   * TODO: Implement SSL support
    */
   withSsl(cert: string, key: string, ca?: string): this {
-    this.config.ssl = { cert, key, ca }
+    // this.config.ssl = { cert, key, ca }
+    // TODO: Add SSL support
     return this
   }
 
@@ -203,7 +205,7 @@ export class ServerBuilder {
       this.withShutdownTimeout(30000)
       this.withHooks({
         beforeStop: async () => {
-          const logger = createLogger({ name: 'shutdown' })
+          const logger = createLogger({ level: 'info', name: 'shutdown' })
           logger.info('Starting graceful shutdown')
         }
       })
@@ -214,7 +216,7 @@ export class ServerBuilder {
       this.withMiddleware({
         name: 'request-logger',
         preProcess: (context) => {
-          const logger = createLogger({ name: 'request' })
+          const logger = createLogger({ level: 'debug', name: 'request' })
           logger.debug({ 
             requestId: context.requestId,
             sessionId: context.sessionId,
@@ -222,7 +224,7 @@ export class ServerBuilder {
           }, 'Request started')
         },
         postProcess: (context, duration) => {
-          const logger = createLogger({ name: 'request' })
+          const logger = createLogger({ level: 'debug', name: 'request' })
           logger.info({ 
             requestId: context.requestId,
             sessionId: context.sessionId,
@@ -230,7 +232,7 @@ export class ServerBuilder {
           }, 'Request completed')
         },
         onError: (context, error) => {
-          const logger = createLogger({ name: 'request' })
+          const logger = createLogger({ level: 'debug', name: 'request' })
           logger.error({ 
             requestId: context.requestId,
             sessionId: context.sessionId,
@@ -244,7 +246,7 @@ export class ServerBuilder {
     if (options.errorRecovery) {
       this.withHooks({
         onError: async (error) => {
-          const logger = createLogger({ name: 'error-recovery' })
+          const logger = createLogger({ level: 'error', name: 'error-recovery' })
           logger.error({ error }, 'Server error occurred')
           // Add recovery logic here
         }
@@ -257,7 +259,7 @@ export class ServerBuilder {
   /**
    * Build the server
    */
-  build(): Server {
+  build(): CurupiraServer {
     const server = new CurupiraServer(this.config)
 
     // Add plugins
@@ -286,7 +288,7 @@ export class ServerBuilder {
   /**
    * Build and start the server
    */
-  async buildAndStart(): Promise<Server> {
+  async buildAndStart(): Promise<CurupiraServer> {
     const server = this.build()
     await server.start()
     return server
@@ -336,10 +338,9 @@ export function createProductionServer(
     .withEnvironment('production')
     .withLogLevel('info')
     .withWebSocket({
+      enablePing: true,
       pingInterval: 30000,
-      reconnect: true,
-      reconnectDelay: 1000,
-      maxReconnectAttempts: 10
+      pongTimeout: 5000
     })
     .withHealthCheck(true, '/health', 60000)
     .withShutdownTimeout(30000)

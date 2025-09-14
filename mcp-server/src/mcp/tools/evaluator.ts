@@ -1,5 +1,5 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import type { EvaluateParams } from '@curupira/shared'
+import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
 
 // Store active evaluation sessions
@@ -7,8 +7,7 @@ const evaluationSessions = new Map<string, any>()
 
 export function setupEvalTool(server: Server) {
   // List available tools
-  server.setRequestHandler('tools/list', async (request) => {
-    if (request.method !== 'tools/list') return
+  server.setRequestHandler(ListToolsRequestSchema, async (request) => {
 
     return {
       tools: [
@@ -36,15 +35,19 @@ export function setupEvalTool(server: Server) {
   })
 
   // Handle eval tool calls
-  server.setRequestHandler('tools/call', async (request) => {
-    if (request.method !== 'tools/call') return
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     const { name, arguments: args } = request.params as {
       name: string
-      arguments: EvaluateParams
+      arguments: {
+        expression: string
+        context?: Record<string, unknown>
+      }
     }
 
-    if (name !== 'eval') return
+    if (name !== 'eval') {
+      throw new Error(`Unknown tool: ${name}`)
+    }
 
     try {
       logger.info({ expression: args.expression }, 'Evaluating expression')

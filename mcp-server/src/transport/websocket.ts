@@ -71,4 +71,9 @@ export class WebSocketTransport implements Transport {
   async close(): Promise<void> {
     this.socket.close()
   }
+
+  async start(): Promise<void> {
+    // WebSocket is already connected when passed to constructor
+    // Nothing to do here
+  }
 }

@@ -1,14 +1,22 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { CircularBuffer } from '@curupira/shared'
-import type { ConsoleLogResource } from '@curupira/shared'
 import { logger } from '../../config/logger.js'
+
+// Console log resource type
+interface ConsoleLogResource {
+  timestamp: number
+  level: string
+  message: string
+  args?: unknown[]
+  stackTrace?: string
+}
 
 const consoleBuffer = new CircularBuffer<ConsoleLogResource>(1000)
 
 export function setupConsoleResource(server: Server) {
   // List available console resources
-  server.setRequestHandler('resources/list', async (request) => {
-    if (request.method !== 'resources/list') return
+  server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
 
     return {
       resources: [
@@ -23,11 +31,12 @@ export function setupConsoleResource(server: Server) {
   })
 
   // Get console logs
-  server.setRequestHandler('resources/read', async (request) => {
-    if (request.method !== 'resources/read') return
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     
     const { uri } = request.params as { uri: string }
-    if (!uri?.startsWith('console://')) return
+    if (!uri?.startsWith('console://')) {
+      throw new Error('Invalid resource URI')
+    }
 
     const url = new URL(uri)
     const level = url.searchParams.get('level')

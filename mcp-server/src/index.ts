@@ -21,7 +21,6 @@ export type {
   JsonRpcResponse,
   JsonRpcNotification,
   JsonRpcError,
-  MCP,
   
   // Common types
   SessionId,
@@ -38,8 +37,6 @@ export type {
   LogLevel,
   
   // Error types
-  CurupiraError,
-  CurupiraErrorCode,
-  ErrorCategory,
+  CurupiraErrorInfo,
   ErrorSeverity
 } from '@curupira/shared'

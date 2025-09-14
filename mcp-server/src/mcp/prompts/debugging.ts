@@ -1,10 +1,10 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { ListPromptsRequestSchema, GetPromptRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
 
 export function setupDebuggingPrompts(server: Server) {
   // List available prompts
-  server.setRequestHandler('prompts/list', async (request) => {
-    if (request.method !== 'prompts/list') return
+  server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
 
     return {
       prompts: [
@@ -51,8 +51,7 @@ export function setupDebuggingPrompts(server: Server) {
   })
 
   // Get prompt template
-  server.setRequestHandler('prompts/get', async (request) => {
-    if (request.method !== 'prompts/get') return
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 
     const { name, arguments: args } = request.params as {
       name: string
