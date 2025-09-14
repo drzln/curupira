@@ -3,9 +3,9 @@
  */
 
 import { describe, test, expect } from 'vitest'
-import { createTransport, getAvailableTransports, TransportManager } from '../registry'
-import type { TransportMessage } from '../types'
-import { createRequestId, createTimestamp } from '../../types'
+import { createTransport, getAvailableTransports, TransportManager } from '../registry.js'
+import type { TransportMessage } from '../types.js'
+import { createRequestId, createTimestamp } from '../../types/index.js'
 
 describe('Transport Integration', () => {
   test('available transports are registered', () => {

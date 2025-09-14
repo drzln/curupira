@@ -25,14 +25,14 @@
  */
 
 // Export all transport types
-export * from './types'
+export * from './types.js'
 
 // Export base transport class
-export { BaseTransport } from './base'
+export { BaseTransport } from './base.js'
 
 // Export transport implementations
-export { WebSocketTransport, createWebSocketTransport } from './websocket'
-export { HttpTransport, createHttpTransport } from './http'
+export { WebSocketTransport, createWebSocketTransport } from './websocket.js'
+export { HttpTransport, createHttpTransport } from './http.js'
 
 // Export registry and factory
 export {
@@ -41,7 +41,7 @@ export {
   registerTransport,
   getAvailableTransports,
   TransportManager
-} from './registry'
+} from './registry.js'
 
 // Re-export commonly used types for convenience
 export type {
@@ -55,4 +55,4 @@ export type {
   TransportCapabilities,
   WebSocketTransportConfig,
   HttpTransportConfig
-} from './types'
+} from './types.js'

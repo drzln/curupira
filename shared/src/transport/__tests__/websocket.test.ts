@@ -3,9 +3,9 @@
  */
 
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { WebSocketTransport, createWebSocketTransport } from '../websocket'
-import type { WebSocketTransportConfig, TransportMessage } from '../types'
-import { createRequestId, createTimestamp } from '../../types'
+import { WebSocketTransport, createWebSocketTransport } from '../websocket.js'
+import type { WebSocketTransportConfig, TransportMessage } from '../types.js'
+import { createRequestId, createTimestamp } from '../../types/index.js'
 import { WebSocket } from 'ws'
 
 // Mock the ws module

@@ -3,15 +3,15 @@
  */
 
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { BaseTransport } from '../base'
+import { BaseTransport } from '../base.js'
 import type {
   TransportConfig,
   TransportMessage,
   TransportCapabilities,
   ConnectionState,
   TransportEvent
-} from '../types'
-import { createRequestId, createTimestamp } from '../../types'
+} from '../types.js'
+import { createRequestId, createTimestamp } from '../../types/index.js'
 
 // Mock transport implementation for testing
 class MockTransport extends BaseTransport {

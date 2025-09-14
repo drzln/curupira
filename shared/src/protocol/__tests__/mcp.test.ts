@@ -3,9 +3,9 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { McpProtocol, createMcpProtocol, McpServerBuilder } from '../mcp'
-import type { MCP } from '../types'
-import type { Resource, Tool, Prompt } from '../../types'
+import { McpProtocol, createMcpProtocol, McpServerBuilder } from '../mcp.js'
+import type { MCP } from '../types.js'
+import type { Resource, Tool, Prompt } from '../../types/index.js'
 
 describe('McpProtocol', () => {
   let protocol: McpProtocol

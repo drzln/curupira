@@ -9,9 +9,9 @@ import {
   registerTransport,
   getAvailableTransports,
   TransportManager
-} from '../registry'
-import { BaseTransport } from '../base'
-import type { TransportConfig, TransportCapabilities } from '../types'
+} from '../registry.js'
+import { BaseTransport } from '../base.js'
+import type { TransportConfig, TransportCapabilities } from '../types.js'
 
 // Mock transport for testing
 class TestTransport extends BaseTransport {

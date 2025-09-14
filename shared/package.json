@@ -8,6 +8,48 @@
   "files": [
     "dist"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./config": {
+      "import": "./dist/config/index.js",
+      "types": "./dist/config/index.d.ts"
+    },
+    "./logging": {
+      "import": "./dist/logging/index.js",
+      "types": "./dist/logging/index.d.ts"
+    },
+    "./errors": {
+      "import": "./dist/errors/index.js",
+      "types": "./dist/errors/index.d.ts"
+    },
+    "./transport": {
+      "import": "./dist/transport/index.js",
+      "types": "./dist/transport/index.d.ts"
+    },
+    "./protocol": {
+      "import": "./dist/protocol/index.js",
+      "types": "./dist/protocol/index.d.ts"
+    },
+    "./security": {
+      "import": "./dist/security/index.js",
+      "types": "./dist/security/index.d.ts"
+    },
+    "./messages": {
+      "import": "./dist/messages/index.js",
+      "types": "./dist/messages/index.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/utils/index.js",
+      "types": "./dist/utils/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

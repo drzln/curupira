@@ -27,6 +27,8 @@
     "build:server": "cd mcp-server && npm run build",
     "build:extension": "cd chrome-extension && npm run build",
     "build:docker": "docker build -t curupira:latest .",
+    "docker:build": "docker buildx build --platform linux/amd64,linux/arm64 -t drzzln/curupira:latest .",
+    "docker:push": "./scripts/docker-build.sh",
     "build:staging": "NODE_ENV=staging npm run build",
     "// Testing": "================================================",
     "test": "npm run test:unit && npm run test:integration",

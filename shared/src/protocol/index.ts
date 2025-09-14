@@ -25,13 +25,13 @@
  */
 
 // Export all protocol types
-export * from './types'
+export * from './types.js'
 
 // Export JSON-RPC implementation
 export { 
   JsonRpcProtocol, 
   createJsonRpcProtocol 
-} from './jsonrpc'
+} from './jsonrpc.js'
 
 // Export MCP implementation
 export { 
@@ -39,7 +39,7 @@ export {
   createMcpProtocol,
   McpServerBuilder,
   type McpConfig
-} from './mcp'
+} from './mcp.js'
 
 // Export protocol client
 export {
@@ -48,7 +48,7 @@ export {
   createMcpClient,
   ProtocolClientBuilder,
   type ProtocolClientConfig
-} from './client'
+} from './client.js'
 
 // Re-export commonly used types
 export type {
@@ -63,4 +63,4 @@ export type {
   ProtocolConfig,
   ProtocolStats,
   ProtocolCapabilities
-} from './types'
+} from './types.js'

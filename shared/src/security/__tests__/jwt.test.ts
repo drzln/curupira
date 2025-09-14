@@ -8,9 +8,9 @@ import {
   createJwtManager, 
   parseAuthHeader, 
   hasPermission 
-} from '../auth/jwt'
-import type { AuthConfig, AuthUser } from '../auth/types'
-import { createUserId, createSessionId } from '../../types'
+} from '../auth/jwt.js'
+import type { AuthConfig, AuthUser } from '../auth/types.js'
+import { createUserId, createSessionId } from '../../types/index.js'
 
 describe('JWT', () => {
   let jwtManager: JwtManager

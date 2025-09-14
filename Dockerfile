@@ -24,7 +24,7 @@ COPY shared/ ./shared/
 COPY mcp-server/ ./mcp-server/
 
 # Build shared and server packages
-RUN npm run build:shared && npm run build:server
+RUN npm run build --workspace=@curupira/shared && npm run build --workspace=curupira-mcp-server
 
 # Production stage
 FROM --platform=$TARGETPLATFORM node:20-alpine AS production
@@ -61,6 +61,8 @@ EXPOSE 8080
 ENV NODE_ENV=production
 ENV CURUPIRA_PORT=8080
 ENV CURUPIRA_HOST=0.0.0.0
+ENV PORT=8080
+ENV HOST=0.0.0.0
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { JsonRpcProtocol, createJsonRpcProtocol } from '../jsonrpc'
+import { JsonRpcProtocol, createJsonRpcProtocol } from '../jsonrpc.js'
 import type { 
   JsonRpcRequest, 
   JsonRpcResponse, 
@@ -11,8 +11,8 @@ import type {
   RequestHandler,
   NotificationHandler,
   RequestContext 
-} from '../types'
-import { createJsonRpcId } from '../../types'
+} from '../types.js'
+import { createJsonRpcId } from '../../types/index.js'
 
 describe('JsonRpcProtocol', () => {
   let protocol: JsonRpcProtocol

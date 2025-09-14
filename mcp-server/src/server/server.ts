@@ -631,33 +631,10 @@ export class CurupiraServer extends EventEmitter {
    * Create transports
    */
   private async createTransports(): Promise<void> {
-    const transports = this.config.transports || {}
-
-    // Create WebSocket transport
-    if (transports.websocket) {
-      const wsConfig = {
-        type: 'websocket' as const,
-        url: `ws://${this.config.host}:${this.config.port}/mcp`,
-        ...transports.websocket
-      }
-
-      const wsTransport = await this.transportManager.add('websocket', wsConfig)
-      this.setupTransportHandlers(wsTransport)
-      await wsTransport.connect()
-    }
-
-    // Create HTTP transport
-    if (transports.http) {
-      const httpConfig = {
-        type: 'http' as const,
-        baseUrl: `http://${this.config.host}:${this.config.port}`,
-        ...transports.http
-      }
-
-      const httpTransport = await this.transportManager.add('http', httpConfig)
-      this.setupTransportHandlers(httpTransport)
-      await httpTransport.connect()
-    }
+    // Note: The server accepts connections, it doesn't create client transports
+    // The WebSocket and HTTP endpoints are created by the HTTP server itself
+    // This method is kept for future use if we need to connect to external services
+    this.logger.debug('Transport endpoints configured')
   }
 
   /**
