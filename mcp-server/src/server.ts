@@ -439,11 +439,17 @@ export class CurupiraServer {
 
     // Setup HTTP/SSE transport
     if (transports.http?.enabled) {
-      if (transports.http.useModernTransport) {
+      // TEMPORARY: Force modern transport for debugging
+      logger.info({ 
+        transportConfig: transports.http,
+        useModernTransport: transports.http.useModernTransport 
+      }, 'Transport configuration debug')
+      
+      if (true) { // Force modern transport
         await this.setupStreamableHttpTransport()
         logger.info({
           httpPath: transports.http?.httpPath || '/mcp',
-        }, 'Streamable HTTP transport enabled')
+        }, 'Streamable HTTP transport enabled (FORCED)')
       } else {
         await this.setupSseTransport()
         logger.info({
