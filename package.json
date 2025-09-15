@@ -1,6 +1,6 @@
 {
   "name": "curupira",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "MCP Frontend Debugging Tool - AI-powered debugging for React applications",
   "private": false,
   "type": "module",

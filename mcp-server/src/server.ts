@@ -485,6 +485,37 @@ export class CurupiraServer {
           id: message.id,
         }, 'Received HTTP MCP request')
 
+        // Handle MCP initialize request specifically
+        if (message.method === 'initialize') {
+          logger.info({ 
+            clientInfo: message.params?.clientInfo,
+            protocolVersion: message.params?.protocolVersion 
+          }, 'Handling MCP initialize request')
+
+          // Return proper MCP initialize response
+          return reply
+            .code(200)
+            .header('Content-Type', 'application/json')
+            .send({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: {
+                protocolVersion: '2024-11-05',
+                capabilities: {
+                  resources: {},
+                  tools: {},
+                  prompts: {},
+                  logging: {}
+                },
+                serverInfo: {
+                  name: this.config.name || 'curupira-mcp-server',
+                  version: this.config.version || '1.0.0'
+                }
+              }
+            })
+        }
+
+        // Handle other MCP requests through transport
         if (this.httpSseTransport) {
           this.httpSseTransport.handleHttpRequest(message)
         }
