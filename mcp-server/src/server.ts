@@ -421,8 +421,17 @@ export class CurupiraServer {
   private setupHttpSseTransport(): void {
     const httpConfig = this.config.transports?.http || {}
     const httpPath = httpConfig.httpPath || '/mcp'
-    const ssePath = httpConfig.ssePath || '/mcp/sse'
+    const ssePath = httpConfig.ssePath || '/mcp/sse' 
     const sseEnabled = httpConfig.sseEnabled !== false
+
+    // Debug logging
+    logger.debug({ 
+      httpConfig, 
+      httpPath, 
+      ssePath, 
+      sseEnabled,
+      fullConfig: this.config.transports 
+    }, 'HTTP/SSE transport configuration')
 
     // Initialize HTTP/SSE transport
     this.httpSseTransport = new HttpSseTransport()
