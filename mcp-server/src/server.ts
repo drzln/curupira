@@ -380,6 +380,48 @@ export class CurupiraServer {
       transports: this.getTransportInfo(),
       endpoints: this.getEndpointInfo(),
     }))
+
+    // Simple tools endpoint for testing (bypasses MCP transport complexity)
+    this.fastify.get('/tools', async () => {
+      try {
+        // Import and call the tools handler directly
+        const { setupUnifiedToolHandlers } = await import('./mcp/tools/index.js')
+        
+        // Collect tools by mocking the server
+        const tools: any[] = []
+        const mockServer = {
+          setRequestHandler: (schema: any, handler: Function) => {
+            if (schema.method === 'tools/list') {
+              // Execute the handler to get tools list
+              handler({ params: {} }).then((result: any) => {
+                if (result?.tools) {
+                  tools.push(...result.tools)
+                }
+              })
+            }
+          }
+        }
+        
+        setupUnifiedToolHandlers(mockServer as any)
+        
+        // Wait a bit for the async handler to complete
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        return {
+          available: tools.length,
+          tools: tools.map(tool => ({
+            name: tool.name,
+            description: tool.description
+          }))
+        }
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          available: 0,
+          tools: []
+        }
+      }
+    })
   }
 
   private async setupTransports(): Promise<void> {
@@ -472,111 +514,133 @@ export class CurupiraServer {
     const httpConfig = this.config.transports?.http || {}
     const httpPath = httpConfig.httpPath || '/mcp'
 
-    // Handle all MCP Streamable HTTP requests
-    this.fastify.all(httpPath, async (request, reply) => {
+    // Handle GET requests for server capabilities
+    this.fastify.get(httpPath, async (request, reply) => {
+      logger.debug('Received GET request for server capabilities')
+      
+      return reply
+        .code(200)
+        .header('Content-Type', 'application/json')
+        .send({
+          name: this.config.name || 'curupira-mcp-server',
+          version: this.config.version || '1.0.0',
+          protocol: 'mcp',
+          protocolVersion: '2025-03-26',
+          capabilities: {
+            resources: { list: true, read: true },
+            tools: { list: true, call: true },
+            prompts: { list: true, get: true },
+            logging: {}
+          },
+          endpoints: {
+            http: httpPath,
+            websocket: this.config.transports?.websocket?.path || '/mcp'
+          }
+        })
+    })
+
+    // Handle POST requests for MCP JSON-RPC messages
+    this.fastify.post(httpPath, async (request, reply) => {
       logger.debug({ 
-        method: request.method,
+        body: request.body,
         headers: request.headers
-      }, 'Received Streamable HTTP request')
+      }, 'Received MCP JSON-RPC request')
 
       try {
-        // Check for existing session
-        const sessionId = request.headers['mcp-session-id'] as string
-        let transport = sessionId ? this.transports.get(sessionId) : null
+        const body = request.body as any
+        
+        // Validate JSON-RPC request
+        if (!body || !body.jsonrpc || body.jsonrpc !== '2.0' || !body.method) {
+          return reply.code(400).send({
+            jsonrpc: '2.0',
+            error: {
+              code: -32600,
+              message: 'Invalid Request',
+              data: 'Missing required JSON-RPC fields'
+            },
+            id: body?.id || null
+          })
+        }
 
-        // Handle GET requests for server info
-        if (request.method === 'GET' && !sessionId) {
-          return reply
-            .code(200)
-            .header('Content-Type', 'application/json')
-            .send({
+        // Get or create session
+        const sessionId = (request.headers['mcp-session-id'] as string) || randomUUID()
+        let transport = this.transports.get(sessionId)
+        
+        if (!transport) {
+          logger.info(`Creating new MCP session: ${sessionId}`)
+          
+          // Create new Streamable HTTP transport
+          transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => sessionId
+          })
+
+          // Store transport
+          this.transports.set(sessionId, transport)
+
+          // Set up cleanup
+          transport.onclose = () => {
+            logger.info(`Transport closed for session ${sessionId}`)
+            this.transports.delete(sessionId)
+          }
+
+          // Create new MCP server for this connection
+          const server = new Server(
+            {
               name: this.config.name || 'curupira-mcp-server',
-              version: this.config.version || '1.0.0',
-              protocol: 'mcp',
-              protocolVersion: '2025-03-26',
+              version: this.config.version || '1.0.0'
+            },
+            {
               capabilities: {
                 resources: { list: true, read: true },
                 tools: { list: true, call: true },
                 prompts: { list: true, get: true },
                 logging: {}
               }
-            })
-        }
-
-        // Create new transport for initialize requests
-        if (!transport && request.method === 'POST') {
-          const body = request.body as any
-          if (body?.method === 'initialize') {
-            // Create new Streamable HTTP transport
-            const newTransport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => randomUUID(),
-              onsessioninitialized: (sessionId) => {
-                logger.info(`Streamable HTTP session initialized: ${sessionId}`)
-                this.transports.set(sessionId, newTransport)
-              }
-            })
-
-            // Set up cleanup
-            newTransport.onclose = () => {
-              const sid = newTransport.sessionId
-              if (sid) {
-                logger.info(`Transport closed for session ${sid}`)
-                this.transports.delete(sid)
-              }
             }
+          )
 
-            // Create new MCP server for this connection
-            const server = new Server(
-              {
-                name: this.config.name || 'curupira-mcp-server',
-                version: this.config.version || '1.0.0'
-              },
-              {
-                capabilities: {
-                  resources: {},
-                  tools: {},
-                  prompts: {}
-                }
-              }
-            )
-
-            // Setup handlers and connect
-            setupMCPHandlers(server)
-            await server.connect(newTransport)
-            transport = newTransport
-          }
+          // Setup handlers and connect
+          setupMCPHandlers(server)
+          await server.connect(transport)
+          
+          logger.info(`MCP server connected for session: ${sessionId}`)
         }
 
-        if (!transport) {
-          return reply.code(400).send({
-            jsonrpc: '2.0',
-            error: {
-              code: -32000,
-              message: 'No valid session or initialization request'
-            },
-            id: null
-          })
-        }
+        // Set session ID header in response
+        reply.header('Mcp-Session-Id', sessionId)
+        reply.header('Content-Type', 'application/json')
 
         // Handle the request with the transport
         if (transport instanceof StreamableHTTPServerTransport) {
-          await transport.handleRequest(request.raw, reply.raw, request.body)
+          // For Streamable HTTP, we need to handle the request directly
+          // since it expects Node.js raw request/response objects
+          await transport.handleRequest(request.raw, reply.raw, body)
         } else {
           logger.error('Invalid transport type')
-          reply.code(500).send({ error: 'Invalid transport type' })
+          return reply.code(500).send({
+            jsonrpc: '2.0',
+            error: {
+              code: -32603,
+              message: 'Internal server error',
+              data: 'Invalid transport type'
+            },
+            id: body.id || null
+          })
         }
 
       } catch (error) {
-        logger.error({ error }, 'Error handling Streamable HTTP request')
+        logger.error({ error }, 'Error handling MCP request')
+        
+        const body = request.body as any
         if (!reply.sent) {
-          reply.code(500).send({
+          return reply.code(500).send({
             jsonrpc: '2.0',
             error: {
               code: -32603,
               message: 'Internal server error',
               data: error instanceof Error ? error.message : 'Unknown error'
             },
-            id: null
+            id: body?.id || null
           })
         }
       }
