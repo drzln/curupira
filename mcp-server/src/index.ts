@@ -1,42 +1,50 @@
 /**
- * @fileoverview Main entry point for Curupira MCP server
+ * Curupira MCP Server
  * 
- * This file exports the public API for the MCP server package.
+ * Main entry point and exports
  */
 
-// Re-export server module (using new implementation with official SDK transports)
-export * from './server.js'
+// Server components
+export { CurupiraServer } from './server/index.js'
+export { MCPHandler } from './server/mcp-handler.js'
+export { TransportManager, type TransportType, type TransportOptions } from './server/transport.js'
+export { HealthChecker, type HealthStatus } from './server/health.js'
 
-// Re-export shared types that consumers might need
-export type {
-  // Transport types
-  Transport,
-  TransportConfig,
-  TransportEvent,
-  TransportMessage,
-  ConnectionState,
-  
-  // Protocol types
-  JsonRpcRequest,
-  JsonRpcResponse,
-  JsonRpcNotification,
-  JsonRpcError,
-  
-  // Common types
-  SessionId,
-  RequestId,
-  Timestamp,
-  TabId,
-  ComponentId,
-  Resource,
-  Tool,
-  Prompt,
-  
-  // Logging types
-  Logger,
-  LogLevel,
-  
-  // Error types
-  CurupiraErrorInfo,
-  ErrorSeverity
-} from '@curupira/shared'
+// Chrome client and domains
+export { ChromeClient } from './chrome/client.js'
+export { RuntimeDomain } from './chrome/domains/runtime.js'
+export { DOMDomain } from './chrome/domains/dom.js'
+export { NetworkDomain } from './chrome/domains/network.js'
+export { PageDomain } from './chrome/domains/page.js'
+
+// Resource providers
+export { createResourceProviders, type ResourceProviders } from './resources/index.js'
+export { BrowserResourceProvider } from './resources/browser-resource.js'
+export { ReactResourceProvider } from './resources/react-resource.js'
+export { StateResourceProvider } from './resources/state-resource.js'
+export { NetworkResourceProvider } from './resources/network-resource.js'
+
+// Tool providers
+export { createToolProviders, type ToolProviders } from './tools/index.js'
+export { DOMTool } from './tools/dom-tool.js'
+export { RuntimeTool } from './tools/runtime-tool.js'
+export { NetworkTool } from './tools/network-tool.js'
+export { PerformanceTool } from './tools/performance-tool.js'
+
+// Framework integrations
+export { createFrameworkIntegrations, type FrameworkIntegrations } from './integrations/index.js'
+export { ReactIntegration } from './integrations/react/index.js'
+export { XStateIntegration } from './integrations/xstate/index.js'
+export { ZustandIntegration } from './integrations/zustand/index.js'
+
+// Configuration
+export { loadConfig, getDefaultConfig, type CurupiraConfig } from './config/config.js'
+export { logger } from './config/logger.js'
+
+// Re-export types from shared
+export type * from '../shared/src/types/cdp.js'
+export type * from '../shared/src/types/mcp.js'
+export type * from '../shared/src/types/framework.js'
+
+// Legacy exports for backward compatibility
+export * from './server.js'

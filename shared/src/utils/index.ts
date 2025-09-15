@@ -1,3 +1,37 @@
+/**
+ * @fileoverview Utility functions shared across Curupira
+ * 
+ * This file re-exports all utilities for easy access
+ */
+
+// Re-export CDP utilities
+export {
+  remoteObjectToValue,
+  valueToCallArgument,
+  buildSelector,
+  getNodeAttribute,
+  formatStackTrace,
+  parseCDPUrl,
+  createSafeEvalExpression,
+  isDebuggableUrl,
+  createFunctionDeclaration,
+  escapeEvalString,
+  waitForCondition,
+  retryWithBackoff,
+  type ParsedCDPUrl,
+  type CallArgument
+} from './cdp.js'
+
+// Re-export data structures
+export {
+  LRUCache,
+  PriorityQueue,
+  Trie,
+  ExpiringCache,
+  EventEmitter,
+  AsyncQueue
+} from './data-structures.js'
+
 // Utility functions shared across Curupira
 
 export function debounce<T extends (...args: any[]) => any>(

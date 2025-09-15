@@ -119,6 +119,28 @@ export {
   createMCPResponseMessage
 } from './messages.js'
 
+// Re-export all CDP types
+export type {
+  CDPConnectionState,
+  CDPSession,
+  CDPTarget,
+  CDPConnectionOptions,
+  CDPEventListener,
+  CDPCommandResult,
+  CDPClient,
+  CDPDomains
+} from './cdp.js'
+
+export {
+  CDPError,
+  CDPConnectionError,
+  CDPTimeoutError,
+  CDPProtocolError
+} from './cdp.js'
+
+// Re-export CDP domain namespaces
+export { Runtime, DOM, Network, Page, Debugger, Console, Performance } from './cdp.js'
+
 // Re-export all state management types
 export type {
   ReactFiberNode,
