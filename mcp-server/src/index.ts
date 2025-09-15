@@ -4,7 +4,7 @@
  * This file exports the public API for the MCP server package.
  */
 
-// Re-export server module
+// Re-export server module (using new implementation with official SDK transports)
 export * from './server.js'
 
 // Re-export shared types that consumers might need

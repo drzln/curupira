@@ -1,9 +1,13 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { z } from 'zod'
+import { ChromeManager } from '../../chrome/manager.js'
 import { logger } from '../../config/logger.js'
 
-// Store active evaluation sessions
-const evaluationSessions = new Map<string, any>()
+const EvaluateSchema = z.object({
+  expression: z.string(),
+  sessionId: z.string()
+})
 
 export function setupEvalTool(server: Server) {
   // List available tools
@@ -38,21 +42,22 @@ export function setupEvalTool(server: Server) {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params
 
-    if (name !== 'eval') {
+    if (name !== 'eval' && name !== 'console/evaluate') {
       throw new Error(`Unknown tool: ${name}`)
     }
 
     try {
       logger.info({ expression: args?.expression }, 'Evaluating expression')
 
-      // TODO: Send to Chrome extension for execution
-      // For now, return a placeholder
-      const result = {
-        value: 'Expression evaluation not yet implemented',
-        type: 'string',
-        timestamp: Date.now(),
-      }
-
+      // Validate input
+      const input = EvaluateSchema.parse(args)
+      
+      const manager = ChromeManager.getInstance()
+      const client = manager.getClient()
+      
+      // Evaluate expression in Chrome
+      const result = await client.evaluate(input.sessionId, input.expression)
+      
       return {
         content: [
           {

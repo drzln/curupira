@@ -3,15 +3,7 @@ import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcon
 import type { ConsoleMessage } from '@curupira/shared/types'
 import { logger } from '../../config/logger.js'
 
-// Access browser state from global
-declare global {
-  var curupiraBrowserState: {
-    consoleLogs: ConsoleMessage[]
-    networkRequests: any[]
-    domSnapshot: any
-    componentStates: Map<string, any>
-  }
-}
+// Browser state is declared in cli-stdio.ts
 
 export function setupConsoleResource(server: Server) {
   // List available console resources
@@ -40,11 +32,11 @@ export function setupConsoleResource(server: Server) {
     const limit = parseInt(url.searchParams.get('limit') || '100', 10)
 
     // Get logs from browser state
-    let logs = global.curupiraBrowserState?.consoleLogs || []
+    let logs = (global as any).curupiraBrowserState?.consoleLogs || []
 
     // Filter by level if specified
     if (level) {
-      logs = logs.filter((log) => log.level === level)
+      logs = logs.filter((log: ConsoleMessage) => log.level === level)
     }
 
     // Apply limit

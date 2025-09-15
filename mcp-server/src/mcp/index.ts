@@ -1,32 +1,22 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { setupConsoleResource } from './resources/console.js'
-import { setupNetworkResource } from './resources/network.js'
-import { setupDOMResource } from './resources/dom.js'
-import { setupStateResource } from './resources/state.js'
-import { setupEvalTool } from './tools/evaluator.js'
-import { setupInspectTool } from './tools/inspector.js'
-import { setupDebuggerTool } from './tools/debugger.js'
-import { setupProfilerTool } from './tools/profiler.js'
+import { setupUnifiedResourceHandlers } from './resources/index.js'
+import { setupUnifiedToolHandlers } from './tools/index.js'
 import { setupDebuggingPrompts } from './prompts/debugging.js'
 import { logger } from '../config/logger.js'
 
 export function setupMCPHandlers(server: Server) {
   logger.info('Setting up MCP handlers')
+  console.log('[MCP] Server instance:', server)
 
-  // Setup resource providers
-  setupConsoleResource(server)
-  setupNetworkResource(server)
-  setupDOMResource(server)
-  setupStateResource(server)
+  // Setup unified resource handlers (handles all resources in one place)
+  setupUnifiedResourceHandlers(server)
 
-  // Setup tool providers
-  setupEvalTool(server)
-  setupInspectTool(server)
-  setupDebuggerTool(server)
-  setupProfilerTool(server)
+  // Setup unified tool handlers (handles all tools in one place)
+  setupUnifiedToolHandlers(server)
 
   // Setup prompt templates
   setupDebuggingPrompts(server)
 
   logger.info('MCP handlers setup complete')
+  console.log('[MCP] Handlers registered successfully')
 }

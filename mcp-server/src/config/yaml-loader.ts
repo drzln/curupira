@@ -62,6 +62,17 @@ const YamlConfigSchema = z.object({
     jwtSecret: z.string().optional(),
     tokenExpiry: z.string().default('24h'),
   }).optional(),
+  
+  chrome: z.object({
+    enabled: z.boolean().default(false),
+    serviceUrl: z.string().optional(),
+    connectTimeout: z.number().default(5000),
+    pageTimeout: z.number().default(30000),
+    defaultViewport: z.object({
+      width: z.number().default(1920),
+      height: z.number().default(1080),
+    }).optional(),
+  }).optional(),
 }).strict()
 
 export type YamlConfig = z.infer<typeof YamlConfigSchema>
@@ -117,6 +128,17 @@ export function loadYamlConfig(configPath: string): Partial<ServerConfig> {
           timeout: validatedConfig.transports.http?.timeout,
           keepAliveInterval: validatedConfig.transports.sse?.keepAliveInterval,
         }
+      }
+    }
+    
+    // Configure Chrome if specified
+    if (validatedConfig.chrome) {
+      serverConfig.chrome = {
+        enabled: validatedConfig.chrome.enabled,
+        serviceUrl: validatedConfig.chrome.serviceUrl,
+        connectTimeout: validatedConfig.chrome.connectTimeout,
+        pageTimeout: validatedConfig.chrome.pageTimeout,
+        defaultViewport: validatedConfig.chrome.defaultViewport,
       }
     }
     

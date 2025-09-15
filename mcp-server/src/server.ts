@@ -1,10 +1,6 @@
 /**
- * Consolidated Curupira MCP Server
- * Single server implementation supporting configurable transports:
- * - WebSocket for Chrome Extension
- * - HTTP/SSE for Claude Code
- * - Health checks and monitoring
- * - YAML configuration support
+ * Consolidated Curupira MCP Server with Official SDK Transports
+ * Uses built-in SSEServerTransport and StreamableHTTPServerTransport
  */
 
 import Fastify from 'fastify'
@@ -13,15 +9,17 @@ import rateLimit from '@fastify/rate-limit'
 import helmet from '@fastify/helmet'
 import websocket from '@fastify/websocket'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import type { FastifyInstance, FastifyReply } from 'fastify'
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import type { FastifyInstance } from 'fastify'
+import { randomUUID } from 'node:crypto'
 
 import { setupMCPHandlers } from './mcp/index.js'
 import { WebSocketTransport } from './transport/websocket.js'
-import { HttpSseTransport } from './transport/http-sse.js'
-import { loadYamlConfig, mergeWithYamlConfig } from './config/yaml-loader.js'
+import { loadYamlConfig } from './config/yaml-loader.js'
 import { logger } from './config/logger.js'
 
-// Extended transport configurations for Curupira
+// Configuration interfaces remain the same
 export interface CurupiraWebSocketConfig {
   enabled?: boolean
   path?: string
@@ -37,6 +35,7 @@ export interface CurupiraHttpConfig {
   sseEnabled?: boolean
   timeout?: number
   keepAliveInterval?: number
+  useModernTransport?: boolean // Use StreamableHTTP vs SSE
 }
 
 export interface ServerConfig {
@@ -66,6 +65,16 @@ export interface ServerConfig {
     jwtSecret?: string
     tokenExpiry?: string
   }
+  chrome?: {
+    enabled?: boolean
+    serviceUrl?: string
+    connectTimeout?: number
+    pageTimeout?: number
+    defaultViewport?: {
+      width?: number
+      height?: number
+    }
+  }
 }
 
 export interface ServerOptions {
@@ -75,9 +84,8 @@ export interface ServerOptions {
 
 export class CurupiraServer {
   private fastify: FastifyInstance
-  private mcpServer: Server
   private config: ServerConfig
-  private httpSseTransport: HttpSseTransport | null = null
+  private transports = new Map<string, SSEServerTransport | StreamableHTTPServerTransport>()
   private isRunning = false
 
   constructor(options: ServerOptions = {}) {
@@ -89,21 +97,6 @@ export class CurupiraServer {
       logger: logger as any,
       trustProxy: true,
     })
-
-    // Initialize MCP server with configuration
-    this.mcpServer = new Server(
-      {
-        name: this.config.name || 'curupira',
-        version: this.config.version || '1.0.0',
-      },
-      {
-        capabilities: {
-          resources: {},
-          tools: {},
-          prompts: {},
-        },
-      }
-    )
   }
 
   private loadConfiguration(options: ServerOptions): ServerConfig {
@@ -121,17 +114,18 @@ export class CurupiraServer {
       transports: {
         websocket: {
           enabled: true,
-          path: '/mcp',
+          path: '/mcp/ws',
           enablePing: true,
           pingInterval: 30000,
           pongTimeout: 5000,
         },
         http: {
           enabled: false,
-          httpPath: '/mcp',
+          httpPath: '/mcp/http',
           ssePath: '/mcp/sse',
           sseEnabled: false,
           keepAliveInterval: 30000,
+          useModernTransport: true, // Default to modern transport
         },
       },
       cors: {
@@ -177,23 +171,15 @@ export class CurupiraServer {
         process.env.CURUPIRA_TRANSPORT_SSE === 'true') {
       transports.http = {
         enabled: true,
-        httpPath: process.env.CURUPIRA_HTTP_PATH || '/mcp',
+        httpPath: process.env.CURUPIRA_HTTP_PATH || '/mcp/http',
         ssePath: process.env.CURUPIRA_SSE_PATH || '/mcp/sse',
         sseEnabled: process.env.CURUPIRA_TRANSPORT_SSE === 'true',
+        useModernTransport: process.env.CURUPIRA_USE_MODERN_TRANSPORT !== 'false',
       }
     }
 
     if (Object.keys(transports).length > 0) {
       envConfig.transports = transports
-    }
-
-    // Auth settings
-    if (process.env.CURUPIRA_AUTH_ENABLED !== undefined) {
-      envConfig.auth = {
-        enabled: process.env.CURUPIRA_AUTH_ENABLED === 'true',
-        jwtSecret: process.env.CURUPIRA_JWT_SECRET,
-        tokenExpiry: process.env.CURUPIRA_TOKEN_EXPIRY,
-      }
     }
 
     // Start with defaults
@@ -248,8 +234,26 @@ export class CurupiraServer {
       // Setup routes
       this.setupRoutes()
 
-      // Setup MCP handlers
-      setupMCPHandlers(this.mcpServer)
+      // Initialize Chrome if configured
+      if (this.config.chrome?.enabled && this.config.chrome?.serviceUrl) {
+        try {
+          const { ChromeManager } = await import('./chrome/manager.js')
+          const manager = ChromeManager.getInstance()
+          await manager.initialize({
+            serviceUrl: this.config.chrome.serviceUrl,
+            connectTimeout: this.config.chrome.connectTimeout,
+            pageTimeout: this.config.chrome.pageTimeout,
+            defaultViewport: this.config.chrome.defaultViewport ? {
+              width: this.config.chrome.defaultViewport.width || 1920,
+              height: this.config.chrome.defaultViewport.height || 1080
+            } : undefined
+          })
+          logger.info('Chrome integration initialized')
+        } catch (error) {
+          logger.error({ error }, 'Failed to initialize Chrome integration')
+          // Continue without Chrome - not critical for server startup
+        }
+      }
 
       // Setup transports based on configuration
       await this.setupTransports()
@@ -285,6 +289,28 @@ export class CurupiraServer {
     }
 
     try {
+      // Close all transports
+      for (const [sessionId, transport] of this.transports) {
+        try {
+          await transport.close()
+          this.transports.delete(sessionId)
+        } catch (error) {
+          logger.error({ error, sessionId }, 'Error closing transport')
+        }
+      }
+
+      // Disconnect Chrome if initialized
+      if (this.config.chrome?.enabled) {
+        try {
+          const { ChromeManager } = await import('./chrome/manager.js')
+          const manager = ChromeManager.getInstance()
+          await manager.disconnect()
+          logger.info('Chrome disconnected')
+        } catch (error) {
+          logger.error({ error }, 'Error disconnecting Chrome')
+        }
+      }
+
       await this.fastify.close()
       this.isRunning = false
       logger.info('Server stopped')
@@ -299,6 +325,7 @@ export class CurupiraServer {
     await this.fastify.register(cors, {
       origin: this.config.cors?.origins || ['*'],
       credentials: this.config.cors?.credentials !== false,
+      exposedHeaders: ['Mcp-Session-Id'], // Important for Streamable HTTP
     })
 
     // Security headers
@@ -370,12 +397,17 @@ export class CurupiraServer {
 
     // Setup HTTP/SSE transport
     if (transports.http?.enabled) {
-      this.setupHttpSseTransport()
-      logger.info({
-        httpPath: transports.http?.httpPath || '/mcp',
-        ssePath: transports.http?.ssePath || '/mcp/sse',
-        sseEnabled: transports.http?.sseEnabled,
-      }, 'HTTP/SSE transport enabled')
+      if (transports.http.useModernTransport) {
+        await this.setupStreamableHttpTransport()
+        logger.info({
+          httpPath: transports.http?.httpPath || '/mcp',
+        }, 'Streamable HTTP transport enabled')
+      } else {
+        await this.setupSseTransport()
+        logger.info({
+          ssePath: transports.http?.ssePath || '/mcp/sse',
+        }, 'SSE transport enabled (deprecated)')
+      }
     }
 
     // Ensure at least one transport is enabled
@@ -399,8 +431,26 @@ export class CurupiraServer {
 
         const transport = new WebSocketTransport(socket)
         
+        // Create a new MCP server instance for this connection
+        const server = new Server(
+          {
+            name: this.config.name || 'curupira-mcp-server',
+            version: this.config.version || '1.0.0'
+          },
+          {
+            capabilities: {
+              resources: { list: true, read: true },
+              tools: { list: true, call: true },
+              prompts: { list: true, get: true }
+            }
+          }
+        )
+
+        // Setup MCP handlers
+        setupMCPHandlers(server)
+
         // Connect MCP server to transport
-        this.mcpServer.connect(transport).catch((error) => {
+        server.connect(transport).catch((error) => {
           logger.error({ error }, 'Failed to connect MCP server to WebSocket')
           if ('close' in socket && typeof socket.close === 'function') {
             socket.close()
@@ -418,177 +468,205 @@ export class CurupiraServer {
     })
   }
 
-  private setupHttpSseTransport(): void {
+  private async setupStreamableHttpTransport(): Promise<void> {
     const httpConfig = this.config.transports?.http || {}
     const httpPath = httpConfig.httpPath || '/mcp'
-    const ssePath = httpConfig.ssePath || '/mcp/sse' 
-    const sseEnabled = httpConfig.sseEnabled !== false
 
-    // Log transport configuration
-    logger.info({ 
-      httpPath, 
-      ssePath, 
-      sseEnabled,
-      timeout: httpConfig.timeout,
-      keepAliveInterval: httpConfig.keepAliveInterval
-    }, 'HTTP/SSE transport configured')
+    // Handle all MCP Streamable HTTP requests
+    this.fastify.all(httpPath, async (request, reply) => {
+      logger.debug({ 
+        method: request.method,
+        headers: request.headers
+      }, 'Received Streamable HTTP request')
 
-    // Initialize HTTP/SSE transport
-    this.httpSseTransport = new HttpSseTransport()
-    
-    // Connect to MCP server
-    this.mcpServer.connect(this.httpSseTransport).catch((error) => {
-      logger.error({ error }, 'Failed to connect HTTP/SSE transport to MCP server')
-    })
-
-    // GET endpoint for MCP server discovery (used by Claude Code)
-    this.fastify.get(httpPath, async (request, reply) => {
-      logger.info({ 
-        ip: request.ip,
-        userAgent: request.headers['user-agent'],
-      }, 'HTTP GET request for server discovery')
-
-      return reply
-        .code(200)
-        .header('Content-Type', 'application/json')
-        .send({
-          name: this.config.name || 'curupira-mcp-server',
-          version: this.config.version || '1.0.0',
-          protocol: 'mcp',
-          capabilities: {
-            resources: {},
-            tools: {},
-            prompts: {},
-          },
-          transports: {
-            http: {
-              endpoint: httpPath,
-              method: 'POST',
-              description: 'HTTP transport for MCP requests',
-            },
-            sse: sseEnabled ? {
-              endpoint: ssePath,
-              method: 'GET',
-              description: 'Server-Sent Events for MCP responses',
-            } : undefined,
-          },
-          timestamp: new Date().toISOString(),
-        })
-    })
-
-    // HTTP endpoint for MCP messages (used by Claude Code)
-    this.fastify.post(httpPath, async (request, reply) => {
       try {
-        const message = request.body as any
-        logger.debug({ 
-          method: message.method,
-          id: message.id,
-        }, 'Received HTTP MCP request')
+        // Check for existing session
+        const sessionId = request.headers['mcp-session-id'] as string
+        let transport = sessionId ? this.transports.get(sessionId) : null
 
-        // Handle MCP initialize request specifically
-        if (message.method === 'initialize') {
-          logger.info({ 
-            clientInfo: message.params?.clientInfo,
-            protocolVersion: message.params?.protocolVersion 
-          }, 'Handling MCP initialize request')
-
-          // Return proper MCP initialize response
+        // Handle GET requests for server info
+        if (request.method === 'GET' && !sessionId) {
           return reply
             .code(200)
             .header('Content-Type', 'application/json')
             .send({
-              jsonrpc: '2.0',
-              id: message.id,
-              result: {
-                protocolVersion: '2024-11-05',
-                capabilities: {
-                  resources: {},
-                  tools: {},
-                  prompts: {},
-                  logging: {}
-                },
-                serverInfo: {
-                  name: this.config.name || 'curupira-mcp-server',
-                  version: this.config.version || '1.0.0'
-                }
+              name: this.config.name || 'curupira-mcp-server',
+              version: this.config.version || '1.0.0',
+              protocol: 'mcp',
+              protocolVersion: '2025-03-26',
+              capabilities: {
+                resources: { list: true, read: true },
+                tools: { list: true, call: true },
+                prompts: { list: true, get: true },
+                logging: {}
               }
             })
         }
 
-        // Handle other MCP requests through transport
-        if (this.httpSseTransport) {
-          this.httpSseTransport.handleHttpRequest(message)
+        // Create new transport for initialize requests
+        if (!transport && request.method === 'POST') {
+          const body = request.body as any
+          if (body?.method === 'initialize') {
+            // Create new Streamable HTTP transport
+            const newTransport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => randomUUID(),
+              onsessioninitialized: (sessionId) => {
+                logger.info(`Streamable HTTP session initialized: ${sessionId}`)
+                this.transports.set(sessionId, newTransport)
+              }
+            })
+
+            // Set up cleanup
+            newTransport.onclose = () => {
+              const sid = newTransport.sessionId
+              if (sid) {
+                logger.info(`Transport closed for session ${sid}`)
+                this.transports.delete(sid)
+              }
+            }
+
+            // Create new MCP server for this connection
+            const server = new Server(
+              {
+                name: this.config.name || 'curupira-mcp-server',
+                version: this.config.version || '1.0.0'
+              },
+              {
+                capabilities: {
+                  resources: {},
+                  tools: {},
+                  prompts: {}
+                }
+              }
+            )
+
+            // Setup handlers and connect
+            setupMCPHandlers(server)
+            await server.connect(newTransport)
+            transport = newTransport
+          }
         }
-        
-        return reply
-          .code(200)
-          .header('Content-Type', 'application/json')
-          .send({ status: 'accepted', timestamp: new Date().toISOString() })
-      } catch (error) {
-        logger.error({ error }, 'Failed to process HTTP MCP request')
-        return reply
-          .code(500)
-          .send({
+
+        if (!transport) {
+          return reply.code(400).send({
             jsonrpc: '2.0',
-            id: (request.body as any)?.id || null,
+            error: {
+              code: -32000,
+              message: 'No valid session or initialization request'
+            },
+            id: null
+          })
+        }
+
+        // Handle the request with the transport
+        if (transport instanceof StreamableHTTPServerTransport) {
+          await transport.handleRequest(request.raw, reply.raw, request.body)
+        } else {
+          logger.error('Invalid transport type')
+          reply.code(500).send({ error: 'Invalid transport type' })
+        }
+
+      } catch (error) {
+        logger.error({ error }, 'Error handling Streamable HTTP request')
+        if (!reply.sent) {
+          reply.code(500).send({
+            jsonrpc: '2.0',
             error: {
               code: -32603,
-              message: 'Internal error',
+              message: 'Internal server error',
               data: error instanceof Error ? error.message : 'Unknown error'
-            }
+            },
+            id: null
           })
+        }
+      }
+    })
+  }
+
+  private async setupSseTransport(): Promise<void> {
+    const httpConfig = this.config.transports?.http || {}
+    const ssePath = httpConfig.ssePath || '/mcp/sse'
+
+    // SSE endpoint for establishing the stream
+    this.fastify.get(ssePath, async (request, reply) => {
+      logger.info({ 
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      }, 'SSE connection request')
+
+      try {
+        // Create a new SSE transport
+        const transport = new SSEServerTransport('/mcp/messages', reply.raw, {
+          enableDnsRebindingProtection: false // Allow all origins for development
+        })
+
+        // Store transport by session ID
+        const sessionId = transport.sessionId
+        this.transports.set(sessionId, transport)
+
+        // Set up cleanup on close
+        transport.onclose = () => {
+          logger.info(`SSE transport closed for session ${sessionId}`)
+          this.transports.delete(sessionId)
+        }
+
+        // Create a new MCP server instance for this connection
+        const server = new Server(
+          {
+            name: this.config.name || 'curupira-mcp-server',
+            version: this.config.version || '1.0.0'
+          },
+          {
+            capabilities: {
+              resources: { list: true, read: true },
+              tools: { list: true, call: true },
+              prompts: { list: true, get: true }
+            }
+          }
+        )
+
+        // Setup MCP handlers
+        setupMCPHandlers(server)
+
+        // Connect the transport
+        await server.connect(transport)
+        logger.info(`Established SSE stream with session ID: ${sessionId}`)
+
+      } catch (error) {
+        logger.error({ error }, 'Error establishing SSE stream')
+        if (!reply.sent) {
+          reply.code(500).send('Error establishing SSE stream')
+        }
       }
     })
 
-    // SSE endpoint for server-sent events (used by Claude Code responses)
-    if (sseEnabled) {
-      this.fastify.get(ssePath, async (request, reply) => {
-        logger.info({ 
-          ip: request.ip,
-          userAgent: request.headers['user-agent'],
-        }, 'SSE connection established')
-        
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-          'X-Accel-Buffering': 'no', // Disable Nginx buffering
-        })
+    // Messages endpoint for receiving client JSON-RPC requests  
+    this.fastify.post('/mcp/messages', async (request, reply) => {
+      logger.debug('Received POST to /mcp/messages')
 
-        // Send initial connection event
-        reply.raw.write('event: connected\\ndata: {"connected": true, "timestamp": "' + new Date().toISOString() + '"}\\n\\n')
+      // Extract session ID from query parameter
+      const sessionId = (request.query as any)?.sessionId
+      if (!sessionId) {
+        logger.error('No session ID provided')
+        return reply.code(400).send({ error: 'Missing sessionId parameter' })
+      }
 
-        // Set the SSE reply in transport
-        if (this.httpSseTransport) {
-          this.httpSseTransport.setSseReply(reply)
+      const transport = this.transports.get(sessionId)
+      if (!transport || !(transport instanceof SSEServerTransport)) {
+        logger.error(`No SSE transport found for session ${sessionId}`)
+        return reply.code(404).send({ error: 'Session not found' })
+      }
+
+      try {
+        // Handle the POST message
+        await transport.handlePostMessage(request.raw, reply.raw, request.body)
+      } catch (error) {
+        logger.error({ error }, 'Error handling POST message')
+        if (!reply.sent) {
+          reply.code(500).send({ error: 'Error handling request' })
         }
-
-        // Keep connection alive with configurable interval
-        const keepAliveInterval = httpConfig.keepAliveInterval || 30000
-        const keepAlive = setInterval(() => {
-          if (!reply.raw.destroyed) {
-            reply.raw.write(':ping\\n\\n')
-          }
-        }, keepAliveInterval)
-
-        // Handle client disconnect
-        request.raw.on('close', () => {
-          clearInterval(keepAlive)
-          logger.info('SSE connection closed')
-          
-          // Clear the SSE reply in transport
-          if (this.httpSseTransport) {
-            this.httpSseTransport.setSseReply(null as any)
-          }
-        })
-
-        request.raw.on('error', (error) => {
-          clearInterval(keepAlive)
-          logger.error({ error }, 'SSE connection error')
-        })
-      })
-    }
+      }
+    })
   }
 
   private getEnabledTransports(): string[] {
@@ -600,8 +678,9 @@ export class CurupiraServer {
     }
 
     if (transports.http?.enabled) {
-      enabled.push('http')
-      if (transports.http.sseEnabled) {
+      if (transports.http.useModernTransport) {
+        enabled.push('streamableHttp')
+      } else {
         enabled.push('sse')
       }
     }
@@ -623,19 +702,18 @@ export class CurupiraServer {
     }
 
     if (transports.http?.enabled) {
-      info.http = {
-        endpoint: transports.http?.httpPath || '/mcp',
-        method: 'POST',
-        description: 'HTTP transport for Claude Code requests',
-        timeout: transports.http?.timeout,
-      }
-
-      if (transports.http.sseEnabled) {
+      if (transports.http.useModernTransport) {
+        info.streamableHttp = {
+          endpoint: transports.http?.httpPath || '/mcp',
+          description: 'Streamable HTTP transport (modern)',
+          protocolVersion: '2025-03-26'
+        }
+      } else {
         info.sse = {
           endpoint: transports.http?.ssePath || '/mcp/sse',
-          method: 'GET',
-          description: 'Server-Sent Events for Claude Code responses',
-          keepAliveInterval: transports.http?.keepAliveInterval,
+          messagesEndpoint: '/mcp/messages',
+          description: 'SSE transport (deprecated)',
+          protocolVersion: '2024-11-05'
         }
       }
     }

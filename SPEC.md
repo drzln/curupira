@@ -12,40 +12,57 @@ Curupira is an MCP (Model Context Protocol) debugging tool for React application
 ## Development Tasks
 
 ### Task 1: Server Architecture Refactoring ✅
-**Status**: IN PROGRESS
+**Status**: COMPLETED
 **Description**: Consolidate multiple server implementations into a single, configurable server
 
 **Implementation Checklist**:
-- [ ] Remove duplicate server implementations (server.ts vs server/server.ts)
-- [ ] Create unified server with configurable transports
-- [ ] Implement transport factory pattern
-- [ ] Add YAML configuration support
-- [ ] Update CLI to use new server
-- [ ] Test all transport modes
+- [x] Remove duplicate server implementations (server.ts vs server/server.ts)
+- [x] Create unified server with configurable transports
+- [x] Implement transport factory pattern
+- [x] Add YAML configuration support
+- [x] Update CLI to use new server
+- [x] Test all transport modes
 
 **Test Requirements**:
-- [ ] WebSocket transport works for Chrome extension
-- [ ] HTTP/SSE transport works for Claude Code
-- [ ] Health check endpoint responds correctly
-- [ ] Configuration loading from YAML works
-- [ ] Environment variable overrides work
+- [x] WebSocket transport works for Chrome extension
+- [x] HTTP/SSE transport works for Claude Code
+- [x] Health check endpoint responds correctly
+- [x] Configuration loading from YAML works
+- [x] Environment variable overrides work
 
 ### Task 2: Transport Configuration System ✅
-**Status**: IN PROGRESS
+**Status**: COMPLETED
 **Description**: Make transports fully configurable via YAML and environment variables
 
 **Implementation Checklist**:
-- [ ] Define transport configuration schema
-- [ ] Implement HTTP/SSE transport alongside WebSocket
-- [ ] Create transport factory based on config
-- [ ] Add transport-specific health checks
-- [ ] Document transport configuration options
+- [x] Define transport configuration schema
+- [x] Implement HTTP/SSE transport alongside WebSocket
+- [x] Create transport factory based on config
+- [x] Add transport-specific health checks
+- [x] Document transport configuration options
 
 **Test Requirements**:
-- [ ] Can enable/disable transports via config
-- [ ] Transport-specific settings are applied
-- [ ] Multiple transports can run simultaneously
-- [ ] Each transport has independent lifecycle
+- [x] Can enable/disable transports via config
+- [x] Transport-specific settings are applied
+- [x] Multiple transports can run simultaneously
+- [x] Each transport has independent lifecycle
+
+### Task 4: Fix HTTP Transport Request-Response Cycle ✅
+**Status**: COMPLETED
+**Description**: Fix HTTP transport to properly handle synchronous request-response pattern
+
+**Implementation Checklist**:
+- [x] Implement request-response tracking in HttpSseTransport
+- [x] Add handleHttpRequestWithResponse method for synchronous responses
+- [x] Update server.ts to use proper request-response handling
+- [x] Fix handler registration conflicts (unified handlers)
+- [x] Create unified resource and tool handlers
+
+**Test Requirements**:
+- [x] HTTP requests to resources/list return actual resource list
+- [x] HTTP requests to tools/list return actual tool list
+- [x] Request timeouts work properly
+- [x] Error handling returns proper JSON-RPC errors
 
 ### Task 3: Kubernetes Deployment Configuration ✅
 **Status**: PENDING
@@ -65,9 +82,9 @@ Curupira is an MCP (Model Context Protocol) debugging tool for React application
 - [ ] Claude Code can connect successfully
 
 ## Progress Tracking
-- Overall Progress: 20%
-- Current Focus: Server refactoring
-- Next Steps: Complete unified server implementation
+- Overall Progress: 75%
+- Current Focus: HTTP transport fixes completed
+- Next Steps: Deploy to Kubernetes and test with Claude Code
 
 ## API Specifications
 
