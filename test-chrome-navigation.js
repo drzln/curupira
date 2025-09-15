@@ -12,6 +12,8 @@ const http = require('http');
 const CURUPIRA_URL = 'curupira.infrastructure.plo.quero.local';
 const CURUPIRA_PORT = 80;
 
+let mcpSessionId = null;
+
 function mcpRequest(method, params = {}) {
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({
@@ -21,24 +23,45 @@ function mcpRequest(method, params = {}) {
       params
     });
 
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+      'Content-Length': Buffer.byteLength(postData)
+    };
+
+    // Include session ID in subsequent requests
+    if (mcpSessionId) {
+      headers['Mcp-Session-Id'] = mcpSessionId;
+    }
+
     const options = {
       hostname: CURUPIRA_URL,
       port: CURUPIRA_PORT,
       path: '/mcp',
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData)
-      }
+      headers: headers
     };
 
     const req = http.request(options, (res) => {
+      // Extract session ID from response headers
+      if (res.headers['mcp-session-id']) {
+        mcpSessionId = res.headers['mcp-session-id'];
+        console.log('📝 MCP Session ID:', mcpSessionId);
+      }
+
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try {
-          const parsed = JSON.parse(data);
-          resolve(parsed);
+          // Handle SSE format for initialize response
+          if (data.startsWith('event: message\ndata: ')) {
+            const jsonData = data.split('data: ')[1].split('\n\n')[0];
+            const parsed = JSON.parse(jsonData);
+            resolve(parsed);
+          } else {
+            const parsed = JSON.parse(data);
+            resolve(parsed);
+          }
         } catch (e) {
           resolve({ raw: data, status: res.statusCode });
         }
