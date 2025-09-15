@@ -424,14 +424,14 @@ export class CurupiraServer {
     const ssePath = httpConfig.ssePath || '/mcp/sse' 
     const sseEnabled = httpConfig.sseEnabled !== false
 
-    // Debug logging
-    logger.debug({ 
-      httpConfig, 
+    // Log transport configuration
+    logger.info({ 
       httpPath, 
       ssePath, 
       sseEnabled,
-      fullConfig: this.config.transports 
-    }, 'HTTP/SSE transport configuration')
+      timeout: httpConfig.timeout,
+      keepAliveInterval: httpConfig.keepAliveInterval
+    }, 'HTTP/SSE transport configured')
 
     // Initialize HTTP/SSE transport
     this.httpSseTransport = new HttpSseTransport()

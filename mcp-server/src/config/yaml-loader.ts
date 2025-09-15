@@ -113,7 +113,7 @@ export function loadYamlConfig(configPath: string): Partial<ServerConfig> {
           enabled: true,
           httpPath: validatedConfig.transports.http?.path || '/mcp',
           ssePath: validatedConfig.transports.sse?.path || '/mcp/sse',
-          sseEnabled: validatedConfig.transports.sse?.enabled || false,
+          sseEnabled: validatedConfig.transports.sse?.enabled !== false, // Default to true if not explicitly disabled
           timeout: validatedConfig.transports.http?.timeout,
           keepAliveInterval: validatedConfig.transports.sse?.keepAliveInterval,
         }
