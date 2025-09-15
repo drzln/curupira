@@ -439,10 +439,9 @@ export function setupUnifiedResourceHandlers(server: Server) {
         const timingData = requests.map((req: NetworkRequest) => ({
           url: req.url,
           method: req.method,
-          startTime: req.startTime,
-          endTime: req.endTime,
-          duration: req.endTime - req.startTime,
-          timing: req.timing || {}
+          timestamp: req.timestamp,
+          duration: req.duration || 0,
+          size: req.size || 0
         })).slice(-limit)
 
         return {
@@ -452,15 +451,15 @@ export function setupUnifiedResourceHandlers(server: Server) {
               mimeType: 'application/json',
               text: JSON.stringify({
                 requests: timingData,
-                averageDuration: timingData.reduce((sum, req) => sum + req.duration, 0) / timingData.length || 0,
-                slowestRequest: timingData.reduce((prev, curr) => prev.duration > curr.duration ? prev : curr, timingData[0])
+                averageDuration: timingData.reduce((sum: number, req: any) => sum + req.duration, 0) / timingData.length || 0,
+                slowestRequest: timingData.reduce((prev: any, curr: any) => prev.duration > curr.duration ? prev : curr, timingData[0])
               }, null, 2),
             },
           ],
         }
       } else if (uri === 'network://failures') {
         const failures = requests.filter((req: NetworkRequest) => 
-          req.status >= 400 || req.error
+          req.status !== undefined && req.status >= 400
         ).slice(-limit)
 
         return {
@@ -471,8 +470,8 @@ export function setupUnifiedResourceHandlers(server: Server) {
               text: JSON.stringify({
                 failures,
                 count: failures.length,
-                byStatus: failures.reduce((acc: any, req) => {
-                  acc[req.status] = (acc[req.status] || 0) + 1
+                byStatus: failures.reduce((acc: any, req: NetworkRequest) => {
+                  acc[req.status || 0] = (acc[req.status || 0] || 0) + 1
                   return acc
                 }, {})
               }, null, 2),
