@@ -10,10 +10,12 @@ import { config } from './config/index.js'
 import { logger } from './config/logger.js'
 import { setupMCPHandlers } from './mcp/index.js'
 import { WebSocketTransport } from './transport/websocket.js'
+import { HttpSseTransport } from './transport/http-sse.js'
 
 export class CurupiraServer {
   private fastify: FastifyInstance
   private mcpServer: Server
+  private httpSseTransport: HttpSseTransport | null = null
   private isRunning = false
 
   constructor() {
@@ -131,7 +133,107 @@ export class CurupiraServer {
         tools: true,
         prompts: true,
       },
+      transports: {
+        websocket: {
+          endpoint: '/mcp',
+          description: 'WebSocket transport for Chrome extension'
+        },
+        http: {
+          endpoint: '/mcp',
+          method: 'POST',
+          description: 'HTTP transport for Claude Code'
+        },
+        sse: {
+          endpoint: '/mcp/sse',
+          method: 'GET',
+          description: 'Server-Sent Events for Claude Code responses'
+        }
+      }
     }))
+
+    // HTTP/SSE endpoints for Claude Code
+    this.setupHttpEndpoints()
+  }
+
+  private setupHttpEndpoints() {
+    // Initialize HTTP/SSE transport for Claude Code
+    if (!this.httpSseTransport) {
+      this.httpSseTransport = new HttpSseTransport()
+      
+      // Connect the transport to MCP server
+      this.mcpServer.connect(this.httpSseTransport).catch((error) => {
+        logger.error({ error }, 'Failed to connect HTTP/SSE transport to MCP server')
+      })
+    }
+
+    // HTTP endpoint for MCP messages (used by Claude Code)
+    this.fastify.post('/mcp', async (request, reply) => {
+      try {
+        const message = request.body as any
+        logger.debug({ method: message.method }, 'Received HTTP MCP request')
+
+        // Handle the message through the transport
+        if (this.httpSseTransport) {
+          this.httpSseTransport.handleHttpRequest(message)
+        }
+        
+        // For HTTP transport, we acknowledge receipt immediately
+        return reply
+          .code(200)
+          .header('Content-Type', 'application/json')
+          .send({ status: 'accepted' })
+      } catch (error) {
+        logger.error({ error }, 'Failed to process HTTP MCP request')
+        return reply
+          .code(500)
+          .send({
+            jsonrpc: '2.0',
+            id: (request.body as any)?.id || null,
+            error: {
+              code: -32603,
+              message: 'Internal error',
+              data: error instanceof Error ? error.message : 'Unknown error'
+            }
+          })
+      }
+    })
+
+    // SSE endpoint for server-sent events (used by Claude Code)
+    this.fastify.get('/mcp/sse', async (request, reply) => {
+      logger.info('SSE connection established')
+      
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'X-Accel-Buffering': 'no' // Disable Nginx buffering
+      })
+
+      // Send initial connection event
+      reply.raw.write('event: connected\ndata: {"connected": true}\n\n')
+
+      // Set the SSE reply in transport
+      if (this.httpSseTransport) {
+        this.httpSseTransport.setSseReply(reply)
+      }
+
+      // Keep connection alive
+      const keepAlive = setInterval(() => {
+        reply.raw.write(':ping\n\n')
+      }, 30000)
+
+      // Handle client disconnect
+      request.raw.on('close', () => {
+        clearInterval(keepAlive)
+        logger.info('SSE connection closed')
+        
+        // Clear the SSE reply in transport
+        if (this.httpSseTransport) {
+          this.httpSseTransport.setSseReply(null as any)
+        }
+      })
+    })
   }
 
   private setupWebSocket() {
