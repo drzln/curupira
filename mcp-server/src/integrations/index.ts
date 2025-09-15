@@ -12,7 +12,7 @@ import type {
   ReactRenderInfo,
   XStateActor,
   ZustandStoreInfo
-} from '@nexus/curupira-shared/types/state.js'
+} from '@curupira/shared/types/state.js'
 import { ReactIntegration, createReactIntegration } from './react/index.js'
 import { XStateIntegration, createXStateIntegration } from './xstate/index.js'
 import { ZustandIntegration, createZustandIntegration } from './zustand/index.js'
@@ -67,7 +67,7 @@ export class FrameworkIntegrationsImpl implements FrameworkIntegrations {
           components.map(c => [c.id, {
             componentId: c.id,
             displayName: c.name,
-            type: c.type,
+            type: c.type as 'function' | 'class' | 'memo' | 'forward_ref',
             interactions: new Set()
           }])
         )
@@ -85,7 +85,7 @@ export class FrameworkIntegrationsImpl implements FrameworkIntegrations {
             machine: a.machine,
             sessionId: a.actor.sessionId,
             parent: undefined,
-            children: new Set(a.children),
+            children: new Set<XStateActor>(),
             observers: new Set()
           } as XStateActor])
         ),
@@ -303,4 +303,6 @@ export function createFrameworkIntegrations(
 }
 
 // Re-export individual integrations
-export { ReactIntegration, XStateIntegration, ZustandIntegration }
+export type { ReactIntegration } from './react/index.js'
+export type { XStateIntegration } from './xstate/index.js'
+export type { ZustandIntegration } from './zustand/index.js'

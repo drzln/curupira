@@ -4,7 +4,7 @@
  * Handles JWT authentication for staging/production environments
  */
 
-import jwt from 'jsonwebtoken'
+import * as jwt from 'jsonwebtoken'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { logger } from '../config/logger.js'
 import { z } from 'zod'
@@ -90,7 +90,7 @@ export class AuthManager {
     }
 
     // Check cookie
-    const cookies = request.cookies
+    const cookies = (request as any).cookies
     if (cookies?.token) {
       return cookies.token
     }
@@ -117,7 +117,8 @@ export class AuthManager {
       const payload = await this.verifyToken(token)
       
       // Attach user info to request
-      (request as any).user = {
+      const req = request as any
+      req.user = {
         id: payload.sub,
         scope: payload.scope || [],
       }
@@ -133,7 +134,8 @@ export class AuthManager {
    * Check if user has required scope
    */
   hasScope(request: FastifyRequest, requiredScope: string): boolean {
-    const user = (request as any).user
+    const req = request as any
+    const user = req.user
     if (!user || !user.scope) {
       return false
     }
@@ -175,7 +177,8 @@ export class AuthManager {
       const token = this.extractToken(request)
       if (token) {
         const payload = await this.verifyToken(token)
-        (request as any).user = {
+        const req = request as any
+        req.user = {
           id: payload.sub,
           scope: payload.scope || [],
         }

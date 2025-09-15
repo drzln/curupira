@@ -5,7 +5,7 @@
  */
 
 import type { NetworkDomain } from '../chrome/domains/network.js'
-import type { Network } from '@nexus/curupira-shared/types/cdp.js'
+import type { Network } from '@curupira/shared/types/cdp.js'
 import type { Resource, ResourceTemplate } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../config/logger.js'
 

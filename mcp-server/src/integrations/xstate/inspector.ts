@@ -11,8 +11,8 @@ import type {
   XStateSnapshot,
   XStateEvent,
   ActorId 
-} from '@nexus/curupira-shared/types/index.js'
-import { CircularBuffer } from '@nexus/curupira-shared/utils/index.js'
+} from '@curupira/shared/types/index.js'
+import { CircularBuffer } from '@curupira/shared/utils'
 import { logger } from '../../config/logger.js'
 
 export interface ActorInspection {
@@ -127,7 +127,7 @@ export class XStateInspector {
       })()
     `)
 
-    return result.value
+    return result.value || null
   }
 
   /**
@@ -179,7 +179,7 @@ export class XStateInspector {
       })()
     `)
 
-    return result.value
+    return result.value || null
   }
 
   /**

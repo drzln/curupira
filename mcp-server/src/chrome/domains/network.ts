@@ -5,9 +5,9 @@
  */
 
 import type { ChromeClient } from '../client.js'
-import type { Network } from '@nexus/curupira-shared/types/cdp.js'
-import type { RequestId, Timestamp } from '@nexus/curupira-shared/types/branded.js'
-import { CircularBuffer } from '@nexus/curupira-shared/utils/index.js'
+import type { Network } from '@curupira/shared/types/cdp.js'
+import type { RequestId, Timestamp } from '@curupira/shared/types/branded.js'
+import { CircularBuffer } from '@curupira/shared/utils'
 import { logger } from '../../config/logger.js'
 
 export class NetworkDomain {
@@ -179,7 +179,7 @@ export class NetworkDomain {
     try {
       const result = await this.client.send<{
         success: boolean
-      }>('Network.setCookie', cookie, this.sessionId)
+      }>('Network.setCookie', cookie as unknown as Record<string, unknown>, this.sessionId)
       
       return result.success
     } catch (error) {

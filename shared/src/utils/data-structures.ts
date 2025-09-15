@@ -41,7 +41,9 @@ export class LRUCache<K, V> {
     if (this.cache.size >= this.capacity) {
       // Remove least recently used (first item)
       const firstKey = this.cache.keys().next().value
-      this.cache.delete(firstKey)
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey)
+      }
     }
 
     // Add new value

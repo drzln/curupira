@@ -5,8 +5,8 @@
  */
 
 import type { RuntimeDomain } from '../../chrome/domains/runtime.js'
-import type { ReactFiberNode, ComponentId } from '@nexus/curupira-shared/types/index.js'
-import { generateId } from '@nexus/curupira-shared/utils/index.js'
+import type { ReactFiberNode, ComponentId } from '@curupira/shared/types/index.js'
+import { generateId } from '@curupira/shared/utils'
 import { logger } from '../../config/logger.js'
 
 export interface FiberComponent {

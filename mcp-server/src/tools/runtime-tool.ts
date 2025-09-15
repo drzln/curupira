@@ -65,42 +65,42 @@ export class RuntimeTool {
       {
         name: `${this.toolPrefix}/evaluate`,
         description: 'Evaluate JavaScript expression in page context',
-        inputSchema: evaluateSchema
+        inputSchema: evaluateSchema as any
       },
       {
         name: `${this.toolPrefix}/callFunction`,
         description: 'Call a function with arguments',
-        inputSchema: callFunctionSchema
+        inputSchema: callFunctionSchema as any
       },
       {
         name: `${this.toolPrefix}/consoleLog`,
         description: 'Log message to browser console',
-        inputSchema: consoleLogSchema
+        inputSchema: consoleLogSchema as any
       },
       {
         name: `${this.toolPrefix}/setGlobal`,
         description: 'Set a global variable',
-        inputSchema: setGlobalSchema
+        inputSchema: setGlobalSchema as any
       },
       {
         name: `${this.toolPrefix}/getGlobal`,
         description: 'Get a global variable value',
-        inputSchema: getGlobalSchema
+        inputSchema: getGlobalSchema as any
       },
       {
         name: `${this.toolPrefix}/installConsoleIntercept`,
         description: 'Install console interceptor for capturing logs',
-        inputSchema: installConsoleInterceptSchema
+        inputSchema: installConsoleInterceptSchema as any
       },
       {
         name: `${this.toolPrefix}/performanceMark`,
         description: 'Create a performance mark',
-        inputSchema: performanceMarkSchema
+        inputSchema: performanceMarkSchema as any
       },
       {
         name: `${this.toolPrefix}/performanceMeasure`,
         description: 'Measure performance between marks',
-        inputSchema: performanceMeasureSchema
+        inputSchema: performanceMeasureSchema as any
       }
     ]
   }

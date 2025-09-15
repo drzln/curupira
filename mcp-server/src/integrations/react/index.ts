@@ -6,7 +6,7 @@
 
 import type { RuntimeDomain } from '../../chrome/domains/runtime.js'
 import type { DOMDomain } from '../../chrome/domains/dom.js'
-import type { ReactRenderInfo, ReactFiberNode } from '@nexus/curupira-shared/types/state.js'
+import type { ReactRenderInfo, ReactFiberNode } from '@curupira/shared/types/state.js'
 import { ReactDetector, type ReactInfo } from './detector.js'
 import { FiberWalker, type FiberComponent } from './fiber-walker.js'
 import { ComponentInspector, type ComponentInspection } from './component-inspector.js'

@@ -5,6 +5,14 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import {
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  ListToolsRequestSchema,
+  CallToolRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema
+} from '@modelcontextprotocol/sdk/types.js'
 import { MCPHandler } from './mcp-handler.js'
 import { ChromeClient } from '../chrome/client.js'
 import { RuntimeDomain } from '../chrome/domains/runtime.js'
@@ -16,9 +24,10 @@ import { createResourceProviders } from '../resources/index.js'
 import { createToolProviders } from '../tools/index.js'
 import { TransportManager, type TransportType } from './transport.js'
 import { HealthChecker } from './health.js'
+import { SecurityManager } from '../security/index.js'
 import { logger } from '../config/logger.js'
 import { loadConfig } from '../config/config.js'
-import type { CDPConnectionOptions } from '../shared/src/types/cdp.js'
+import type { CDPConnectionOptions } from '@curupira/shared/types'
 
 export class CurupiraServer {
   private server: Server
@@ -26,6 +35,7 @@ export class CurupiraServer {
   private chromeClient: ChromeClient
   private transportManager?: TransportManager
   private healthChecker: HealthChecker
+  private securityManager: SecurityManager
   private isConnected = false
 
   constructor() {
@@ -53,9 +63,19 @@ export class CurupiraServer {
       }
     )
 
-    this.chromeClient = new ChromeClient()
+    this.chromeClient = new ChromeClient({
+      host: 'localhost',
+      port: 9222,
+      secure: false
+    })
     this.handler = new MCPHandler()
     this.healthChecker = new HealthChecker(this.chromeClient)
+    
+    // Initialize security with development defaults (will be configured in start())
+    this.securityManager = new SecurityManager({
+      enabled: false,
+      environment: 'development',
+    })
   }
 
   /**
@@ -67,11 +87,36 @@ export class CurupiraServer {
       const config = loadConfig()
       logger.info({ config }, 'Starting Curupira MCP server')
 
+      // Configure security based on environment
+      const environment = process.env.NODE_ENV === 'production' ? 'production' :
+                         process.env.NODE_ENV === 'staging' ? 'staging' : 'development'
+      
+      this.securityManager = new SecurityManager({
+        enabled: environment !== 'development',
+        environment,
+        auth: {
+          enabled: environment !== 'development',
+          jwtSecret: process.env.CURUPIRA_JWT_SECRET,
+          jwtPublicKey: process.env.CURUPIRA_JWT_PUBLIC_KEY,
+          issuer: process.env.CURUPIRA_JWT_ISSUER,
+          audience: process.env.CURUPIRA_JWT_AUDIENCE,
+        },
+      })
+
       // Connect to Chrome
       await this.connectToChrome(config.cdp)
 
+      // Create a session for the default page
+      const targets = await this.chromeClient.getTargets()
+      const pageTarget = targets.find((t: any) => t.type === 'page')
+      if (!pageTarget) {
+        throw new Error('No page target found')
+      }
+      
+      const session = await this.chromeClient.createSession(pageTarget.targetId)
+      
       // Initialize domains
-      const domains = await this.initializeDomains()
+      const domains = await this.initializeDomains(session.id || session.sessionId)
 
       // Create integrations
       const integrations = createFrameworkIntegrations(
@@ -113,6 +158,7 @@ export class CurupiraServer {
         port: config.server?.port,
         corsOrigins: config.server?.corsOrigins,
         healthChecker: this.healthChecker,
+        securityManager: this.securityManager,
       })
       await this.transportManager.start()
 
@@ -146,11 +192,11 @@ export class CurupiraServer {
   /**
    * Initialize CDP domains
    */
-  private async initializeDomains() {
-    const runtime = new RuntimeDomain(this.chromeClient)
-    const dom = new DOMDomain(this.chromeClient)
-    const network = new NetworkDomain(this.chromeClient)
-    const page = new PageDomain(this.chromeClient)
+  private async initializeDomains(sessionId: string) {
+    const runtime = new RuntimeDomain(this.chromeClient, sessionId)
+    const dom = new DOMDomain(this.chromeClient, sessionId)
+    const network = new NetworkDomain(this.chromeClient, sessionId)
+    const page = new PageDomain(this.chromeClient, sessionId)
 
     // Enable domains
     await Promise.all([
@@ -171,48 +217,38 @@ export class CurupiraServer {
   private setupHandlers() {
     // Resource handlers
     this.server.setRequestHandler(
-      'resources/list',
+      ListResourcesRequestSchema,
       async () => this.handler.listResources()
     )
 
     this.server.setRequestHandler(
-      'resources/read',
-      async (request) => this.handler.readResource(request.params as any)
+      ReadResourceRequestSchema,
+      async (request) => this.handler.readResource(request.params)
     )
 
     // Tool handlers
     this.server.setRequestHandler(
-      'tools/list',
+      ListToolsRequestSchema,
       async () => this.handler.listTools()
     )
 
     this.server.setRequestHandler(
-      'tools/call',
-      async (request) => this.handler.callTool(request.params as any)
+      CallToolRequestSchema,
+      async (request) => this.handler.callTool(request.params)
     )
 
     // Prompt handlers
     this.server.setRequestHandler(
-      'prompts/list',
+      ListPromptsRequestSchema,
       async () => this.handler.listPrompts()
     )
 
     this.server.setRequestHandler(
-      'prompts/get',
-      async (request) => this.handler.getPrompt(request.params as any)
+      GetPromptRequestSchema,
+      async (request) => this.handler.getPrompt(request.params)
     )
 
-    // Health check
-    this.server.setRequestHandler(
-      'health',
-      async () => this.healthChecker.check()
-    )
-
-    // Statistics
-    this.server.setRequestHandler(
-      'statistics',
-      async () => this.handler.getStatistics()
-    )
+    // Note: Health and statistics are handled via HTTP endpoints, not MCP
 
     logger.info('Request handlers configured')
   }

@@ -11,11 +11,21 @@ import type {
   CDPConnectionOptions,
   CDPConnectionState,
   CDPSession,
-  CDPTarget,
-  CDPEventMap
-} from '@nexus/curupira-shared/types/cdp.js';
-import { LRUCache, ExpiringCache } from '@nexus/curupira-shared/utils/data-structures.js';
-import { waitForCondition, retryWithBackoff } from '@nexus/curupira-shared/utils/cdp.js';
+  CDPTarget
+} from '@curupira/shared/types';
+import { LRUCache, ExpiringCache } from '@curupira/shared/utils';
+import { waitForCondition, retryWithBackoff } from '@curupira/shared/utils';
+
+// Local event map type
+type CDPEventMap = {
+  stateChange: CDPConnectionState;
+  connected: any;
+  disconnected: void;
+  targetsUpdated: CDPTarget[];
+  sessionError: { sessionId: string; error: Error };
+  sessionClosed: { sessionId: string };
+  [key: string]: any;
+};
 
 interface InternalSession extends CDPSession {
   ws: WebSocket;
@@ -24,10 +34,10 @@ interface InternalSession extends CDPSession {
     reject: (error: Error) => void;
     timeout: NodeJS.Timeout;
   }>;
-  eventHandlers: Map<string, Set<Function>>;
+  eventHandlers: Map<string, Set<(...args: any[]) => void>>;
 }
 
-export class ChromeClient extends EventEmitter implements CDPClient {
+export class ChromeClient implements CDPClient {
   private config: CDPConnectionOptions;
   private sessions: Map<string, InternalSession> = new Map();
   private state: CDPConnectionState = 'disconnected';
@@ -36,13 +46,11 @@ export class ChromeClient extends EventEmitter implements CDPClient {
   private responseCache: LRUCache<string, any> = new LRUCache(100);
   private eventCache: ExpiringCache<string, any[]> = new ExpiringCache(60000); // 1 minute
 
+  private eventEmitter = new EventEmitter();
+
   constructor(config: CDPConnectionOptions) {
-    super();
     this.config = {
       timeout: 30000,
-      host: 'localhost',
-      port: 9222,
-      secure: false,
       ...config
     };
   }
@@ -58,7 +66,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
     }
 
     this.state = 'connecting';
-    this.emit('stateChange', this.state);
+    this.eventEmitter.emit('stateChange', this.state);
 
     try {
       const protocol = this.config.secure ? 'https' : 'http';
@@ -83,11 +91,11 @@ export class ChromeClient extends EventEmitter implements CDPClient {
       await this.updateTargets();
       
       this.state = 'connected';
-      this.emit('stateChange', this.state);
-      this.emit('connected', versionInfo);
+      this.eventEmitter.emit('stateChange', this.state);
+      this.eventEmitter.emit('connected', versionInfo);
     } catch (error) {
       this.state = 'error';
-      this.emit('stateChange', this.state);
+      this.eventEmitter.emit('stateChange', this.state);
       logger.error('Failed to connect to Chrome', error);
       throw error;
     }
@@ -124,8 +132,9 @@ export class ChromeClient extends EventEmitter implements CDPClient {
           
           const session: InternalSession = {
             id: sessionId,
+            sessionId: sessionId,
             targetId,
-            targetType: target.type,
+            targetType: target.type as 'page' | 'iframe' | 'worker' | 'service_worker' | 'other',
             ws,
             messageHandlers: new Map(),
             eventHandlers: new Map()
@@ -143,7 +152,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
 
           ws.on('error', (error) => {
             logger.error('WebSocket error', { sessionId, error });
-            this.emit('sessionError', { sessionId, error });
+            this.eventEmitter.emit('sessionError', { sessionId, error });
           });
 
           // Enable necessary domains
@@ -152,8 +161,9 @@ export class ChromeClient extends EventEmitter implements CDPClient {
 
           resolve({
             id: sessionId,
+            sessionId: sessionId,
             targetId,
-            targetType: target.type
+            targetType: target.type as 'page' | 'iframe' | 'worker' | 'service_worker' | 'other'
           });
         });
 
@@ -196,7 +206,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
 
     this.sessions.delete(sessionId);
     this.eventCache.delete(`session:${sessionId}`);
-    this.emit('sessionClosed', { sessionId });
+    this.eventEmitter.emit('sessionClosed', { sessionId });
   }
 
   async updateTargets(): Promise<void> {
@@ -227,16 +237,18 @@ export class ChromeClient extends EventEmitter implements CDPClient {
       this.targets.clear();
       for (const target of targets) {
         this.targets.set(target.id, {
-          id: target.id,
+          targetId: target.id,
           type: target.type,
           title: target.title,
           url: target.url,
+          attached: false,
+          canAccessOpener: false,
           webSocketDebuggerUrl: target.webSocketDebuggerUrl,
           devtoolsFrontendUrl: target.devtoolsFrontendUrl
         });
       }
 
-      this.emit('targetsUpdated', Array.from(this.targets.values()));
+      this.eventEmitter.emit('targetsUpdated', Array.from(this.targets.values()));
     } catch (error) {
       logger.error('Failed to update targets', error);
       throw error;
@@ -279,7 +291,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
     handler: (params: CDPEventMap[K]) => void
   ): void;
   on(event: string, handler: (params: any) => void): void {
-    super.on(event, handler);
+    this.eventEmitter.on(event, handler);
   }
 
   off<K extends keyof CDPEventMap>(
@@ -288,13 +300,13 @@ export class ChromeClient extends EventEmitter implements CDPClient {
   ): void;
   off(event: string, handler?: (params: any) => void): void {
     if (handler) {
-      super.off(event, handler);
+      this.eventEmitter.removeListener(event, handler);
     } else {
-      super.removeAllListeners(event);
+      this.eventEmitter.removeAllListeners(event);
     }
   }
 
-  getTargets(): CDPTarget[] {
+  async getTargets(): Promise<CDPTarget[]> {
     return Array.from(this.targets.values());
   }
 
@@ -305,6 +317,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
   getSessions(): CDPSession[] {
     return Array.from(this.sessions.values()).map(session => ({
       id: session.id,
+      sessionId: session.sessionId,
       targetId: session.targetId,
       targetType: session.targetType
     }));
@@ -316,6 +329,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
     
     return {
       id: session.id,
+      sessionId: session.sessionId,
       targetId: session.targetId,
       targetType: session.targetType
     };
@@ -323,6 +337,51 @@ export class ChromeClient extends EventEmitter implements CDPClient {
 
   getState(): CDPConnectionState {
     return this.state;
+  }
+
+  getConnectionState(): CDPConnectionState {
+    return this.state;
+  }
+
+  async attachToTarget(targetId: string): Promise<void> {
+    // For browserless, creating a session is the same as attaching
+    await this.createSession(targetId);
+  }
+
+  async detachFromTarget(sessionId: string): Promise<void> {
+    await this.closeSession(sessionId);
+  }
+
+  once<T = unknown>(event: string, handler: (params: T) => void): void {
+    this.eventEmitter.once(event, handler);
+  }
+
+  async waitForTarget(
+    predicate: (target: CDPTarget) => boolean,
+    timeout: number = 30000
+  ): Promise<CDPTarget> {
+    const existingTarget = Array.from(this.targets.values()).find(predicate);
+    if (existingTarget) {
+      return existingTarget;
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeoutHandle = setTimeout(() => {
+        this.off('targetsUpdated', checkTargets);
+        reject(new Error('Timeout waiting for target'));
+      }, timeout);
+
+      const checkTargets = (targets: CDPTarget[]) => {
+        const target = targets.find(predicate);
+        if (target) {
+          clearTimeout(timeoutHandle);
+          this.off('targetsUpdated', checkTargets);
+          resolve(target);
+        }
+      };
+
+      this.on('targetsUpdated', checkTargets);
+    });
   }
 
   private async sendBrowserCommand<T>(
@@ -452,7 +511,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
         }
 
         // Emit global event
-        this.emit(event, { sessionId, ...params });
+        this.eventEmitter.emit(event, { sessionId, ...params });
       }
     } catch (error) {
       logger.error('Failed to parse CDP message', { sessionId, error });
@@ -465,7 +524,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
     }
 
     this.state = 'disconnected';
-    this.emit('stateChange', this.state);
+    this.eventEmitter.emit('stateChange', this.state);
 
     // Close all sessions
     const sessionIds = Array.from(this.sessions.keys());
@@ -477,7 +536,7 @@ export class ChromeClient extends EventEmitter implements CDPClient {
     this.eventCache.clear();
     this.messageId = 1;
 
-    this.emit('disconnected');
+    this.eventEmitter.emit('disconnected');
   }
 
   isConnected(): boolean {
@@ -486,6 +545,21 @@ export class ChromeClient extends EventEmitter implements CDPClient {
 
   getSessionCount(): number {
     return this.sessions.size;
+  }
+
+  // EventEmitter interface implementation
+  emit(event: string, ...args: any[]): boolean {
+    return this.eventEmitter.emit(event, ...args);
+  }
+
+  removeListener(event: string, listener: (...args: any[]) => void): this {
+    this.eventEmitter.removeListener(event, listener);
+    return this;
+  }
+
+  removeAllListeners(event?: string): this {
+    this.eventEmitter.removeAllListeners(event);
+    return this;
   }
 
   // Session-specific event handling

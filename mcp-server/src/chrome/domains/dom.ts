@@ -5,8 +5,8 @@
  */
 
 import type { ChromeClient } from '../client.js'
-import type { DOM } from '@nexus/curupira-shared/types/cdp.js'
-import { buildSelector, getNodeAttribute } from '@nexus/curupira-shared/utils/cdp.js'
+import type { DOM } from '@curupira/shared/types/cdp.js'
+import { buildSelector, getNodeAttribute } from '@curupira/shared/utils'
 import { logger } from '../../config/logger.js'
 
 export class DOMDomain {

@@ -10,7 +10,7 @@ import type {
   ZustandStoreInfo,
   ZustandStateChange,
   StoreId
-} from '@nexus/curupira-shared/types/index.js'
+} from '@curupira/shared/types/index.js'
 import { ZustandDetector, type ZustandInfo } from './detector.js'
 import { ZustandInspector, type StoreInspection } from './inspector.js'
 import { logger } from '../../config/logger.js'
@@ -278,7 +278,7 @@ export class ZustandIntegrationImpl implements ZustandIntegration {
       })()
     `)
 
-    return result.value
+    return result.value || null
   }
 
   /**

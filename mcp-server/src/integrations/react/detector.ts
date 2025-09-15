@@ -5,7 +5,7 @@
  */
 
 import type { RuntimeDomain } from '../../chrome/domains/runtime.js'
-import type { ReactDevToolsHook, ReactFiberNode } from '@nexus/curupira-shared/types/state.js'
+import type { ReactDevToolsHook, ReactFiberNode } from '@curupira/shared/types/state.js'
 import { logger } from '../../config/logger.js'
 
 export interface ReactInfo {

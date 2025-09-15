@@ -23,6 +23,13 @@ Curupira is a Model Context Protocol (MCP) debugging tool that provides AI assis
 - 🚀 **Real-time Communication**: WebSocket-based bidirectional data flow
 - 🤖 **AI-Optimized**: Built specifically for AI assistant interaction via MCP
 
+## 📚 Documentation
+
+- [API Documentation](./docs/API.md) - Complete API reference for all resources, tools, and prompts
+- [Usage Examples](./docs/EXAMPLES.md) - Common debugging scenarios and integration examples
+- [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) - Solutions for common issues
+- [Development Specification](./CURUPIRA_ENHANCED_SPEC.md) - Technical implementation details
+
 ## Quick Start
 
 ### Using Docker

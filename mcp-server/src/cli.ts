@@ -9,7 +9,7 @@
 import { Command } from 'commander'
 import { CurupiraServer, ServerOptions } from './server.js'
 import { createLogger } from '@curupira/shared/logging'
-import type { LogLevel } from '@curupira/shared/config'
+import type { LogLevel } from '@curupira/shared/types'
 
 const logger = createLogger({ level: 'info', name: 'cli' })
 

@@ -5,8 +5,8 @@
  */
 
 import type { ChromeClient } from '../client.js'
-import type { Runtime, CDPSession } from '@nexus/curupira-shared/types/cdp.js'
-import { remoteObjectToValue, valueToCallArgument } from '@nexus/curupira-shared/utils/cdp.js'
+import type { Runtime, CDPSession } from '@curupira/shared/types/cdp.js'
+import { remoteObjectToValue, valueToCallArgument } from '@curupira/shared/utils'
 import { logger } from '../../config/logger.js'
 
 export class RuntimeDomain {

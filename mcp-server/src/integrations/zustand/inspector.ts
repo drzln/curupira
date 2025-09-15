@@ -10,8 +10,8 @@ import type {
   ZustandStoreInfo,
   ZustandStateChange,
   StoreId
-} from '@nexus/curupira-shared/types/index.js'
-import { CircularBuffer } from '@nexus/curupira-shared/utils/index.js'
+} from '@curupira/shared/types/index.js'
+import { CircularBuffer } from '@curupira/shared/utils'
 import { logger } from '../../config/logger.js'
 
 export interface StoreInspection<T = unknown> {
@@ -92,7 +92,7 @@ export class ZustandInspector {
       })()
     `)
 
-    return result.value
+    return result.value || null
   }
 
   /**

@@ -216,7 +216,7 @@ export class StateResourceProvider {
     }
 
     if (path === 'machines') {
-      const machines = await this.xstate.getMachines()
+      const machines = await (this.xstate as any).getMachines()
       return {
         content: JSON.stringify({
           total: machines.length,

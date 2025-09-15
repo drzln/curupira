@@ -11,7 +11,7 @@ import type {
   XStateSnapshot,
   XStateEvent,
   ActorId
-} from '@nexus/curupira-shared/types/index.js'
+} from '@curupira/shared/types/index.js'
 import { XStateDetector, type XStateInfo } from './detector.js'
 import { XStateInspector, type ActorInspection } from './inspector.js'
 import { logger } from '../../config/logger.js'
@@ -236,7 +236,7 @@ export class XStateIntegrationImpl implements XStateIntegration {
       })()
     `)
 
-    return result.value
+    return result.value || null
   }
 
   /**
@@ -251,7 +251,10 @@ export class XStateIntegrationImpl implements XStateIntegration {
       return []
     }
 
-    return this.xstateInfo?.machines || []
+    return (this.xstateInfo?.machines || []).map(m => ({
+      ...m,
+      actorCount: 0 // TODO: Calculate actual actor count per machine
+    }))
   }
 }
 

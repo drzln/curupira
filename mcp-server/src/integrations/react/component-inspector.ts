@@ -6,7 +6,7 @@
 
 import type { RuntimeDomain } from '../../chrome/domains/runtime.js'
 import type { DOMDomain } from '../../chrome/domains/dom.js'
-import type { ComponentId } from '@nexus/curupira-shared/types/branded.js'
+import type { ComponentId } from '@curupira/shared/types/branded.js'
 import { FiberWalker, type FiberComponent } from './fiber-walker.js'
 import { logger } from '../../config/logger.js'
 
@@ -90,7 +90,7 @@ export class ComponentInspector {
       found: boolean
       tagName?: string
       attributes?: Record<string, string>
-      rect?: DOMRect
+      rect?: { x: number; y: number; width: number; height: number; top: number; right: number; bottom: number; left: number }
     }>(`
       (() => {
         // Find DOM node for component

@@ -29,9 +29,17 @@ export class MCPHandler {
   private resourceProviders?: ResourceProviders
   private toolProviders?: ToolProviders
   private prompts: Map<string, Prompt> = new Map()
+  private securityManager?: any // Will be set by server
 
   constructor() {
     this.initializePrompts()
+  }
+
+  /**
+   * Set security manager
+   */
+  setSecurityManager(securityManager: any) {
+    this.securityManager = securityManager
   }
 
   /**
@@ -160,7 +168,7 @@ export class MCPHandler {
       }
 
       // Replace template variables
-      let prompt = promptTemplate.prompt
+      let prompt = String(promptTemplate.prompt)
       if (args) {
         for (const [key, value] of Object.entries(args)) {
           prompt = prompt.replace(`{{${key}}}`, String(value))
@@ -326,7 +334,10 @@ Then focus on any specific issues you discover.`,
 
     if (this.resourceProviders) {
       const resourceStats = await this.resourceProviders.getStatistics()
-      stats.resources = resourceStats
+      stats.resources = {
+        total: resourceStats.totalResources,
+        byProvider: resourceStats.byProvider
+      }
     }
 
     if (this.toolProviders) {

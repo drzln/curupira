@@ -239,14 +239,13 @@ export class CurupiraServer {
         try {
           const { ChromeManager } = await import('./chrome/manager.js')
           const manager = ChromeManager.getInstance()
+          // Parse serviceUrl to get host and port
+          const url = new URL(this.config.chrome.serviceUrl)
           await manager.initialize({
-            serviceUrl: this.config.chrome.serviceUrl,
-            connectTimeout: this.config.chrome.connectTimeout,
-            pageTimeout: this.config.chrome.pageTimeout,
-            defaultViewport: this.config.chrome.defaultViewport ? {
-              width: this.config.chrome.defaultViewport.width || 1920,
-              height: this.config.chrome.defaultViewport.height || 1080
-            } : undefined
+            host: url.hostname,
+            port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
+            secure: url.protocol === 'https:',
+            timeout: this.config.chrome.connectTimeout
           })
           logger.info('Chrome integration initialized')
         } catch (error) {

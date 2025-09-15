@@ -20,12 +20,12 @@ deployments:
     build:
       dockerfile: Dockerfile.infrastructure.deploy
     storage:
-      endpoint: http://minio.infrastructure.plo.quero.local
-      region: us-east-1
-      bucket: lambda-artifacts
+      endpoint: "local"
+      region: "local"
+      bucket: "temp"
       forcePathStyle: true
-      accessKeyId: ${MINIO_ACCESS_KEY_ID}
-      secretAccessKey: ${MINIO_SECRET_ACCESS_KEY}
+      accessKeyId: "temp"
+      secretAccessKey: "temp"
     deployment:
       type: container
       runtime: nodejs
@@ -52,6 +52,12 @@ deployments:
           env:
             - name: NODE_ENV
               value: "production"
+            - name: CURUPIRA_TRANSPORT_WEBSOCKET
+              value: "true"
+            - name: CURUPIRA_TRANSPORT_HTTP
+              value: "true"
+            - name: CURUPIRA_LOG_LEVEL
+              value: "info"
           livenessProbe:
             httpGet:
               path: /health
@@ -70,5 +76,4 @@ deployments:
             failureThreshold: 3
           useExistingManifests: true
     notifications:
-      webhook: ${DISCORD_WEBHOOK_URL}
-      enabled: true
+      enabled: false

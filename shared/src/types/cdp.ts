@@ -17,12 +17,13 @@ export type CDPConnectionState = 'disconnected' | 'connecting' | 'connected' | '
  * CDP session information
  */
 export interface CDPSession {
+  id?: string
   sessionId: string
   targetId: string
   targetType: 'page' | 'iframe' | 'worker' | 'service_worker' | 'other'
-  url: string
-  title: string
-  attached: boolean
+  url?: string
+  title?: string
+  attached?: boolean
 }
 
 /**
@@ -36,6 +37,8 @@ export interface CDPTarget {
   attached: boolean
   canAccessOpener: boolean
   browserContextId?: string
+  webSocketDebuggerUrl?: string
+  devtoolsFrontendUrl?: string
 }
 
 /**
@@ -107,6 +110,12 @@ export namespace Runtime {
     value: ObjectPreview
   }
 
+  export interface CallArgument {
+    value?: any
+    unserializableValue?: string
+    objectId?: string
+  }
+
   export interface EvaluateParams {
     expression: string
     objectGroup?: string
@@ -161,6 +170,53 @@ export namespace Runtime {
   export interface StackTraceId {
     id: string
     debuggerId?: string
+  }
+
+  export interface PropertyDescriptor {
+    name: string
+    value?: RemoteObject
+    writable?: boolean
+    get?: RemoteObject
+    set?: RemoteObject
+    configurable: boolean
+    enumerable: boolean
+    wasThrown?: boolean
+    isOwn?: boolean
+    symbol?: RemoteObject
+  }
+
+  export interface InternalPropertyDescriptor {
+    name: string
+    value?: RemoteObject
+  }
+
+  export interface PrivatePropertyDescriptor {
+    name: string
+    value?: RemoteObject
+    get?: RemoteObject
+    set?: RemoteObject
+  }
+
+  export interface ExecutionContextDescription {
+    id: number
+    origin: string
+    name: string
+    uniqueId: string
+    auxData?: Record<string, unknown>
+  }
+
+  export interface ConsoleAPICalledEvent {
+    type: string
+    args: RemoteObject[]
+    executionContextId: number
+    timestamp: number
+    stackTrace?: StackTrace
+    context?: string
+  }
+
+  export interface ExceptionThrownEvent {
+    timestamp: number
+    exceptionDetails: ExceptionDetails
   }
 }
 
@@ -252,6 +308,7 @@ export namespace DOM {
  */
 export namespace Network {
   export interface Request {
+    requestId: string
     url: string
     urlFragment?: string
     method: string
@@ -265,6 +322,13 @@ export namespace Network {
     isLinkPreload?: boolean
     trustTokenParams?: TrustTokenParams
     isSameSite?: boolean
+    failed?: boolean
+    response?: Response
+    timestamp?: number
+    type?: string
+    encodedDataLength?: number
+    finished?: boolean
+    errorText?: string
   }
 
   export interface PostDataEntry {
@@ -300,6 +364,7 @@ export namespace Network {
     encodedDataLength: number
     timing?: ResourceTiming
     serviceWorkerResponseSource?: string
+    timestamp?: number
     responseTime?: number
     cacheStorageCacheName?: string
     protocol?: string
@@ -367,6 +432,38 @@ export namespace Network {
     signatureAlgorithm: string
     signatureData: string
   }
+
+  export interface Cookie {
+    name: string
+    value: string
+    domain?: string
+    path?: string
+    expires?: number
+    httpOnly?: boolean
+    secure?: boolean
+    sameSite?: string
+  }
+
+  export interface CookieParam {
+    name: string
+    value: string
+    url?: string
+    domain?: string
+    path?: string
+    secure?: boolean
+    httpOnly?: boolean
+    sameSite?: string
+    expires?: number
+  }
+
+  export type ResourceType = string
+  export type ErrorReason = string
+  
+  export interface Initiator {
+    type: string
+  }
+
+  export type BlockedReason = string
 }
 
 /**
@@ -418,6 +515,39 @@ export namespace Page {
     width: number
     height: number
     scale?: number
+  }
+
+  export type TransitionType = string
+
+  export interface NavigationEntry {
+    id: number
+    url: string
+    userTypedURL: string
+    title: string
+    transitionType: TransitionType
+  }
+
+  export interface LayoutViewport {
+    pageX: number
+    pageY: number
+    clientWidth: number
+    clientHeight: number
+  }
+
+  export interface VisualViewport {
+    offsetX: number
+    offsetY: number
+    pageX: number
+    pageY: number
+    clientWidth: number
+    clientHeight: number
+    scale: number
+    zoom?: number
+  }
+
+  export interface FrameTree {
+    frame: Frame
+    childFrames?: FrameTree[]
   }
 }
 

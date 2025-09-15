@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod'
-import type { CDPConnectionOptions } from '../shared/src/types/cdp.js'
+import type { CDPConnectionOptions } from '@curupira/shared/types'
 
 export interface CurupiraConfig {
   // Chrome DevTools Protocol connection

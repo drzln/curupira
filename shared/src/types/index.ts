@@ -138,8 +138,8 @@ export {
   CDPProtocolError
 } from './cdp.js'
 
-// Re-export CDP domain namespaces
-export { Runtime, DOM, Network, Page, Debugger, Console, Performance } from './cdp.js'
+// Note: CDP namespaces are available through their containing types
+// Use Runtime.RemoteObject, DOM.Node, etc. directly from imported types
 
 // Re-export all state management types
 export type {
@@ -177,6 +177,9 @@ export type {
   StateInspectionContext,
   StateInspector
 } from './state.js'
+
+// Re-export LogLevel from config
+export type { LogLevel } from '../config/schema.js'
 
 // Version information
 export const CURUPIRA_VERSION = '1.0.0'

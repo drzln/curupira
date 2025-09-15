@@ -108,20 +108,20 @@ export class HealthChecker {
    */
   private async checkChrome(): Promise<HealthStatus['checks']['chrome']> {
     try {
-      const isConnected = this.chromeClient.getConnectionState() === 'connected'
+      const isConnected = this.chromeClient.getState() === 'connected'
       
       if (!isConnected) {
         return { connected: false }
       }
 
       // Try to get version info
-      const version = await this.chromeClient.send('Browser.getVersion')
-      const targets = await this.chromeClient.send('Target.getTargets')
+      const version = await this.chromeClient.send<any>('Browser.getVersion')
+      const targets = await this.chromeClient.send<any>('Target.getTargets')
 
       return {
         connected: true,
-        version: version.product,
-        targets: targets.targetInfos?.length || 0,
+        version: version?.product || 'unknown',
+        targets: targets?.targetInfos?.length || 0,
       }
     } catch (error) {
       logger.error({ error }, 'Chrome health check failed')
@@ -181,7 +181,7 @@ export class HealthChecker {
       memory_heap_total_bytes: memoryUsage.heapTotal,
       memory_external_bytes: memoryUsage.external,
       memory_rss_bytes: memoryUsage.rss,
-      chrome_connected: this.chromeClient.getConnectionState() === 'connected' ? 1 : 0,
+      chrome_connected: this.chromeClient.getState() === 'connected' ? 1 : 0,
       resources_count: this.resourceCount,
       tools_count: this.toolCount,
     }

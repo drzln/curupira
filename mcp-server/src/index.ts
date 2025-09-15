@@ -33,18 +33,16 @@ export { PerformanceTool } from './tools/performance-tool.js'
 
 // Framework integrations
 export { createFrameworkIntegrations, type FrameworkIntegrations } from './integrations/index.js'
-export { ReactIntegration } from './integrations/react/index.js'
-export { XStateIntegration } from './integrations/xstate/index.js'
-export { ZustandIntegration } from './integrations/zustand/index.js'
+export type { ReactIntegration } from './integrations/react/index.js'
+export type { XStateIntegration } from './integrations/xstate/index.js'
+export type { ZustandIntegration } from './integrations/zustand/index.js'
 
 // Configuration
 export { loadConfig, getDefaultConfig, type CurupiraConfig } from './config/config.js'
 export { logger } from './config/logger.js'
 
 // Re-export types from shared
-export type * from '../shared/src/types/cdp.js'
-export type * from '../shared/src/types/mcp.js'
-export type * from '../shared/src/types/framework.js'
+export type * from '@curupira/shared/types'
 
 // Legacy exports for backward compatibility
 export * from './server.js'

@@ -209,7 +209,7 @@ export function setupUnifiedToolHandlers(server: Server) {
         case 'navigate': {
           const input = NavigateSchema.parse(args)
           const client = manager.getClient()
-          await client.send(input.sessionId, 'Page.navigate', { url: input.url })
+          await client.send('Page.navigate', { url: input.url }, input.sessionId)
           
           return {
             content: [
@@ -296,7 +296,7 @@ export function setupUnifiedToolHandlers(server: Server) {
           const { sessionId } = args as any
           const client = manager.getClient()
           
-          await client.send(sessionId, 'Debugger.pause')
+          await client.send('Debugger.pause', {}, sessionId)
           
           return {
             content: [
@@ -312,7 +312,7 @@ export function setupUnifiedToolHandlers(server: Server) {
           const { sessionId } = args as any
           const client = manager.getClient()
           
-          await client.send(sessionId, 'Debugger.resume')
+          await client.send('Debugger.resume', {}, sessionId)
           
           return {
             content: [
@@ -331,7 +331,7 @@ export function setupUnifiedToolHandlers(server: Server) {
           const stepMethod = type === 'into' ? 'Debugger.stepInto' : 
                                type === 'over' ? 'Debugger.stepOver' : 
                                'Debugger.stepOut'
-          await client.send(sessionId, stepMethod)
+          await client.send(stepMethod, {}, sessionId)
           
           return {
             content: [
@@ -347,8 +347,8 @@ export function setupUnifiedToolHandlers(server: Server) {
           const { sessionId } = args as any
           const client = manager.getClient()
           
-          await client.send(sessionId, 'Profiler.enable')
-          await client.send(sessionId, 'Profiler.start')
+          await client.send('Profiler.enable', {}, sessionId)
+          await client.send('Profiler.start', {}, sessionId)
           
           return {
             content: [
@@ -364,8 +364,8 @@ export function setupUnifiedToolHandlers(server: Server) {
           const { sessionId } = args as any
           const client = manager.getClient()
           
-          const profile = await client.send(sessionId, 'Profiler.stop')
-          await client.send(sessionId, 'Profiler.disable')
+          const profile = await client.send('Profiler.stop', {}, sessionId)
+          await client.send('Profiler.disable', {}, sessionId)
           
           return {
             content: [

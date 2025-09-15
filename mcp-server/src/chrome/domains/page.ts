@@ -5,7 +5,7 @@
  */
 
 import type { ChromeClient } from '../client.js'
-import type { Page, Runtime } from '@nexus/curupira-shared/types/cdp.js'
+import type { Page, Runtime } from '@curupira/shared/types/cdp.js'
 import { logger } from '../../config/logger.js'
 
 export class PageDomain {

@@ -58,37 +58,37 @@ export class PerformanceTool {
       {
         name: `${this.toolPrefix}/captureMetrics`,
         description: 'Capture current performance metrics',
-        inputSchema: captureMetricsSchema
+        inputSchema: captureMetricsSchema as any
       },
       {
         name: `${this.toolPrefix}/startProfiling`,
         description: 'Start performance profiling',
-        inputSchema: startProfilingSchema
+        inputSchema: startProfilingSchema as any
       },
       {
         name: `${this.toolPrefix}/stopProfiling`,
         description: 'Stop profiling and get results',
-        inputSchema: z.object({})
+        inputSchema: z.object({}) as any
       },
       {
         name: `${this.toolPrefix}/analyzeRendering`,
         description: 'Analyze rendering performance',
-        inputSchema: analyzeRenderingSchema
+        inputSchema: analyzeRenderingSchema as any
       },
       {
         name: `${this.toolPrefix}/memorySnapshot`,
         description: 'Take memory snapshot',
-        inputSchema: memorySnapshotSchema
+        inputSchema: memorySnapshotSchema as any
       },
       {
         name: `${this.toolPrefix}/analyzeLongTasks`,
         description: 'Analyze long-running tasks',
-        inputSchema: analyzeLongTasksSchema
+        inputSchema: analyzeLongTasksSchema as any
       },
       {
         name: `${this.toolPrefix}/runLighthouse`,
         description: 'Run Lighthouse audit (simulated)',
-        inputSchema: lighthouse
+        inputSchema: lighthouse as any
       }
     ]
   }

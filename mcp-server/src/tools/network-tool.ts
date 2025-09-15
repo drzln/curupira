@@ -70,42 +70,42 @@ export class NetworkTool {
       {
         name: `${this.toolPrefix}/setCacheDisabled`,
         description: 'Enable or disable browser cache',
-        inputSchema: setCacheDisabledSchema
+        inputSchema: setCacheDisabledSchema as any
       },
       {
         name: `${this.toolPrefix}/setUserAgent`,
         description: 'Override user agent string',
-        inputSchema: setUserAgentSchema
+        inputSchema: setUserAgentSchema as any
       },
       {
         name: `${this.toolPrefix}/setExtraHeaders`,
         description: 'Set extra HTTP headers for all requests',
-        inputSchema: setExtraHeadersSchema
+        inputSchema: setExtraHeadersSchema as any
       },
       {
         name: `${this.toolPrefix}/blockRequests`,
         description: 'Block network requests matching patterns',
-        inputSchema: blockRequestsSchema
+        inputSchema: blockRequestsSchema as any
       },
       {
         name: `${this.toolPrefix}/throttleNetwork`,
         description: 'Simulate slow network conditions',
-        inputSchema: throttleNetworkSchema
+        inputSchema: throttleNetworkSchema as any
       },
       {
         name: `${this.toolPrefix}/clearData`,
         description: 'Clear cookies and/or cache',
-        inputSchema: clearDataSchema
+        inputSchema: clearDataSchema as any
       },
       {
         name: `${this.toolPrefix}/setCookie`,
         description: 'Set a cookie',
-        inputSchema: setCookieSchema
+        inputSchema: setCookieSchema as any
       },
       {
         name: `${this.toolPrefix}/deleteCookies`,
         description: 'Delete cookies',
-        inputSchema: deleteCookiesSchema
+        inputSchema: deleteCookiesSchema as any
       }
     ]
   }

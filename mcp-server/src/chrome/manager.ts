@@ -3,13 +3,14 @@
  * Singleton manager for Chrome client lifecycle
  */
 
-import { ChromeClient, ChromeConfig } from './client.js';
+import { ChromeClient } from './client.js';
+import type { CDPConnectionOptions } from '@curupira/shared/types';
 import { logger } from '../config/logger.js';
 
 export class ChromeManager {
   private static instance: ChromeManager;
   private client: ChromeClient | null = null;
-  private config: ChromeConfig | null = null;
+  private config: CDPConnectionOptions | null = null;
   private activeSessions: Map<string, { sessionId: string; createdAt: Date }> = new Map();
 
   private constructor() {}
@@ -21,7 +22,7 @@ export class ChromeManager {
     return ChromeManager.instance;
   }
 
-  async initialize(config: ChromeConfig): Promise<void> {
+  async initialize(config: CDPConnectionOptions): Promise<void> {
     if (this.client && this.client.isConnected()) {
       logger.warn('Chrome client already initialized');
       return;
@@ -45,7 +46,7 @@ export class ChromeManager {
       this.activeSessions.delete(sessionId);
     });
 
-    this.client.on('sessionClosed', (sessionId) => {
+    this.client.on('sessionClosed', ({ sessionId }) => {
       logger.info('Chrome session closed', { sessionId });
       this.activeSessions.delete(sessionId);
     });
@@ -60,7 +61,16 @@ export class ChromeManager {
       throw new Error('Chrome not connected');
     }
 
-    const sessionId = await this.client.createPage();
+    // Get the first page target or create a new one
+    const targets = await this.client.getTargets();
+    const pageTarget = targets.find(t => t.type === 'page');
+    
+    if (!pageTarget) {
+      throw new Error('No page target available');
+    }
+    
+    const session = await this.client.createSession(pageTarget.targetId);
+    const sessionId = session.sessionId;
     this.activeSessions.set(sessionId, {
       sessionId,
       createdAt: new Date()
@@ -90,7 +100,7 @@ export class ChromeManager {
   } {
     return {
       connected: this.client?.isConnected() || false,
-      serviceUrl: this.config?.serviceUrl || null,
+      serviceUrl: this.config ? `${this.config.secure ? 'https' : 'http'}://${this.config.host}:${this.config.port}` : null,
       activeSessions: this.activeSessions.size,
       sessions: Array.from(this.activeSessions.values())
     };

@@ -63,37 +63,37 @@ export class DOMTool {
       {
         name: `${this.toolPrefix}/querySelector`,
         description: 'Find elements using CSS selector',
-        inputSchema: querySelectorSchema
+        inputSchema: querySelectorSchema as any
       },
       {
         name: `${this.toolPrefix}/getAttribute`,
         description: 'Get attribute value from element',
-        inputSchema: getAttributeSchema
+        inputSchema: getAttributeSchema as any
       },
       {
         name: `${this.toolPrefix}/setAttribute`,
         description: 'Set attribute value on element',
-        inputSchema: setAttributeSchema
+        inputSchema: setAttributeSchema as any
       },
       {
         name: `${this.toolPrefix}/setTextContent`,
         description: 'Set text content of element',
-        inputSchema: setTextContentSchema
+        inputSchema: setTextContentSchema as any
       },
       {
         name: `${this.toolPrefix}/click`,
         description: 'Click an element',
-        inputSchema: clickElementSchema
+        inputSchema: clickElementSchema as any
       },
       {
         name: `${this.toolPrefix}/scrollTo`,
         description: 'Scroll element into view',
-        inputSchema: scrollToElementSchema
+        inputSchema: scrollToElementSchema as any
       },
       {
         name: `${this.toolPrefix}/highlight`,
         description: 'Highlight element temporarily',
-        inputSchema: highlightElementSchema
+        inputSchema: highlightElementSchema as any
       }
     ]
   }
