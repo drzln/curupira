@@ -423,6 +423,8 @@ export class CurupiraServer {
     const httpPath = httpConfig.httpPath || '/mcp'
     const ssePath = httpConfig.ssePath || '/mcp/sse' 
     const sseEnabled = httpConfig.sseEnabled !== false
+    const wsConfig = this.config.transports?.websocket || {}
+    const wsEnabled = wsConfig.enabled !== false
 
     // Log transport configuration
     logger.info({ 
@@ -440,6 +442,46 @@ export class CurupiraServer {
     this.mcpServer.connect(this.httpSseTransport).catch((error) => {
       logger.error({ error }, 'Failed to connect HTTP/SSE transport to MCP server')
     })
+
+    // Only register GET endpoint if WebSocket is NOT using the same path
+    // or if WebSocket is disabled entirely
+    if (!wsEnabled || (wsConfig.path || '/mcp') !== httpPath) {
+      // GET endpoint for MCP server discovery (used by Claude Code)
+      this.fastify.get(httpPath, async (request, reply) => {
+        return reply
+          .code(200)
+          .header('Content-Type', 'application/json')
+          .send({
+            name: this.config.name || 'curupira-mcp-server',
+            version: this.config.version || '1.0.0',
+            protocol: 'mcp',
+            capabilities: {
+              resources: {},
+              tools: {},
+              prompts: {},
+            },
+            transports: {
+              http: {
+                endpoint: httpPath,
+                method: 'POST',
+                description: 'HTTP transport for MCP requests',
+              },
+              sse: sseEnabled ? {
+                endpoint: ssePath,
+                method: 'GET',
+                description: 'Server-Sent Events for MCP responses',
+              } : undefined,
+            },
+            timestamp: new Date().toISOString(),
+          })
+      })
+    } else {
+      logger.info({ 
+        httpPath, 
+        wsPath: wsConfig.path || '/mcp',
+        reason: 'WebSocket already registered GET route for same path'
+      }, 'Skipping GET endpoint registration to avoid conflict')
+    }
 
     // HTTP endpoint for MCP messages (used by Claude Code)
     this.fastify.post(httpPath, async (request, reply) => {
