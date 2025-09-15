@@ -5,7 +5,7 @@
  */
 
 // Re-export server module
-export * from './server/index.js'
+export * from './server.js'
 
 // Re-export shared types that consumers might need
 export type {

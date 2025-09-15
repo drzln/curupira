@@ -7,11 +7,9 @@
  */
 
 import { Command } from 'commander'
-import { createServerBuilder, createDevServer, createProductionServer } from './server/builder.js'
-import { loadConfig } from '@curupira/shared/config'
+import { CurupiraServer, ServerOptions } from './server.js'
 import { createLogger } from '@curupira/shared/logging'
 import type { LogLevel } from '@curupira/shared/config'
-import type { CurupiraServer } from './server/server.js'
 
 const logger = createLogger({ level: 'info', name: 'cli' })
 
@@ -55,71 +53,44 @@ program
     try {
       logger.info({ options }, 'Starting Curupira MCP server')
 
-      let server: CurupiraServer
-
-      // Load config from file if provided
-      if (options.config) {
-        const config = await loadConfig(options.config)
-        server = createServerBuilder()
-          .withName(options.name)
-          .withAddress(options.host, options.port)
-          .withEnvironment(options.env)
-          .withLogLevel(parseLogLevel(options.logLevel))
-          .build()
-      } else {
-        // Use environment-specific builder
-        if (options.env === 'production') {
-          server = createProductionServer(options.name, '1.0.0', options.port)
-            .withAddress(options.host, options.port)
-            .withLogLevel(parseLogLevel(options.logLevel))
-            .build()
-        } else {
-          server = createDevServer(options.name, options.port)
-            .withAddress(options.host, options.port)
-            .withEnvironment(options.env)
-            .withLogLevel(parseLogLevel(options.logLevel))
-            .build()
-        }
-
-        // Configure transports
-        if (!options.websocket) {
-          // Remove WebSocket transport if disabled
-          // This would need additional API in builder
-        }
-
-        // Configure health checks
-        if (!options.health) {
-          // Disable health checks
-          // This would need additional API in builder
+      // Create server options
+      const serverOptions: ServerOptions = {
+        configPath: options.config,
+        envConfig: {
+          name: options.name,
+          host: options.host,
+          port: options.port,
+          environment: options.env,
+          logLevel: parseLogLevel(options.logLevel),
+          healthCheck: options.health,
         }
       }
+
+      // Configure transports via environment variables if CLI flags are used
+      if (!options.websocket) {
+        process.env.CURUPIRA_TRANSPORT_WEBSOCKET = 'false'
+      }
+
+      // Create server
+      const server = new CurupiraServer(serverOptions)
 
       // Set up graceful shutdown
       process.on('SIGTERM', async () => {
         logger.info('Received SIGTERM, shutting down gracefully')
-        await server.stop('SIGTERM')
+        await server.stop()
         process.exit(0)
       })
 
       process.on('SIGINT', async () => {
         logger.info('Received SIGINT, shutting down gracefully')
-        await server.stop('SIGINT')
+        await server.stop()
         process.exit(0)
       })
 
       // Start server
       await server.start()
 
-      logger.info(
-        {
-          name: server.config.name,
-          version: server.config.version,
-          host: server.config.host,
-          port: server.config.port,
-          environment: server.config.environment
-        },
-        'Curupira MCP server started successfully'
-      )
+      logger.info('Curupira MCP server started successfully')
 
       // Keep process alive
       process.stdin.resume()
@@ -171,8 +142,20 @@ program
     try {
       logger.info('Starting development server')
 
-      const server = await createDevServer('curupira-dev', options.port)
-        .buildAndStart()
+      // Enable HTTP/SSE for dev mode
+      process.env.CURUPIRA_TRANSPORT_HTTP = 'true'
+      process.env.CURUPIRA_TRANSPORT_SSE = 'true'
+      
+      const server = new CurupiraServer({
+        envConfig: {
+          name: 'curupira-dev',
+          port: options.port,
+          environment: 'development',
+          logLevel: 'debug',
+        }
+      })
+      
+      await server.start()
 
       logger.info(
         {
@@ -184,12 +167,12 @@ program
 
       // Set up graceful shutdown
       process.on('SIGTERM', async () => {
-        await server.stop('SIGTERM')
+        await server.stop()
         process.exit(0)
       })
 
       process.on('SIGINT', async () => {
-        await server.stop('SIGINT')
+        await server.stop()
         process.exit(0)
       })
 
