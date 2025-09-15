@@ -1,91 +1,261 @@
 # Curupira Development Guide for Claude
 
-This guide outlines the systematic approach to developing Curupira - the MCP debugging tool for React applications.
+This guide outlines the systematic approach to developing Curupira - the CDP-native MCP debugging platform for React applications.
 
-## Core Development Principles
+## 🚨 CRITICAL RULES (STRICTLY HIERARCHICAL & DETERMINISTIC)
 
-### 1. TypeScript-First Development
-- **Type Safety**: All code must be strongly typed with TypeScript
-- **No `any`**: Use `unknown` and proper type guards instead
-- **Branded Types**: Use branded types for IDs and domain concepts
-- **Strict Mode**: TypeScript strict mode is always enabled
+### RULE 0: **Strict Dependency Hierarchy** 🏗️
+- **Level N → Level 0 to N-1 ONLY** (no upward/circular/sideways)
+- **Dependency graph = DAG** (Directed Acyclic Graph)
+- **Violations = build failure**
 
-### 2. Modular Architecture
-- **Maximum file size**: 500 lines per file (300 for components)
-- **Single responsibility**: Each module has one clear purpose
-- **Feature folders**: Organize by feature, not file type
-- **Clean dependencies**: No circular dependencies allowed
+### RULE 1: **One Canonical Implementation** 🗡️
+- **ONE of everything**: CDP client, resource provider, tool handler
+- **Find duplicates → Delete → Update imports**
+- **PR with duplicates = auto-reject**
 
-### 3. Test-Driven Development
-- **Test first**: Write tests before implementation
-- **Coverage target**: >80% for all code
-- **Test types**: Unit, integration, and E2E tests
-- **Mock strategically**: Use MSW for network mocking
+### RULE 2: **Pure Functional Core** 🧪
+- **Business logic = pure functions**
+- **Components = pure** (props → same output)
+- **Side effects in boundaries only** (Chrome API, MCP transport)
+- **Test everything** (behavior, not implementation)
 
-### 4. NPM Scripts Standard
-- **IMPORTANT**: All tasks must use `npm run` commands
-- **No Makefiles**: Package.json scripts are the single source of truth
-- **Descriptive names**: Scripts should be self-documenting
-- **Grouped by purpose**: Use comment separators in scripts
+### RULE 3: **Explicit State Machines** 🎯
+- **ALL state = XState machines** (useState BANNED)
+- **Every state explicitly defined**
+- **Illegal transitions impossible**
+- **Chrome connection states managed deterministically**
+
+### RULE 4: **Type-Driven Architecture** 📐
+- **Types first, code second**
+- **Branded types** (SessionId, TargetId, not string)
+- **Named exports only** (testability)
+- **Exhaustive matching** (no defaults)
+
+### RULE 5: **Technology Stack Compliance** 🛠️
+- **State**: XState + TypeScript strict mode
+- **Testing**: Vitest + MSW + Chrome DevTools Protocol mocks
+- **Chrome API**: Native Chrome DevTools Protocol over WebSocket
+- **MCP**: Official @modelcontextprotocol/sdk
+- **Build**: TypeScript 5.2+ with strict mode
+
+### RULE 6: **Modular Boundaries** 📦
+- **Max 500 lines/file** (200 for React components)
+- **Feature folders** with index.ts exports
+- **Private internals** (not exported)
+- **Clear public APIs**
+
+## 📊 Strict Hierarchy (Dependencies Flow DOWN Only)
+
+```
+Level 0: Foundation    → types, errors, constants, pure utils
+Level 1: Chrome Core   → CDP client, connection management
+Level 2: MCP Core      → resource providers, tool handlers
+Level 3: Integration   → React detection, state management bridges
+Level 4: Server        → transport, routing, main server
+```
+
+**RULE**: Level N imports ONLY from Level 0 to N-1
+
+## 🔄 Implementation Process
+
+1. **Type-First**: Define CDP/MCP types and interfaces
+2. **Bottom-Up**: Build Level 0 → 4
+3. **Test Each Level**: Before proceeding up
+4. **Enforce Hierarchy**: No upward imports
+
+## 🚨 Critical Violations
+
+- **Circular dependencies** → Restructure immediately
+- **Upward imports** → Move to lower level
+- **Duplicates** → Delete, use canonical
+- **useState** → Convert to XState
+- **Files >500 lines** → Modularize
+
+## 📋 Component Pattern
+
+```typescript
+FeatureName/
+├── types.ts          # Branded types, interfaces
+├── machine.ts        # XState ONLY (no useState)
+├── FeatureName.tsx   # < 200 lines, pure
+├── index.ts          # Public API exports
+└── tests/            # Comprehensive tests
+```
+
+## 🎯 Code Examples
+
+```typescript
+// ✅ CORRECT: Branded types
+type SessionId = string & { readonly _brand: 'SessionId' }
+type TargetId = string & { readonly _brand: 'TargetId' }
+
+// ✅ CORRECT: XState only
+const [state, send] = useMachine(chromeConnectionMachine)
+
+// ✅ CORRECT: Pure functions
+export const parseChromeCDPEvent = (event: CDPEvent): ParsedEvent => {
+  // Pure transformation
+}
+
+// ❌ WRONG: All banned
+useState() // Use XState
+export default // Named exports only
+any // Use unknown + type guards
+```
+
+## 🎯 Success Metrics
+
+1. ✅ **Strict hierarchy** (no circular/upward dependencies)
+2. ✅ **Zero duplicates** (one canonical everything)
+3. ✅ **Pure functional** (deterministic, testable)
+4. ✅ **All XState** (no useState)
+5. ✅ **<500 lines/file**
+6. ✅ **>80% test coverage**
 
 ## Development Workflow
 
 ### Initial Setup
 ```bash
 # Clone and setup
-git clone <repo>
 cd curupira
-npm run setup:dev  # Installs everything and sets up dev environment
+npm install
+npm run setup:dev  # Configures Chrome debugging, MCP transport
 ```
 
 ### Daily Development
 ```bash
-# Start development servers
+# Start development servers (Level 4 → 0 dependency order)
 npm run dev
 
-# Run tests in watch mode
+# Run tests in watch mode (test hierarchy compliance)
 npm run test:watch
 
-# Check code quality
+# Check code quality (enforce rules)
 npm run quality
 
-# Fix code issues
+# Fix code issues (auto-fix violations)
 npm run quality:fix
 ```
 
 ### Before Committing
 ```bash
-# Run all checks
-npm run lint:check
-npm run format:check
-npm run type-check
-npm run test
+# Run all hierarchy checks
+npm run hierarchy:check   # Verify dependency graph
+npm run duplicates:check  # Find duplicate implementations
+npm run types:check      # TypeScript strict mode
+npm run test            # All tests must pass
 
 # Or use the combined command
-npm run quality && npm run test
+npm run ci:check
 ```
 
-## Architecture Patterns
+## 🏛️ Curupira Architecture (Level-Based)
 
-### 1. Three-Component Architecture
+### Level 0: Foundation Types
+```typescript
+// Pure types and constants (no dependencies)
+export type SessionId = string & { readonly _brand: 'SessionId' }
+export type TargetId = string & { readonly _brand: 'TargetId' }
+
+export interface CDPEvent {
+  method: string;
+  params: unknown;
+  sessionId: SessionId;
+}
+
+export interface MCPResource {
+  uri: string;
+  name: string;
+  mimeType?: string;
+}
+```
+
+### Level 1: Chrome Core
+```typescript
+// CDP client and connection management (depends on Level 0)
+export class ChromeClient {
+  async createSession(targetId: TargetId): Promise<SessionId>
+  async send<T>(method: string, params: unknown, sessionId: SessionId): Promise<T>
+  async enableDomain(domain: string, sessionId: SessionId): Promise<void>
+}
+
+export class ConnectionManager {
+  async connect(options: CDPConnectionOptions): Promise<void>
+  async disconnect(): Promise<void>
+  getState(): ConnectionState
+}
+```
+
+### Level 2: MCP Core
+```typescript
+// Resource providers and tool handlers (depends on Level 0-1)
+export class ResourceProvider {
+  async listResources(): Promise<MCPResource[]>
+  async readResource(uri: string): Promise<ResourceContent>
+}
+
+export class ToolHandler {
+  async listTools(): Promise<MCPTool[]>
+  async callTool(name: string, args: unknown): Promise<ToolResult>
+}
+```
+
+### Level 3: Integration Layer
+```typescript
+// Framework detection and bridges (depends on Level 0-2)
+export class ReactDetector {
+  async detectReactVersion(sessionId: SessionId): Promise<ReactInfo>
+  async getFiberTree(sessionId: SessionId): Promise<FiberNode[]>
+}
+
+export class StateManagerBridge {
+  async detectStateManagers(sessionId: SessionId): Promise<StateManagerInfo[]>
+  async getZustandStores(sessionId: SessionId): Promise<ZustandStore[]>
+}
+```
+
+### Level 4: Server Layer
+```typescript
+// Transport and main server (depends on Level 0-3)
+export class CurupiraServer {
+  async start(): Promise<void>
+  async setupTransports(): Promise<void>
+  async setupMCPHandlers(): Promise<void>
+}
+```
+
+### Component Architecture
 ```
 curupira/
-├── shared/           # Shared types and utilities
-├── mcp-server/       # MCP protocol server
-└── chrome-extension/ # Browser extension
+├── shared/                    # Level 0: Foundation types and utilities
+│   ├── types/                 # CDP, MCP, React type definitions
+│   ├── constants/             # Static configuration values
+│   └── utils/                 # Pure utility functions
+├── mcp-server/                # Level 1-4: Server implementation
+│   ├── src/
+│   │   ├── chrome/            # Level 1: CDP client and connection
+│   │   ├── mcp/               # Level 2: Resource providers, tools
+│   │   ├── integrations/      # Level 3: React, state management bridges
+│   │   └── server/            # Level 4: Transport and main server
+└── chrome-extension/          # Separate component (Browser extension)
+    ├── content/               # Page context integration
+    ├── background/            # Service worker
+    └── popup/                 # Extension UI
 ```
 
-### 2. Message Flow
+### Message Flow (Hierarchical)
 ```
-Page Context → Content Script → Background Script → MCP Server
-                                                   ↓
-AI Assistant ← MCP Protocol ← WebSocket ← Response
+Level 4: Server Transport ← MCP Protocol ← AI Assistant
+    ↓
+Level 3: React Integration ← State Management Bridge
+    ↓
+Level 2: MCP Handlers ← Resource Providers ← Tool Handlers
+    ↓
+Level 1: Chrome Client ← CDP Connection ← WebSocket
+    ↓
+Level 0: Types & Utils ← Pure Functions ← Constants
 ```
-
-### 3. State Management
-- **Server State**: Managed by MCP server
-- **Extension State**: Chrome storage API
-- **Page State**: Read-only access via injected scripts
 
 ## MCP Implementation Guidelines
 

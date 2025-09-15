@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const ConfigSchema = z.object({
-  env: z.enum(['development', 'staging', 'production']).default('development'),
+  env: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   port: z.number().int().positive().default(8080),
   host: z.string().default('0.0.0.0'),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -61,7 +61,10 @@ function loadConfig(): Config {
     return ConfigSchema.parse(raw)
   } catch (error) {
     console.error('Invalid configuration:', error)
-    process.exit(1)
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1)
+    }
+    throw error
   }
 }
 

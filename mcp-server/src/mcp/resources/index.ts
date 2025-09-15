@@ -1,11 +1,11 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import type { ConsoleMessage, NetworkRequest, DOMElement } from '@curupira/shared/types'
+import type { ConsoleMessage, NetworkRequest, DOMElement, SessionId } from '@curupira/shared/types'
 import { ChromeManager } from '../../chrome/manager.js'
 import { logger } from '../../config/logger.js'
-import { ReactDetector } from '../../integrations/react/detector.js'
-import { XStateDetector } from '../../integrations/xstate/detector.js'
-import { ZustandDetector } from '../../integrations/zustand/detector.js'
+import { ChromeCDPResourceProvider } from './providers/cdp.js'
+import { ReactFrameworkProvider } from './providers/react.js'
+import { StateManagementResourceProvider } from './providers/state.js'
 
 // Define missing types locally
 interface DOMSnapshot {
@@ -27,10 +27,15 @@ interface ComponentState {
 // NOTE: This declaration is shared across multiple files, so we use the existing one
 
 export function setupUnifiedResourceHandlers(server: Server) {
+  // Initialize resource providers
+  const cdpProvider = new ChromeCDPResourceProvider()
+  const reactProvider = new ReactFrameworkProvider()
+  const stateProvider = new StateManagementResourceProvider()
+  
   // Single handler for listing all resources
   server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-    logger.info('Resource list handler called!')
-    console.log('[Resources] List handler called with request:', request)
+    logger.info('Enhanced resource list handler called!')
+    console.log('[Resources] Enhanced list handler called with request:', request)
     
     // Get Chrome manager instance
     const chromeManager = ChromeManager.getInstance()
@@ -38,11 +43,27 @@ export function setupUnifiedResourceHandlers(server: Server) {
     
     // Try to detect frameworks if Chrome is connected
     try {
-      // This would need access to runtime domain
-      // For now, assume we expose all resources
-      detectedFrameworks = { react: true, xstate: true, zustand: true, apollo: true }
+      const client = chromeManager.getClient()
+      const sessions = client.getSessions()
+      
+      if (sessions.length > 0) {
+        const sessionId = sessions[0].sessionId as SessionId
+        
+        // Detect frameworks using our providers
+        detectedFrameworks.react = await reactProvider.detectReact(sessionId) !== null
+        detectedFrameworks.xstate = await stateProvider.detectXState(sessionId)
+        detectedFrameworks.zustand = await stateProvider.detectZustand(sessionId)
+        detectedFrameworks.apollo = await stateProvider.detectApollo(sessionId)
+        
+        logger.info('Framework detection results:', detectedFrameworks)
+      } else {
+        // No active sessions, show all resources anyway
+        detectedFrameworks = { react: true, xstate: true, zustand: true, apollo: true }
+        logger.warn('No active Chrome sessions, showing all resources')
+      }
     } catch (error) {
       logger.warn('Framework detection failed, showing all resources anyway', error)
+      detectedFrameworks = { react: true, xstate: true, zustand: true, apollo: true }
     }
     
     const resources = [
@@ -285,7 +306,7 @@ export function setupUnifiedResourceHandlers(server: Server) {
     return { resources }
   })
 
-  // Single handler for reading any resource
+  // Single handler for reading any resource using enhanced providers
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const { uri } = request.params
     
@@ -293,7 +314,21 @@ export function setupUnifiedResourceHandlers(server: Server) {
       throw new Error('Resource URI is required')
     }
 
-    logger.debug({ uri }, 'Reading resource')
+    logger.debug({ uri }, 'Reading resource with enhanced providers')
+    
+    // Get active session for provider operations
+    const chromeManager = ChromeManager.getInstance()
+    let sessionId: SessionId | null = null
+    
+    try {
+      const client = chromeManager.getClient()
+      const sessions = client.getSessions()
+      if (sessions.length > 0) {
+        sessionId = sessions[0].sessionId as SessionId
+      }
+    } catch (error) {
+      logger.warn('Could not get active session for enhanced resource reading:', error)
+    }
 
     // Handle browser resources
     if (uri.startsWith('browser://')) {

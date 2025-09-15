@@ -88,20 +88,970 @@ Based on analysis of NovaSkyn and other products:
 - **MSW** (2.11.2): API mocking
 - **Testing Library**: Component testing
 
-## 🎯 Enhanced MCP Capabilities
+## 🎯 Enhanced MCP Capabilities - Maximum Resource Exposure
 
-### 1. Browser Control Resources
+Based on research of embedded-MCP library capabilities, Chrome DevTools Protocol domains, and frontend framework patterns, here's the comprehensive maximum tooling exposure:
 
-#### CDP Connection Management
+### 1. Chrome DevTools Protocol Domain Resources
+
+#### Runtime Domain
 ```typescript
 resources:
-  - name: "cdp/connection"
-    description: "Chrome DevTools Protocol connection status"
-    methods:
-      - connect(url: string, options?: CDPOptions)
-      - disconnect()
-      - listTargets()
-      - attachToTarget(targetId: string)
+  - name: "cdp/runtime/console"
+    description: "Console logs with filtering and live streaming"
+    schema:
+      timestamp: number
+      level: "log" | "warn" | "error" | "debug" | "info"
+      args: RemoteObject[]
+      stackTrace?: StackTrace
+      executionContextId: number
+      
+  - name: "cdp/runtime/exceptions"
+    description: "JavaScript exceptions and errors"
+    schema:
+      exceptionId: number
+      message: string
+      lineNumber: number
+      columnNumber: number
+      scriptId: string
+      url: string
+      stackTrace: StackTrace
+      
+  - name: "cdp/runtime/execution-contexts"
+    description: "JavaScript execution contexts (frames, workers)"
+    schema:
+      id: number
+      origin: string
+      name: string
+      uniqueId: string
+      auxData: Record<string, unknown>
+
+#### DOM Domain  
+```typescript
+resources:
+  - name: "cdp/dom/tree"
+    description: "Complete DOM tree with element inspection"
+    schema:
+      nodeId: number
+      parentId: number
+      nodeName: string
+      nodeType: number
+      attributes: string[]
+      children: Node[]
+      
+  - name: "cdp/dom/box-model"
+    description: "Element box model and positioning"
+    schema:
+      content: number[]  # [x1, y1, x2, y2, ...]
+      padding: number[]
+      border: number[]
+      margin: number[]
+      width: number
+      height: number
+
+#### Network Domain
+```typescript
+resources:
+  - name: "cdp/network/requests"
+    description: "HTTP requests with timing and headers"
+    schema:
+      requestId: string
+      url: string
+      method: string
+      headers: Record<string, string>
+      postData?: string
+      resourceType: string
+      timing: ResourceTiming
+      response?: Response
+      
+  - name: "cdp/network/websockets"
+    description: "WebSocket connections and messages"
+    schema:
+      requestId: string
+      url: string
+      initiator: Initiator
+      frames: WebSocketFrame[]
+      
+  - name: "cdp/network/security"
+    description: "TLS/SSL security details"
+    schema:
+      securityState: SecurityState
+      certificateId: number
+      securityDetails: SecurityDetails
+
+#### Performance Domain
+```typescript
+resources:
+  - name: "cdp/performance/metrics"
+    description: "Core Web Vitals and performance metrics"
+    schema:
+      CLS: number  # Cumulative Layout Shift
+      FCP: number  # First Contentful Paint
+      LCP: number  # Largest Contentful Paint
+      FID: number  # First Input Delay
+      TTFB: number # Time to First Byte
+      memoryUsage: MemoryUsage
+      
+  - name: "cdp/performance/timeline"
+    description: "Performance timeline events"
+    schema:
+      name: string
+      ts: number
+      dur: number
+      ph: string
+      args: Record<string, unknown>
+
+#### Page Domain
+```typescript
+resources:
+  - name: "cdp/page/frames"
+    description: "Frame tree and navigation state"
+    schema:
+      id: string
+      parentId?: string
+      url: string
+      securityOrigin: string
+      mimeType: string
+      loaderId: string
+      
+  - name: "cdp/page/lifecycle"
+    description: "Page lifecycle events (DOMContentLoaded, load, etc.)"
+    schema:
+      name: string
+      timestamp: number
+      
+  - name: "cdp/page/screenshots"
+    description: "Page screenshots and visual captures"
+    schema:
+      format: "png" | "jpeg"
+      data: string  # base64
+      viewport: Viewport
+
+### 2. React Framework Integration Resources
+
+#### React DevTools Integration
+```typescript
+resources:
+  - name: "react/fiber-tree"
+    description: "React Fiber tree with component hierarchy"
+    schema:
+      fiberId: string
+      elementType: string
+      displayName: string
+      key: string | null
+      props: Record<string, unknown>
+      state: Record<string, unknown>
+      children: FiberNode[]
+      
+  - name: "react/hooks"
+    description: "React hooks state and dependencies"
+    schema:
+      hookType: "useState" | "useEffect" | "useCallback" | "useMemo" | "useContext"
+      hookIndex: number
+      value: unknown
+      deps?: unknown[]
+      
+  - name: "react/performance"
+    description: "React render performance and profiling"
+    schema:
+      componentName: string
+      renderTime: number
+      renderCount: number
+      actualDuration: number
+      baseDuration: number
+      commitTime: number
+
+#### XState Machine Inspection
+```typescript
+resources:
+  - name: "xstate/machines"
+    description: "All XState machines and their current state"
+    schema:
+      machineId: string
+      currentState: string
+      context: Record<string, unknown>
+      availableEvents: string[]
+      history: StateTransition[]
+      
+  - name: "xstate/services"
+    description: "XState services and invoked actors"
+    schema:
+      serviceId: string
+      type: "promise" | "callback" | "observable" | "machine"
+      state: string
+      data?: unknown
+      
+  - name: "xstate/events"
+    description: "XState event log with transitions"
+    schema:
+      timestamp: number
+      machineId: string
+      event: string
+      fromState: string
+      toState: string
+      context: Record<string, unknown>
+
+#### Zustand Store Inspection
+```typescript
+resources:
+  - name: "zustand/stores"
+    description: "All Zustand stores and their state"
+    schema:
+      storeName: string
+      state: Record<string, unknown>
+      actions: string[]
+      subscribers: number
+      
+  - name: "zustand/mutations"
+    description: "Zustand state mutations log"
+    schema:
+      timestamp: number
+      storeName: string
+      action: string
+      previousState: Record<string, unknown>
+      nextState: Record<string, unknown>
+      diff: StateDiff
+
+#### Apollo Client Cache Inspection
+```typescript
+resources:
+  - name: "apollo/cache"
+    description: "Apollo Client normalized cache"
+    schema:
+      cacheSize: number
+      entities: CacheEntry[]
+      optimisticData: Record<string, unknown>
+      
+  - name: "apollo/queries"
+    description: "Active GraphQL queries and their state"
+    schema:
+      queryId: string
+      query: string
+      variables: Record<string, unknown>
+      networkStatus: NetworkStatus
+      data?: unknown
+      error?: GraphQLError
+      
+  - name: "apollo/subscriptions"
+    description: "Active GraphQL subscriptions"
+    schema:
+      subscriptionId: string
+      query: string
+      variables: Record<string, unknown>
+      lastMessage?: unknown
+
+### 3. Application State Resources
+
+#### Form State (React Hook Form + Zod)
+```typescript
+resources:
+  - name: "forms/state"
+    description: "All form instances and their state"
+    schema:
+      formId: string
+      fields: Record<string, FieldState>
+      errors: Record<string, FieldError>
+      isValid: boolean
+      isDirty: boolean
+      isSubmitting: boolean
+      
+  - name: "forms/validation"
+    description: "Zod schema validation results"
+    schema:
+      schemaName: string
+      isValid: boolean
+      errors: ZodError[]
+      path: string[]
+
+#### Animation State (Framer Motion)
+```typescript
+resources:
+  - name: "animation/instances"
+    description: "Active Framer Motion animations"
+    schema:
+      animationId: string
+      element: string
+      animation: AnimationDefinition
+      progress: number
+      isPlaying: boolean
+      
+  - name: "animation/performance"
+    description: "Animation performance metrics"
+    schema:
+      fps: number
+      droppedFrames: number
+      animationDuration: number
+
+### 4. CSS and Styling Resources (Panda CSS)
+
+```typescript
+resources:
+  - name: "styles/tokens"
+    description: "Panda CSS design tokens and computed values"
+    schema:
+      tokenName: string
+      value: string
+      computedValue: string
+      category: "colors" | "spacing" | "typography" | "shadows"
+      
+  - name: "styles/css-vars"
+    description: "CSS custom properties and their values"
+    schema:
+      property: string
+      value: string
+      element: string
+      specificity: number
+
+### 5. Testing and Development Resources
+
+#### MSW Mock Service Worker
+```typescript
+resources:
+  - name: "msw/handlers"
+    description: "Active MSW request handlers"
+    schema:
+      method: string
+      path: string
+      response: unknown
+      matchCount: number
+      
+  - name: "msw/requests"
+    description: "Intercepted requests and responses"
+    schema:
+      requestId: string
+      method: string
+      url: string
+      headers: Record<string, string>
+      body?: unknown
+      response?: unknown
+
+#### Vitest Testing State
+```typescript
+resources:
+  - name: "vitest/tests"
+    description: "Test execution state and results"
+    schema:
+      testFile: string
+      testName: string
+      status: "pass" | "fail" | "skip" | "pending"
+      duration: number
+      error?: Error
+
+### 6. Browser Environment Resources
+
+#### Local Storage & Session Storage
+```typescript
+resources:
+  - name: "storage/local"
+    description: "localStorage key-value pairs"
+    schema:
+      key: string
+      value: string
+      size: number
+      
+  - name: "storage/session"
+    description: "sessionStorage key-value pairs"
+    schema:
+      key: string
+      value: string
+      size: number
+      
+  - name: "storage/indexeddb"
+    description: "IndexedDB databases and object stores"
+    schema:
+      databaseName: string
+      version: number
+      objectStores: ObjectStore[]
+
+#### Service Workers
+```typescript
+resources:
+  - name: "service-worker/registration"
+    description: "Service worker registration and state"
+    schema:
+      scriptURL: string
+      scope: string
+      state: "installing" | "installed" | "activating" | "activated" | "redundant"
+      
+  - name: "service-worker/cache"
+    description: "Service worker cache contents"
+    schema:
+      cacheName: string
+      entries: CacheEntry[]
+
+### 7. Connectivity Troubleshooting Resources
+
+#### Network Connectivity
+```typescript
+resources:
+  - name: "connectivity/online-status"
+    description: "Browser online/offline status"
+    schema:
+      online: boolean
+      effectiveType: "slow-2g" | "2g" | "3g" | "4g"
+      downlink: number
+      rtt: number
+      
+  - name: "connectivity/dns-resolution"
+    description: "DNS resolution timing and results"
+    schema:
+      hostname: string
+      resolved: boolean
+      ip: string
+      ttl: number
+      resolutionTime: number
+      
+  - name: "connectivity/websocket-health"
+    description: "WebSocket connection health"
+    schema:
+      url: string
+      readyState: number
+      protocol: string
+      latency: number
+      reconnectCount: number
+
+#### Error Boundary State
+```typescript
+resources:
+  - name: "errors/boundaries"
+    description: "React Error Boundary states"
+    schema:
+      boundaryId: string
+      hasError: boolean
+      error?: Error
+      errorInfo?: ErrorInfo
+      componentStack: string
+
+#### MCP Connection Debugging
+```typescript
+resources:
+  - name: "mcp/connection-health"
+    description: "MCP connection status and diagnostics"
+    schema:
+      connected: boolean
+      transport: "websocket" | "stdio" | "sse"
+      latency: number
+      lastPing: number
+      messageCount: number
+      errorCount: number
+      
+  - name: "mcp/message-log"
+    description: "MCP protocol message log"
+    schema:
+      timestamp: number
+      direction: "sent" | "received"
+      method: string
+      params?: Record<string, unknown>
+      result?: unknown
+      error?: unknown
+
+### 8. Security and Authentication Resources
+
+#### Authentication State
+```typescript
+resources:
+  - name: "auth/tokens"
+    description: "JWT tokens and authentication state"
+    schema:
+      tokenType: "access" | "refresh" | "id"
+      valid: boolean
+      expiresAt: number
+      claims: Record<string, unknown>
+      
+  - name: "auth/permissions"
+    description: "User permissions and role state"
+    schema:
+      userId: string
+      roles: string[]
+      permissions: string[]
+      restrictions: string[]
+
+#### Security Headers
+```typescript
+resources:
+  - name: "security/csp"
+    description: "Content Security Policy evaluation"
+    schema:
+      directive: string
+      violations: CSPViolation[]
+      
+  - name: "security/cors"
+    description: "CORS policy and preflight requests"
+    schema:
+      origin: string
+      allowed: boolean
+      methods: string[]
+      headers: string[]
+## 🛠️ Comprehensive Tool Arsenal
+
+### 1. Chrome DevTools Protocol Tools
+
+#### Browser Control Tools
+```typescript
+tools:
+  - name: "navigate"
+    description: "Navigate to URL and wait for load"
+    inputSchema:
+      url: string
+      waitUntil: "load" | "domcontentloaded" | "networkidle"
+      timeout: number
+      
+  - name: "screenshot"
+    description: "Take page screenshot with options"
+    inputSchema:
+      format: "png" | "jpeg" | "webp"
+      quality: number
+      fullPage: boolean
+      clip?: Viewport
+      
+  - name: "reload"
+    description: "Reload page with cache options"
+    inputSchema:
+      ignoreCache: boolean
+      scriptToEvaluateOnLoad?: string
+
+#### JavaScript Execution Tools
+```typescript
+tools:
+  - name: "evaluate"
+    description: "Execute JavaScript in page context"
+    inputSchema:
+      expression: string
+      awaitPromise: boolean
+      returnByValue: boolean
+      timeout: number
+      
+  - name: "evaluate-async"
+    description: "Execute async JavaScript with result"
+    inputSchema:
+      expression: string
+      timeout: number
+      
+  - name: "call-function"
+    description: "Call function on object with arguments"
+    inputSchema:
+      objectId: string
+      functionDeclaration: string
+      arguments: Array<unknown>
+
+#### DOM Manipulation Tools
+```typescript
+tools:
+  - name: "query-selector"
+    description: "Find elements using CSS selectors"
+    inputSchema:
+      selector: string
+      all: boolean
+      
+  - name: "set-attribute"
+    description: "Set element attribute value"
+    inputSchema:
+      nodeId: number
+      name: string
+      value: string
+      
+  - name: "click-element"
+    description: "Click element at coordinates or by selector"
+    inputSchema:
+      selector?: string
+      x?: number
+      y?: number
+      
+  - name: "type-text"
+    description: "Type text into input element"
+    inputSchema:
+      selector: string
+      text: string
+      delay: number
+
+#### Network Control Tools
+```typescript
+tools:
+  - name: "set-cache-disabled"
+    description: "Enable/disable browser cache"
+    inputSchema:
+      disabled: boolean
+      
+  - name: "block-requests"
+    description: "Block requests matching patterns"
+    inputSchema:
+      patterns: string[]
+      
+  - name: "throttle-network"
+    description: "Simulate network conditions"
+    inputSchema:
+      downloadThroughput: number
+      uploadThroughput: number
+      latency: number
+
+### 2. React Framework Tools
+
+#### Component Manipulation Tools
+```typescript
+tools:
+  - name: "update-props"
+    description: "Update React component props"
+    inputSchema:
+      componentId: string
+      props: Record<string, unknown>
+      
+  - name: "trigger-rerender"
+    description: "Force component re-render"
+    inputSchema:
+      componentId: string
+      
+  - name: "inspect-hooks"
+    description: "Get detailed React hooks information"
+    inputSchema:
+      componentId: string
+      hookTypes: string[]
+
+#### State Management Tools
+```typescript
+tools:
+  - name: "dispatch-xstate-event"
+    description: "Send event to XState machine"
+    inputSchema:
+      machineId: string
+      event: string
+      payload?: Record<string, unknown>
+      
+  - name: "update-zustand-store"
+    description: "Update Zustand store state"
+    inputSchema:
+      storeName: string
+      updates: Record<string, unknown>
+      replace: boolean
+      
+  - name: "reset-apollo-cache"
+    description: "Reset Apollo Client cache"
+    inputSchema:
+      queries?: string[]
+      resetWatches: boolean
+
+### 3. Testing and Development Tools
+
+#### Mock and Stub Tools
+```typescript
+tools:
+  - name: "mock-api-request"
+    description: "Mock specific API endpoint"
+    inputSchema:
+      method: string
+      url: string
+      response: unknown
+      status: number
+      delay: number
+      
+  - name: "stub-function"
+    description: "Stub global function with return value"
+    inputSchema:
+      functionPath: string
+      returnValue: unknown
+      callCount?: number
+
+#### Performance Tools
+```typescript
+tools:
+  - name: "start-profiling"
+    description: "Start CPU/memory profiling session"
+    inputSchema:
+      type: "cpu" | "memory" | "both"
+      samplingInterval: number
+      
+  - name: "measure-performance"
+    description: "Measure Core Web Vitals"
+    inputSchema:
+      duration: number
+      includeResources: boolean
+      
+  - name: "trace-interactions"
+    description: "Trace user interactions and performance"
+    inputSchema:
+      events: string[]
+      duration: number
+
+### 4. Form and Input Tools
+
+#### Form Manipulation Tools
+```typescript
+tools:
+  - name: "fill-form"
+    description: "Fill entire form with data"
+    inputSchema:
+      formSelector: string
+      data: Record<string, unknown>
+      submit: boolean
+      
+  - name: "validate-form"
+    description: "Trigger form validation"
+    inputSchema:
+      formSelector: string
+      fields?: string[]
+      
+  - name: "reset-form"
+    description: "Reset form to initial state"
+    inputSchema:
+      formSelector: string
+
+### 5. Animation and Visual Tools
+
+#### Animation Control Tools
+```typescript
+tools:
+  - name: "pause-animations"
+    description: "Pause all CSS/JS animations"
+    inputSchema:
+      pauseCSS: boolean
+      pauseJS: boolean
+      
+  - name: "step-animation"
+    description: "Step through animation frame by frame"
+    inputSchema:
+      animationId: string
+      steps: number
+      
+  - name: "set-animation-speed"
+    description: "Change animation playback speed"
+    inputSchema:
+      speed: number
+
+#### Visual Testing Tools
+```typescript
+tools:
+  - name: "visual-diff"
+    description: "Compare current state with baseline"
+    inputSchema:
+      baselineId: string
+      threshold: number
+      highlightDifferences: boolean
+      
+  - name: "record-interaction"
+    description: "Record user interaction sequence"
+    inputSchema:
+      duration: number
+      includeScreenshots: boolean
+
+### 6. Connectivity and Network Tools
+
+#### Connection Testing Tools
+```typescript
+tools:
+  - name: "test-websocket"
+    description: "Test WebSocket connection health"
+    inputSchema:
+      url: string
+      protocols?: string[]
+      timeout: number
+      
+  - name: "ping-endpoint"
+    description: "Test HTTP endpoint connectivity"
+    inputSchema:
+      url: string
+      method: string
+      timeout: number
+      retries: number
+      
+  - name: "trace-dns"
+    description: "Trace DNS resolution path"
+    inputSchema:
+      hostname: string
+      recordType: "A" | "AAAA" | "CNAME" | "MX"
+
+#### Network Simulation Tools
+```typescript
+tools:
+  - name: "simulate-offline"
+    description: "Simulate offline/online transitions"
+    inputSchema:
+      offline: boolean
+      duration?: number
+      
+  - name: "simulate-slow-network"
+    description: "Simulate slow network conditions"
+    inputSchema:
+      downloadKbps: number
+      uploadKbps: number
+      latencyMs: number
+      packetLoss: number
+
+### 7. Error and Exception Tools
+
+#### Error Injection Tools
+```typescript
+tools:
+  - name: "inject-error"
+    description: "Inject error into application flow"
+    inputSchema:
+      type: "javascript" | "network" | "render"
+      message: string
+      stackTrace?: string
+      
+  - name: "trigger-error-boundary"
+    description: "Trigger React Error Boundary"
+    inputSchema:
+      componentId: string
+      error: Error
+
+#### Recovery Tools
+```typescript
+tools:
+  - name: "recover-from-error"
+    description: "Attempt error recovery"
+    inputSchema:
+      resetState: boolean
+      reloadComponents: string[]
+      
+  - name: "clear-error-state"
+    description: "Clear all error states"
+    inputSchema:
+      includeGlobal: boolean
+
+### 8. Security and Authentication Tools
+
+#### Authentication Tools
+```typescript
+tools:
+  - name: "simulate-login"
+    description: "Simulate user authentication"
+    inputSchema:
+      userId: string
+      roles: string[]
+      permissions: string[]
+      
+  - name: "rotate-tokens"
+    description: "Simulate token rotation"
+    inputSchema:
+      tokenType: "access" | "refresh"
+      
+  - name: "test-permissions"
+    description: "Test user permission scenarios"
+    inputSchema:
+      action: string
+      resource: string
+      expected: boolean
+
+## 🎯 Maximum Resource Exposure Strategy
+
+### Resource Discovery and Registration
+
+Based on the embedded-MCP library research, here's the strategy for maximum resource exposure:
+
+#### 1. Automatic Framework Detection
+```typescript
+interface FrameworkDetector {
+  detectReact(): boolean
+  detectXState(): XStateMachine[]
+  detectZustand(): ZustandStore[]
+  detectApollo(): ApolloClient[]
+  detectFramerMotion(): MotionValue[]
+  detectPandaCSS(): boolean
+  detectVitest(): TestSuite[]
+}
+```
+
+#### 2. Dynamic Resource Registration
+```typescript
+class ResourceRegistry {
+  private resources: Map<string, ResourceProvider> = new Map()
+  
+  autoRegisterResources(): void {
+    // CDP Domain Resources (Always Available)
+    this.registerCDPResources()
+    
+    // Framework-Specific Resources (Conditional)
+    if (this.detector.detectReact()) {
+      this.registerReactResources()
+    }
+    
+    if (this.detector.detectXState().length > 0) {
+      this.registerXStateResources()
+    }
+    
+    if (this.detector.detectZustand().length > 0) {
+      this.registerZustandResources()
+    }
+    
+    if (this.detector.detectApollo().length > 0) {
+      this.registerApolloResources()
+    }
+    
+    // Environment-Specific Resources
+    if (this.isTestEnvironment()) {
+      this.registerTestingResources()
+    }
+    
+    if (this.isDevelopment()) {
+      this.registerDevelopmentResources()
+    }
+  }
+}
+```
+
+#### 3. Resource Capability Matrix
+
+| Resource Category | Base | React | XState | Zustand | Apollo | Testing |
+|-------------------|------|-------|--------|---------|--------|---------|
+| CDP Runtime       | ✅   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| CDP DOM           | ✅   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| CDP Network       | ✅   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| CDP Performance   | ✅   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| React DevTools    | ❌   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| Component Tree    | ❌   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| Hooks Inspection  | ❌   | ✅    | ✅     | ✅      | ✅     | ✅      |
+| State Machines    | ❌   | ❌    | ✅     | ❌      | ❌     | ✅      |
+| Store State       | ❌   | ❌    | ❌     | ✅      | ❌     | ✅      |
+| GraphQL Cache     | ❌   | ❌    | ❌     | ❌      | ✅     | ✅      |
+| MSW Mocks         | ❌   | ❌    | ❌     | ❌      | ❌     | ✅      |
+
+#### 4. Estimated Resource Count by Environment
+
+- **Base CDP**: 15 core resources
+- **+ React**: +12 React-specific resources (27 total)
+- **+ XState**: +8 state machine resources (35 total) 
+- **+ Zustand**: +6 store resources (41 total)
+- **+ Apollo**: +9 GraphQL resources (50 total)
+- **+ Testing**: +15 testing resources (65 total)
+- **+ Development**: +20 dev/debug resources (85 total)
+
+#### 5. Performance-Optimized Resource Loading
+
+```typescript
+class PerformantResourceProvider {
+  private cache: Map<string, CachedResource> = new Map()
+  private subscriptions: Map<string, Subscription> = new Map()
+  
+  // Lazy load resources only when requested
+  async getResource(uri: string): Promise<ResourceData> {
+    const cached = this.cache.get(uri)
+    if (cached && !this.isStale(cached)) {
+      return cached.data
+    }
+    
+    const data = await this.fetchResource(uri)
+    this.cache.set(uri, {
+      data,
+      timestamp: Date.now(),
+      ttl: this.getTTL(uri)
+    })
+    
+    return data
+  }
+  
+  // Stream updates for live resources
+  subscribeToResource(uri: string): Observable<ResourceData> {
+    if (this.subscriptions.has(uri)) {
+      return this.subscriptions.get(uri)!
+    }
+    
+    const subscription = this.createLiveSubscription(uri)
+    this.subscriptions.set(uri, subscription)
+    return subscription
+  }
+}
+```
+
+This comprehensive resource and tool exposure provides unprecedented debugging capabilities while maintaining performance and scalability.
 ```
 
 #### Page Navigation & Control

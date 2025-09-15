@@ -3,6 +3,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { z } from 'zod'
 import { ChromeManager } from '../../chrome/manager.js'
 import { logger } from '../../config/logger.js'
+import { setupEnhancedToolHandlers } from './enhanced.js'
 
 // Tool input schemas
 const NavigateSchema = z.object({
@@ -27,6 +28,10 @@ const InspectSchema = z.object({
 })
 
 export function setupUnifiedToolHandlers(server: Server) {
+  // Setup enhanced tool handlers first
+  setupEnhancedToolHandlers(server)
+  
+  // Continue with basic tool handlers (they can coexist)
   // Single handler for listing all tools
   server.setRequestHandler(ListToolsRequestSchema, async (request) => {
     logger.debug('Listing all available tools')
