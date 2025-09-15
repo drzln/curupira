@@ -29,8 +29,9 @@ RUN npm run build --workspace=@curupira/shared && npm run build --workspace=curu
 # Production stage
 FROM --platform=$TARGETPLATFORM node:20-alpine AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init and security updates
+RUN apk add --no-cache dumb-init ca-certificates && \
+    apk upgrade --no-cache
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -64,9 +65,9 @@ ENV CURUPIRA_HOST=0.0.0.0
 ENV PORT=8080
 ENV HOST=0.0.0.0
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:8080/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
+# Health check with modern approach
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD node -e "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 # Metadata
 LABEL org.opencontainers.image.source="https://github.com/drzln/curupira"
