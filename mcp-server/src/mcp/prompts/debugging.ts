@@ -52,11 +52,7 @@ export function setupDebuggingPrompts(server: Server) {
 
   // Get prompt template
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-
-    const { name, arguments: args } = request.params as {
-      name: string
-      arguments?: Record<string, string>
-    }
+    const { name, arguments: args } = request.params
 
     logger.debug({ name, args }, 'Getting prompt template')
 

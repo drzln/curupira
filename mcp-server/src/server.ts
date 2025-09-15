@@ -91,15 +91,19 @@ export class CurupiraServer {
     })
 
     // Initialize MCP server with configuration
-    this.mcpServer = new Server({
-      name: this.config.name || 'curupira',
-      version: this.config.version || '1.0.0',
-      capabilities: {
-        resources: true,
-        tools: true,
-        prompts: true,
+    this.mcpServer = new Server(
+      {
+        name: this.config.name || 'curupira',
+        version: this.config.version || '1.0.0',
       },
-    })
+      {
+        capabilities: {
+          resources: {},
+          tools: {},
+          prompts: {},
+        },
+      }
+    )
   }
 
   private loadConfiguration(options: ServerOptions): ServerConfig {

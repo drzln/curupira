@@ -16,7 +16,6 @@ declare global {
 export function setupConsoleResource(server: Server) {
   // List available console resources
   server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-
     return {
       resources: [
         {
@@ -31,8 +30,7 @@ export function setupConsoleResource(server: Server) {
 
   // Get console logs
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    
-    const { uri } = request.params as { uri: string }
+    const { uri } = request.params
     if (!uri?.startsWith('console://')) {
       throw new Error('Invalid resource URI')
     }

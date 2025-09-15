@@ -36,21 +36,14 @@ export function setupEvalTool(server: Server) {
 
   // Handle eval tool calls
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    
-    const { name, arguments: args } = request.params as {
-      name: string
-      arguments: {
-        expression: string
-        context?: Record<string, unknown>
-      }
-    }
+    const { name, arguments: args } = request.params
 
     if (name !== 'eval') {
       throw new Error(`Unknown tool: ${name}`)
     }
 
     try {
-      logger.info({ expression: args.expression }, 'Evaluating expression')
+      logger.info({ expression: args?.expression }, 'Evaluating expression')
 
       // TODO: Send to Chrome extension for execution
       // For now, return a placeholder
