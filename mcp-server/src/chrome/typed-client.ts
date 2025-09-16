@@ -6,363 +6,351 @@
 import type { SessionId } from '@curupira/shared/types'
 import { ChromeClient } from './client.js'
 import type * as CDP from '@curupira/shared/cdp-types'
+import type { ITypedCDPClient, EvaluateOptions, EvaluateResult, NavigateOptions, NavigateResult, ScreenshotOptions, ScreenshotResult, CookieOptions, Cookie } from './interfaces.js'
 
-export class TypedCDPClient {
+export class TypedCDPClient implements ITypedCDPClient {
   constructor(private client: ChromeClient) {}
 
   // Runtime domain methods
-  async evaluate<T = unknown>(
+  async evaluate(
     expression: string,
-    params?: Partial<CDP.Runtime.EvaluateParams>,
-    sessionId?: SessionId
-  ): Promise<CDP.Runtime.EvaluateResult> {
-    return this.client.send<CDP.Runtime.EvaluateResult>(
+    options: EvaluateOptions,
+    sessionId: SessionId
+  ): Promise<EvaluateResult> {
+    const result = await this.client.send<CDP.Runtime.EvaluateResult>(
       'Runtime.evaluate',
-      { expression, ...params } as Record<string, unknown>,
+      { 
+        expression, 
+        returnByValue: options.returnByValue ?? true,
+        awaitPromise: options.awaitPromise ?? true,
+        userGesture: options.userGesture,
+        silent: options.silent
+      },
       sessionId
-    )
-  }
-
-  async callFunctionOn(
-    functionDeclaration: string,
-    params?: Partial<CDP.Runtime.CallFunctionOnParams>,
-    sessionId?: SessionId
-  ): Promise<CDP.Runtime.CallFunctionOnResult> {
-    return this.client.send<CDP.Runtime.CallFunctionOnResult>(
-      'Runtime.callFunctionOn',
-      { functionDeclaration, ...params } as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async getProperties(
-    objectId: CDP.Runtime.RemoteObjectId,
-    params?: Partial<CDP.Runtime.GetPropertiesParams>,
-    sessionId?: SessionId
-  ): Promise<CDP.Runtime.GetPropertiesResult> {
-    return this.client.send<CDP.Runtime.GetPropertiesResult>(
-      'Runtime.getProperties',
-      { objectId, ...params } as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async releaseObject(
-    objectId: CDP.Runtime.RemoteObjectId,
-    sessionId?: SessionId
-  ): Promise<void> {
-    await this.client.send(
-      'Runtime.releaseObject',
-      { objectId } as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async releaseObjectGroup(
-    objectGroup: string,
-    sessionId?: SessionId
-  ): Promise<void> {
-    await this.client.send(
-      'Runtime.releaseObjectGroup',
-      { objectGroup } as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async compileScript(
-    params: CDP.Runtime.CompileScriptParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Runtime.CompileScriptResult> {
-    return this.client.send<CDP.Runtime.CompileScriptResult>(
-      'Runtime.compileScript',
-      params as unknown as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async runScript(
-    params: CDP.Runtime.RunScriptParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Runtime.RunScriptResult> {
-    return this.client.send<CDP.Runtime.RunScriptResult>(
-      'Runtime.runScript',
-      params as unknown as Record<string, unknown>,
-      sessionId
-    )
+    );
+    
+    return {
+      result: {
+        type: result.result.type,
+        value: result.result.value,
+        objectId: result.result.objectId
+      },
+      exceptionDetails: result.exceptionDetails ? {
+        text: result.exceptionDetails.text || result.exceptionDetails.exception?.description || 'Unknown error',
+        lineNumber: result.exceptionDetails.lineNumber,
+        columnNumber: result.exceptionDetails.columnNumber,
+        scriptId: result.exceptionDetails.scriptId
+      } : undefined
+    };
   }
 
   // Page domain methods
   async navigate(
     url: string,
-    params?: Partial<CDP.Page.NavigateParams>,
-    sessionId?: SessionId
-  ): Promise<CDP.Page.NavigateResult> {
-    return this.client.send<CDP.Page.NavigateResult>(
+    options: NavigateOptions,
+    sessionId: SessionId
+  ): Promise<NavigateResult> {
+    const result = await this.client.send<CDP.Page.NavigateResult>(
       'Page.navigate',
-      { url, ...params } as Record<string, unknown>,
+      { url },
       sessionId
-    )
+    );
+    
+    // Wait for load if specified
+    if (options.waitUntil) {
+      // Implementation would wait for appropriate event
+      // For now, just return the result
+    }
+    
+    return {
+      frameId: result.frameId,
+      loaderId: result.loaderId,
+      errorText: result.errorText
+    };
   }
 
   async reload(
-    params?: CDP.Page.ReloadParams,
+    options?: { ignoreCache?: boolean },
     sessionId?: SessionId
   ): Promise<void> {
     await this.client.send(
       'Page.reload',
-      (params || {}) as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async getFrameTree(
-    sessionId?: SessionId
-  ): Promise<CDP.Page.GetFrameTreeResult> {
-    return this.client.send<CDP.Page.GetFrameTreeResult>(
-      'Page.getFrameTree',
-      {} as Record<string, unknown>,
+      {
+        ignoreCache: options?.ignoreCache
+      },
       sessionId
     )
   }
 
   async captureScreenshot(
-    params?: CDP.Page.CaptureScreenshotParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Page.CaptureScreenshotResult> {
-    return this.client.send<CDP.Page.CaptureScreenshotResult>(
+    options: ScreenshotOptions,
+    sessionId: SessionId
+  ): Promise<ScreenshotResult> {
+    const result = await this.client.send<CDP.Page.CaptureScreenshotResult>(
       'Page.captureScreenshot',
-      (params || {}) as Record<string, unknown>,
+      {
+        format: 'png',
+        captureBeyondViewport: options.fullPage || options.captureBeyondViewport,
+        clip: options.clip
+      },
       sessionId
-    )
-  }
-
-  async printToPDF(
-    params?: CDP.Page.PrintToPDFParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Page.PrintToPDFResult> {
-    return this.client.send<CDP.Page.PrintToPDFResult>(
-      'Page.printToPDF',
-      (params || {}) as Record<string, unknown>,
-      sessionId
-    )
+    );
+    
+    return {
+      data: result.data
+    };
   }
 
   // DOM domain methods
   async getDocument(
-    params?: CDP.DOM.GetDocumentParams,
+    options?: { depth?: number; pierce?: boolean },
     sessionId?: SessionId
-  ): Promise<CDP.DOM.GetDocumentResult> {
+  ): Promise<any> {
     return this.client.send<CDP.DOM.GetDocumentResult>(
       'DOM.getDocument',
-      (params || {}) as Record<string, unknown>,
+      {
+        depth: options?.depth,
+        pierce: options?.pierce
+      },
       sessionId
     )
   }
 
   async querySelector(
-    nodeId: CDP.DOM.NodeId,
+    nodeId: number,
     selector: string,
-    sessionId?: SessionId
-  ): Promise<CDP.DOM.QuerySelectorResult> {
-    return this.client.send<CDP.DOM.QuerySelectorResult>(
+    sessionId: SessionId
+  ): Promise<{ nodeId: number }> {
+    const result = await this.client.send<CDP.DOM.QuerySelectorResult>(
       'DOM.querySelector',
-      { nodeId, selector } as Record<string, unknown>,
+      { nodeId, selector },
       sessionId
-    )
+    );
+    
+    return {
+      nodeId: result.nodeId
+    };
   }
 
   async querySelectorAll(
-    nodeId: CDP.DOM.NodeId,
+    nodeId: number,
     selector: string,
-    sessionId?: SessionId
-  ): Promise<CDP.DOM.QuerySelectorAllResult> {
-    return this.client.send<CDP.DOM.QuerySelectorAllResult>(
+    sessionId: SessionId
+  ): Promise<{ nodeIds: number[] }> {
+    const result = await this.client.send<CDP.DOM.QuerySelectorAllResult>(
       'DOM.querySelectorAll',
-      { nodeId, selector } as Record<string, unknown>,
+      { nodeId, selector },
+      sessionId
+    )
+    return { nodeIds: result.nodeIds }
+  }
+
+  async getBoxModel(
+    options: { nodeId: number },
+    sessionId: SessionId
+  ): Promise<any> {
+    return this.client.send<CDP.DOM.GetBoxModelResult>(
+      'DOM.getBoxModel',
+      { nodeId: options.nodeId },
       sessionId
     )
   }
 
   async getAttributes(
-    nodeId: CDP.DOM.NodeId,
-    sessionId?: SessionId
-  ): Promise<CDP.DOM.GetAttributesResult> {
-    return this.client.send<CDP.DOM.GetAttributesResult>(
+    nodeId: number,
+    sessionId: SessionId
+  ): Promise<{ attributes: string[] }> {
+    const result = await this.client.send<CDP.DOM.GetAttributesResult>(
       'DOM.getAttributes',
-      { nodeId } as Record<string, unknown>,
+      { nodeId },
       sessionId
     )
+    return { attributes: result.attributes }
   }
 
   async setAttributeValue(
-    nodeId: CDP.DOM.NodeId,
+    nodeId: number,
     name: string,
     value: string,
-    sessionId?: SessionId
+    sessionId: SessionId
   ): Promise<void> {
     await this.client.send(
       'DOM.setAttributeValue',
-      { nodeId, name, value } as Record<string, unknown>,
+      { nodeId, name, value },
       sessionId
     )
   }
 
   async removeAttribute(
-    nodeId: CDP.DOM.NodeId,
+    nodeId: number,
     name: string,
-    sessionId?: SessionId
+    sessionId: SessionId
   ): Promise<void> {
     await this.client.send(
       'DOM.removeAttribute',
-      { nodeId, name } as Record<string, unknown>,
+      { nodeId, name },
       sessionId
     )
   }
 
   async getOuterHTML(
-    params: CDP.DOM.GetOuterHTMLParams,
-    sessionId?: SessionId
-  ): Promise<CDP.DOM.GetOuterHTMLResult> {
-    return this.client.send<CDP.DOM.GetOuterHTMLResult>(
+    params: { nodeId: number },
+    sessionId: SessionId
+  ): Promise<{ outerHTML: string }> {
+    const result = await this.client.send<CDP.DOM.GetOuterHTMLResult>(
       'DOM.getOuterHTML',
-      params as unknown as Record<string, unknown>,
+      params,
       sessionId
     )
+    return { outerHTML: result.outerHTML }
   }
 
   async setOuterHTML(
-    nodeId: CDP.DOM.NodeId,
+    nodeId: number,
     outerHTML: string,
-    sessionId?: SessionId
+    sessionId: SessionId
   ): Promise<void> {
     await this.client.send(
       'DOM.setOuterHTML',
-      { nodeId, outerHTML } as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async getBoxModel(
-    params: CDP.DOM.GetBoxModelParams,
-    sessionId?: SessionId
-  ): Promise<CDP.DOM.GetBoxModelResult> {
-    return this.client.send<CDP.DOM.GetBoxModelResult>(
-      'DOM.getBoxModel',
-      params as unknown as Record<string, unknown>,
+      { nodeId, outerHTML },
       sessionId
     )
   }
 
   async focus(
-    params: CDP.DOM.FocusParams,
-    sessionId?: SessionId
+    params: { nodeId: number },
+    sessionId: SessionId
   ): Promise<void> {
     await this.client.send(
       'DOM.focus',
-      params as unknown as Record<string, unknown>,
+      params,
       sessionId
     )
   }
 
   async scrollIntoViewIfNeeded(
-    params: CDP.DOM.ScrollIntoViewIfNeededParams,
-    sessionId?: SessionId
+    params: { nodeId: number },
+    sessionId: SessionId
   ): Promise<void> {
     await this.client.send(
       'DOM.scrollIntoViewIfNeeded',
-      params as unknown as Record<string, unknown>,
+      params,
       sessionId
     )
   }
 
   async describeNode(
-    params: CDP.DOM.DescribeNodeParams,
-    sessionId?: SessionId
-  ): Promise<CDP.DOM.DescribeNodeResult> {
+    params: { nodeId: number },
+    sessionId: SessionId
+  ): Promise<any> {
     return this.client.send<CDP.DOM.DescribeNodeResult>(
       'DOM.describeNode',
-      params as unknown as Record<string, unknown>,
+      params,
       sessionId
     )
   }
 
   // Network domain methods
   async setCookie(
-    params: CDP.Network.SetCookieParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Network.SetCookieResult> {
-    return this.client.send<CDP.Network.SetCookieResult>(
+    cookie: CookieOptions,
+    sessionId: SessionId
+  ): Promise<{ success: boolean }> {
+    const result = await this.client.send<CDP.Network.SetCookieResult>(
       'Network.setCookie',
-      params as unknown as Record<string, unknown>,
+      {
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        sameSite: cookie.sameSite,
+        expires: cookie.expires
+      },
       sessionId
-    )
+    );
+    
+    return {
+      success: result.success
+    };
   }
 
   async getCookies(
-    params?: CDP.Network.GetCookiesParams,
+    options?: { urls?: string[] },
     sessionId?: SessionId
-  ): Promise<CDP.Network.GetCookiesResult> {
-    return this.client.send<CDP.Network.GetCookiesResult>(
+  ): Promise<{ cookies: Cookie[] }> {
+    const result = await this.client.send<CDP.Network.GetCookiesResult>(
       'Network.getCookies',
-      (params || {}) as Record<string, unknown>,
+      options || {},
       sessionId
-    )
+    );
+    
+    return {
+      cookies: result.cookies.map(cookie => ({
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path,
+        expires: cookie.expires,
+        size: cookie.size,
+        httpOnly: cookie.httpOnly,
+        secure: cookie.secure,
+        session: cookie.session,
+        sameSite: cookie.sameSite as 'Strict' | 'Lax' | 'None'
+      }))
+    };
   }
 
-  async deleteCookies(
-    params: CDP.Network.DeleteCookiesParams,
-    sessionId?: SessionId
+  async clearCookies(sessionId?: SessionId): Promise<void> {
+    await this.client.send('Network.clearBrowserCookies', {}, sessionId)
+  }
+
+  // Mouse and input events
+  async dispatchMouseEvent(
+    params: any,
+    sessionId: SessionId
   ): Promise<void> {
-    await this.client.send(
-      'Network.deleteCookies',
-      params as unknown as Record<string, unknown>,
-      sessionId
-    )
+    await this.client.send('Input.dispatchMouseEvent', params, sessionId)
   }
 
-  async getResponseBody(
-    requestId: CDP.Network.RequestId,
+  async dispatchKeyEvent(
+    params: any,
+    sessionId: SessionId
+  ): Promise<void> {
+    await this.client.send('Input.dispatchKeyEvent', params, sessionId)
+  }
+
+  async dispatchTouchEvent(
+    params: any,
+    sessionId: SessionId
+  ): Promise<void> {
+    await this.client.send('Input.dispatchTouchEvent', params, sessionId)
+  }
+
+  // Debugger methods
+  async enableDebugger(
+    params?: any,
     sessionId?: SessionId
-  ): Promise<CDP.Network.GetResponseBodyResult> {
-    return this.client.send<CDP.Network.GetResponseBodyResult>(
-      'Network.getResponseBody',
-      { requestId } as Record<string, unknown>,
-      sessionId
-    )
+  ): Promise<any> {
+    return this.client.send('Debugger.enable', params || {}, sessionId)
   }
 
-  // Debugger domain methods
+  async disableDebugger(sessionId?: SessionId): Promise<void> {
+    await this.client.send('Debugger.disable', {}, sessionId)
+  }
+
   async setBreakpointByUrl(
-    params: CDP.Debugger.SetBreakpointByUrlParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Debugger.SetBreakpointByUrlResult> {
-    return this.client.send<CDP.Debugger.SetBreakpointByUrlResult>(
-      'Debugger.setBreakpointByUrl',
-      params as unknown as Record<string, unknown>,
-      sessionId
-    )
+    params: any,
+    sessionId: SessionId
+  ): Promise<any> {
+    return this.client.send('Debugger.setBreakpointByUrl', params, sessionId)
   }
 
   async removeBreakpoint(
-    breakpointId: CDP.Debugger.BreakpointId,
-    sessionId?: SessionId
+    breakpointId: string,
+    sessionId: SessionId
   ): Promise<void> {
-    await this.client.send(
-      'Debugger.removeBreakpoint',
-      { breakpointId } as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async evaluateOnCallFrame(
-    params: CDP.Debugger.EvaluateOnCallFrameParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Debugger.EvaluateOnCallFrameResult> {
-    return this.client.send<CDP.Debugger.EvaluateOnCallFrameResult>(
-      'Debugger.evaluateOnCallFrame',
-      params as unknown as Record<string, unknown>,
-      sessionId
-    )
+    await this.client.send('Debugger.removeBreakpoint', { breakpointId }, sessionId)
   }
 
   async pause(sessionId?: SessionId): Promise<void> {
@@ -370,65 +358,39 @@ export class TypedCDPClient {
   }
 
   async resume(
-    params?: CDP.Debugger.ResumeParams,
+    params?: any,
     sessionId?: SessionId
   ): Promise<void> {
-    await this.client.send('Debugger.resume', (params || {}) as Record<string, unknown>, sessionId)
+    await this.client.send('Debugger.resume', params || {}, sessionId)
   }
 
   async stepOver(
-    params?: CDP.Debugger.StepOverParams,
+    params?: any,
     sessionId?: SessionId
   ): Promise<void> {
-    await this.client.send('Debugger.stepOver', (params || {}) as Record<string, unknown>, sessionId)
+    await this.client.send('Debugger.stepOver', params || {}, sessionId)
   }
 
   async stepInto(
-    params?: CDP.Debugger.StepIntoParams,
+    params?: any,
     sessionId?: SessionId
   ): Promise<void> {
-    await this.client.send('Debugger.stepInto', (params || {}) as Record<string, unknown>, sessionId)
+    await this.client.send('Debugger.stepInto', params || {}, sessionId)
   }
 
   async stepOut(sessionId?: SessionId): Promise<void> {
     await this.client.send('Debugger.stepOut', {}, sessionId)
   }
 
-  // Input domain methods
-  async dispatchMouseEvent(
-    params: CDP.Input.DispatchMouseEventParams,
-    sessionId?: SessionId
-  ): Promise<void> {
-    await this.client.send('Input.dispatchMouseEvent', params as unknown as Record<string, unknown>, sessionId)
-  }
-
-  async dispatchKeyEvent(
-    params: CDP.Input.DispatchKeyEventParams,
-    sessionId?: SessionId
-  ): Promise<void> {
-    await this.client.send('Input.dispatchKeyEvent', params as unknown as Record<string, unknown>, sessionId)
-  }
-
-  async dispatchTouchEvent(
-    params: CDP.Input.DispatchTouchEventParams,
-    sessionId?: SessionId
-  ): Promise<void> {
-    await this.client.send('Input.dispatchTouchEvent', params as unknown as Record<string, unknown>, sessionId)
-  }
-
-  // Performance domain methods
-  async getMetrics(
-    sessionId?: SessionId
-  ): Promise<CDP.Performance.GetMetricsResult> {
-    return this.client.send<CDP.Performance.GetMetricsResult>(
-      'Performance.getMetrics',
-      {} as Record<string, unknown>,
-      sessionId
-    )
+  async evaluateOnCallFrame(
+    params: any,
+    sessionId: SessionId
+  ): Promise<any> {
+    return this.client.send('Debugger.evaluateOnCallFrame', params, sessionId)
   }
 
   // Domain enable/disable methods
-  async enableRuntime(sessionId?: SessionId): Promise<void> {
+  async enableRuntime(sessionId: SessionId): Promise<void> {
     await this.client.send('Runtime.enable', {}, sessionId)
   }
 
@@ -436,7 +398,7 @@ export class TypedCDPClient {
     await this.client.send('Runtime.disable', {}, sessionId)
   }
 
-  async enablePage(sessionId?: SessionId): Promise<void> {
+  async enablePage(sessionId: SessionId): Promise<void> {
     await this.client.send('Page.enable', {}, sessionId)
   }
 
@@ -444,7 +406,7 @@ export class TypedCDPClient {
     await this.client.send('Page.disable', {}, sessionId)
   }
 
-  async enableDOM(sessionId?: SessionId): Promise<void> {
+  async enableDOM(sessionId: SessionId): Promise<void> {
     await this.client.send('DOM.enable', {}, sessionId)
   }
 
@@ -452,30 +414,12 @@ export class TypedCDPClient {
     await this.client.send('DOM.disable', {}, sessionId)
   }
 
-  async enableNetwork(
-    params?: CDP.Network.EnableParams,
-    sessionId?: SessionId
-  ): Promise<void> {
-    await this.client.send('Network.enable', (params || {}) as Record<string, unknown>, sessionId)
+  async enableNetwork(sessionId: SessionId): Promise<void> {
+    await this.client.send('Network.enable', {}, sessionId)
   }
 
   async disableNetwork(sessionId?: SessionId): Promise<void> {
     await this.client.send('Network.disable', {}, sessionId)
-  }
-
-  async enableDebugger(
-    params?: CDP.Debugger.EnableParams,
-    sessionId?: SessionId
-  ): Promise<CDP.Debugger.EnableResult> {
-    return this.client.send<CDP.Debugger.EnableResult>(
-      'Debugger.enable',
-      (params || {}) as Record<string, unknown>,
-      sessionId
-    )
-  }
-
-  async disableDebugger(sessionId?: SessionId): Promise<void> {
-    await this.client.send('Debugger.disable', {}, sessionId)
   }
 
   async enableConsole(sessionId?: SessionId): Promise<void> {
@@ -486,21 +430,26 @@ export class TypedCDPClient {
     await this.client.send('Console.disable', {}, sessionId)
   }
 
+  // Performance methods
   async enablePerformance(
-    params?: CDP.Performance.EnableParams,
+    params?: any,
     sessionId?: SessionId
   ): Promise<void> {
-    await this.client.send('Performance.enable', (params || {}) as Record<string, unknown>, sessionId)
+    await this.client.send('Performance.enable', params || {}, sessionId)
   }
 
   async disablePerformance(sessionId?: SessionId): Promise<void> {
     await this.client.send('Performance.disable', {}, sessionId)
   }
 
+  async getMetrics(sessionId?: SessionId): Promise<any> {
+    return this.client.send('Performance.getMetrics', {}, sessionId)
+  }
+  
   // Generic send method for any other CDP commands
   async send<T = unknown>(
     method: string,
-    params?: Record<string, unknown>,
+    params?: any,
     sessionId?: SessionId
   ): Promise<T> {
     return this.client.send<T>(method, params, sessionId)

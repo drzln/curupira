@@ -17,6 +17,7 @@ export const mockChromeClient = {
     { targetId: 'mock-target-id' as TargetId, type: 'page', title: 'Test Page' }
   ]),
   getState: vi.fn().mockReturnValue('connected'),
+  isConnected: vi.fn().mockReturnValue(true),
   on: vi.fn(),
   off: vi.fn(),
 }

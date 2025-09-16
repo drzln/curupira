@@ -13,6 +13,7 @@ import type {
   CDPSession,
   CDPTarget
 } from '@curupira/shared/types';
+import type { IChromeClient, SessionInfo } from './interfaces.js';
 import { LRUCache, ExpiringCache } from '@curupira/shared/utils';
 import { waitForCondition, retryWithBackoff } from '@curupira/shared/utils';
 
@@ -37,7 +38,7 @@ interface InternalSession extends CDPSession {
   eventHandlers: Map<string, Set<(...args: any[]) => void>>;
 }
 
-export class ChromeClient implements CDPClient {
+export class ChromeClient implements CDPClient, IChromeClient {
   private config: CDPConnectionOptions;
   private sessions: Map<string, InternalSession> = new Map();
   private state: CDPConnectionState = 'disconnected';
@@ -101,14 +102,28 @@ export class ChromeClient implements CDPClient {
     }
   }
 
-  async createSession(targetId: string): Promise<CDPSession> {
+  async createSession(targetId?: string): Promise<CDPSession> {
     if (this.state !== 'connected') {
       throw new Error('Not connected to Chrome');
     }
 
-    const target = this.targets.get(targetId);
-    if (!target) {
-      throw new Error(`Target ${targetId} not found`);
+    let target: CDPTarget | undefined;
+    let actualTargetId: string;
+    
+    if (targetId) {
+      target = this.targets.get(targetId);
+      if (!target) {
+        throw new Error(`Target ${targetId} not found`);
+      }
+      actualTargetId = targetId;
+    } else {
+      // Find first available page target
+      const targets = Array.from(this.targets.values());
+      target = targets.find(t => t.type === 'page');
+      if (!target) {
+        throw new Error('No page target available');
+      }
+      actualTargetId = target.targetId;
     }
 
     try {
@@ -133,7 +148,7 @@ export class ChromeClient implements CDPClient {
           const session: InternalSession = {
             id: sessionId,
             sessionId: sessionId,
-            targetId,
+            targetId: actualTargetId,
             targetType: target.type as 'page' | 'iframe' | 'worker' | 'service_worker' | 'other',
             ws,
             messageHandlers: new Map(),
@@ -159,12 +174,15 @@ export class ChromeClient implements CDPClient {
           this.send('Runtime.enable', {}, sessionId);
           this.send('Page.enable', {}, sessionId);
 
-          resolve({
+          const sessionInfo = {
             id: sessionId,
             sessionId: sessionId,
-            targetId,
+            targetId: actualTargetId,
             targetType: target.type as 'page' | 'iframe' | 'worker' | 'service_worker' | 'other'
-          });
+          };
+          
+          // Always return CDPSession for compatibility
+          resolve(sessionInfo);
         });
 
         ws.on('error', (error) => {
@@ -309,6 +327,7 @@ export class ChromeClient implements CDPClient {
   async getTargets(): Promise<CDPTarget[]> {
     return Array.from(this.targets.values());
   }
+  
 
   getTarget(targetId: string): CDPTarget | undefined {
     return this.targets.get(targetId);
@@ -322,6 +341,7 @@ export class ChromeClient implements CDPClient {
       targetType: session.targetType
     }));
   }
+  
 
   getSession(sessionId: string): CDPSession | undefined {
     const session = this.sessions.get(sessionId);

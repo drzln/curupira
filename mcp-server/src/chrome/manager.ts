@@ -6,9 +6,10 @@
 import { ChromeClient } from './client.js';
 import { TypedCDPClient } from './typed-client.js';
 import type { CDPConnectionOptions } from '@curupira/shared/types';
+import type { IChromeManager, IChromeClient, ITypedCDPClient, ConnectionStatus } from './interfaces.js';
 import { logger } from '../config/logger.js';
 
-export class ChromeManager {
+export class ChromeManager implements IChromeManager {
   private static instance: ChromeManager;
   private client: ChromeClient | null = null;
   private typedClient: TypedCDPClient | null = null;
@@ -88,26 +89,21 @@ export class ChromeManager {
     this.activeSessions.delete(sessionId);
   }
 
-  getClient(): ChromeClient {
+  getClient(): IChromeClient {
     if (!this.client || !this.client.isConnected()) {
       throw new Error('Chrome not connected');
     }
     return this.client;
   }
 
-  getTypedClient(): TypedCDPClient {
+  getTypedClient(): ITypedCDPClient {
     if (!this.typedClient || !this.client || !this.client.isConnected()) {
       throw new Error('Chrome not connected');
     }
     return this.typedClient;
   }
 
-  getStatus(): {
-    connected: boolean;
-    serviceUrl: string | null;
-    activeSessions: number;
-    sessions: Array<{ sessionId: string; createdAt: Date }>;
-  } {
+  getStatus(): ConnectionStatus {
     return {
       connected: this.client?.isConnected() || false,
       serviceUrl: this.config ? `${this.config.secure ? 'https' : 'http'}://${this.config.host}:${this.config.port}` : null,
@@ -120,6 +116,7 @@ export class ChromeManager {
     if (this.client) {
       await this.client.disconnect();
       this.client = null;
+      this.typedClient = null;
     }
     this.activeSessions.clear();
   }

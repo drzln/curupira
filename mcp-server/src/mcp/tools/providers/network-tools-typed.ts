@@ -71,7 +71,7 @@ export class NetworkToolProvider extends BaseToolProvider implements ToolProvide
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            await typed.enableNetwork({}, sessionId)
+            await typed.enableNetwork(sessionId)
             
             // Clear browser cache and cookies
             await typed.send('Network.clearBrowserCache', {}, sessionId)
@@ -104,7 +104,7 @@ export class NetworkToolProvider extends BaseToolProvider implements ToolProvide
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            await typed.enableNetwork({}, sessionId)
+            await typed.enableNetwork(sessionId)
             
             const result = await typed.getCookies({}, sessionId)
             
@@ -151,7 +151,7 @@ export class NetworkToolProvider extends BaseToolProvider implements ToolProvide
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            await typed.enableNetwork({}, sessionId)
+            await typed.enableNetwork(sessionId)
             
             const result = await typed.setCookie({
               name,

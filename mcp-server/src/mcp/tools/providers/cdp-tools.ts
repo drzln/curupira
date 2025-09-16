@@ -105,6 +105,16 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
         }
       },
       {
+        name: 'cdp_clear_cookies',
+        description: 'Clear all cookies',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
+          }
+        }
+      },
+      {
         name: 'cdp_reload',
         description: 'Reload the current page',
         inputSchema: {
@@ -171,7 +181,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            const result = await typed.navigate(url, {}, sessionId)
+            const result = await typed.navigate(url, { waitUntil: waitUntil as any }, sessionId)
             
             if (result.errorText) {
               return {
@@ -213,9 +223,9 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            const params: CDP.Page.CaptureScreenshotParams = {}
-            if (fullPage !== undefined) {
-              params.captureBeyondViewport = fullPage
+            let options: any = {
+              fullPage: fullPage || false,
+              captureBeyondViewport: fullPage || false
             }
             
             if (selector) {
@@ -232,7 +242,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
               }
               
               const { model } = await typed.getBoxModel({ nodeId }, sessionId)
-              params.clip = {
+              options.clip = {
                 x: model.content[0],
                 y: model.content[1],
                 width: model.content[2] - model.content[0],
@@ -240,7 +250,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
               }
             }
             
-            const result = await typed.captureScreenshot(params, sessionId)
+            const result = await typed.captureScreenshot(options, sessionId)
             
             return {
               success: true,
@@ -267,7 +277,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            await typed.enableNetwork({}, sessionId)
+            await typed.enableNetwork(sessionId)
             
             const result = await typed.setCookie({
               name,
@@ -276,7 +286,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
               path: path || '/',
               secure: secure || false,
               httpOnly: httpOnly || false,
-              sameSite: (sameSite as CDP.Network.CookieSameSite) || 'Lax'
+              sameSite: (sameSite as any) || 'Lax'
             }, sessionId)
             
             return {
@@ -304,7 +314,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            await typed.enableNetwork({}, sessionId)
+            await typed.enableNetwork(sessionId)
             
             const result = await typed.getCookies({ urls }, sessionId)
             
@@ -316,6 +326,34 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
             return {
               success: false,
               error: error instanceof Error ? error.message : 'Failed to get cookies'
+            }
+          }
+        }
+      },
+      
+      cdp_clear_cookies: {
+        name: 'cdp_clear_cookies',
+        description: 'Clear all cookies',
+        async execute(args): Promise<ToolResult> {
+          try {
+            const validArgs = validateAndCast<BaseToolArgs>(args, ArgSchemas.baseToolArgs, 'cdp_clear_cookies')
+            const { sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
+            
+            const manager = ChromeManager.getInstance()
+            const typed = manager.getTypedClient()
+            
+            await typed.enableNetwork(sessionId)
+            await typed.clearCookies(sessionId)
+            
+            return {
+              success: true,
+              data: { message: 'Cookies cleared' }
+            }
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to clear cookies'
             }
           }
         }
@@ -333,7 +371,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
             
-            await typed.reload({}, sessionId)
+            await typed.reload({ ignoreCache: false }, sessionId)
             
             return {
               success: true,
