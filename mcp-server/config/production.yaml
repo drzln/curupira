@@ -1,0 +1,38 @@
+# Curupira MCP Server - Production Configuration
+# Inherits from base.yaml with production overrides
+
+server:
+  environment: "production"
+
+logging:
+  level: "warn"
+  pretty: false
+
+auth:
+  enabled: true
+  jwtSecret: "${JWT_SECRET}"
+
+cors:
+  origins:
+    - "https://claude.ai"
+    - "https://*.claude.ai"
+    - "${ALLOWED_ORIGINS}"
+
+rateLimit:
+  max: 1000
+  window: 60000
+
+chrome:
+  discovery:
+    autoConnect: false
+    timeout: 10000
+
+performance:
+  maxMessageSize: 5242880  # 5MB for production
+  debounceMs: 200
+  throttleMs: 2000
+
+resources:
+  maxConsoleLogEntries: 500
+  maxNetworkRequests: 250
+  cacheSize: 50

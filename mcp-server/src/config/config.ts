@@ -1,13 +1,17 @@
 /**
- * Configuration management
+ * Configuration management following Nexus standards
  * 
- * Loads and validates configuration from environment variables
+ * Loads configuration in order:
+ * 1. Base YAML (config/base.yaml)
+ * 2. Environment YAML (config/{environment}.yaml)
+ * 3. Environment variable overrides
  */
 
 import { z } from 'zod'
 import type { CDPConnectionOptions } from '@curupira/shared/types'
+import { loadConfig as loadNexusConfig, type CurupiraConfig as NexusConfig } from './nexus-config.js'
 
-export interface CurupiraConfig {
+export interface LegacyCurupiraConfig {
   // Chrome DevTools Protocol connection
   cdp: CDPConnectionOptions
   
@@ -39,8 +43,8 @@ export interface CurupiraConfig {
   }
 }
 
-// Configuration schema
-const configSchema = z.object({
+// Legacy Configuration schema
+const legacyConfigSchema = z.object({
   cdp: z.object({
     host: z.string().default('localhost'),
     port: z.number().default(9222),
@@ -71,9 +75,10 @@ const configSchema = z.object({
 })
 
 /**
- * Load configuration from environment variables
+ * Load configuration from environment variables (Legacy)
+ * @deprecated Use loadConfig() for Nexus-compliant configuration
  */
-export function loadConfig(): CurupiraConfig {
+function loadCurupiraConfig(): LegacyCurupiraConfig {
   const env = process.env
   
   const config = {
@@ -107,19 +112,39 @@ export function loadConfig(): CurupiraConfig {
   }
   
   // Validate configuration
-  const result = configSchema.safeParse(config)
+  const result = legacyConfigSchema.safeParse(config)
   if (!result.success) {
     throw new Error(`Invalid configuration: ${result.error.message}`)
   }
   
-  return result.data as CurupiraConfig
+  return result.data as LegacyCurupiraConfig
+}
+
+// Export Nexus configuration as the primary config system
+export { type CurupiraConfig } from './nexus-config.js'
+
+/**
+ * Load configuration using Nexus standards
+ * This is the recommended way to load configuration
+ */
+export async function loadConfig(): Promise<NexusConfig> {
+  return loadNexusConfig()
 }
 
 /**
- * Get default configuration
+ * Legacy configuration loader for backward compatibility
+ * @deprecated Use loadConfig() instead
  */
-export function getDefaultConfig(): CurupiraConfig {
-  return configSchema.parse({})
+export function loadLegacyConfig(): LegacyCurupiraConfig {
+  return loadCurupiraConfig()
+}
+
+/**
+ * Get default configuration (Legacy)
+ * @deprecated Use loadConfig() for Nexus-compliant configuration
+ */
+export function getDefaultConfig(): LegacyCurupiraConfig {
+  return legacyConfigSchema.parse({})
 }
 
 /**

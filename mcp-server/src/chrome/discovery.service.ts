@@ -105,7 +105,7 @@ export class ChromeDiscoveryService implements IChromeDiscoveryService {
   async isPortAvailable(host: string, port: number): Promise<boolean> {
     try {
       const response = await fetch(`http://${host}:${port}/json/version`, {
-        signal: AbortSignal.timeout(this.defaultTimeout)
+        signal: AbortSignal.timeout(this.config.timeout)
       });
       return response.ok;
     } catch (error) {

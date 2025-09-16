@@ -1,0 +1,32 @@
+# Curupira MCP Server - Staging Configuration
+# Inherits from base.yaml with staging overrides
+
+server:
+  environment: "staging"
+
+logging:
+  level: "debug"
+  pretty: true
+
+auth:
+  enabled: true
+  jwtSecret: "${STAGING_JWT_SECRET}"
+
+cors:
+  origins:
+    - "https://staging.novaskyn.com"
+    - "https://*.novaskyn-staging.com"
+    - "http://localhost:3000"
+
+rateLimit:
+  max: 500
+  window: 60000
+
+chrome:
+  discovery:
+    timeout: 8000
+
+performance:
+  maxMessageSize: 8388608  # 8MB
+  debounceMs: 150
+  throttleMs: 1500

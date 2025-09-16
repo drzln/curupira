@@ -139,7 +139,7 @@ const getCookiesSchema: Schema<{ sessionId?: string; urls?: string[] }> = {
     const obj = (value || {}) as any;
     return {
       sessionId: obj.sessionId,
-      urls: Array.isArray(obj.urls) ? obj.urls.filter(url => typeof url === 'string') : undefined
+      urls: Array.isArray(obj.urls) ? obj.urls.filter((url: any) => typeof url === 'string') : undefined
     };
   },
   safeParse: (value) => {
@@ -273,7 +273,7 @@ class CDPToolProvider extends BaseToolProvider {
               };
             }
 
-            const navData = navigateResult.unwrap();
+            const navData = navigateResult.unwrap() as { frameId: string; loaderId: string };
             
             // Enhanced wait logic based on waitUntil parameter
             if (args.waitUntil !== 'load') {
@@ -324,7 +324,7 @@ class CDPToolProvider extends BaseToolProvider {
               format: args.format 
             }, 'Taking screenshot');
 
-            let screenshotOptions: any = {
+            const screenshotOptions: any = {
               format: args.format,
               quality: args.format === 'jpeg' ? args.quality : undefined,
               captureBeyondViewport: args.fullPage
@@ -364,7 +364,7 @@ class CDPToolProvider extends BaseToolProvider {
               };
             }
 
-            const screenshot = screenshotResult.unwrap();
+            const screenshot = screenshotResult.unwrap() as { data: string };
             this.logger.info({ dataLength: screenshot.data.length }, 'Screenshot captured successfully');
 
             return {
@@ -437,7 +437,7 @@ class CDPToolProvider extends BaseToolProvider {
               };
             }
 
-            const result = cookieResult.unwrap();
+            const result = cookieResult.unwrap() as { success: boolean };
             this.logger.info({ success: result.success }, 'Cookie operation completed');
 
             return {
@@ -496,7 +496,7 @@ class CDPToolProvider extends BaseToolProvider {
               };
             }
 
-            const result = cookiesResult.unwrap();
+            const result = cookiesResult.unwrap() as { cookies: any[] };
             this.logger.info({ cookieCount: result.cookies.length }, 'Cookies retrieved successfully');
 
             return {
@@ -652,7 +652,7 @@ class CDPToolProvider extends BaseToolProvider {
       // Query selector
       const queryResult = await withCDPCommand(
         'DOM.querySelector',
-        { nodeId: docResult.unwrap().root.nodeId, selector },
+        { nodeId: (docResult.unwrap() as any).root.nodeId, selector },
         context
       );
       
@@ -660,7 +660,7 @@ class CDPToolProvider extends BaseToolProvider {
         throw new Error(queryResult.unwrapErr());
       }
 
-      const nodeId = queryResult.unwrap().nodeId;
+      const nodeId = (queryResult.unwrap() as any).nodeId;
       if (!nodeId) {
         throw new Error(`Element not found: ${selector}`);
       }
@@ -676,7 +676,7 @@ class CDPToolProvider extends BaseToolProvider {
         throw new Error(boxResult.unwrapErr());
       }
 
-      const model = boxResult.unwrap().model;
+      const model = (boxResult.unwrap() as any).model;
       return {
         x: model.content[0],
         y: model.content[1],

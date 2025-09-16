@@ -16,8 +16,8 @@ const discoverSchema: Schema<{ hosts?: string[]; ports?: number[]; timeout?: num
   parse: (value) => {
     const obj = (value || {}) as any;
     return {
-      hosts: Array.isArray(obj.hosts) ? obj.hosts.filter(h => typeof h === 'string') : undefined,
-      ports: Array.isArray(obj.ports) ? obj.ports.filter(p => typeof p === 'number') : undefined,
+      hosts: Array.isArray(obj.hosts) ? obj.hosts.filter((h: any) => typeof h === 'string') : undefined,
+      ports: Array.isArray(obj.ports) ? obj.ports.filter((p: any) => typeof p === 'number') : undefined,
       timeout: typeof obj.timeout === 'number' ? obj.timeout : undefined
     };
   },
@@ -281,7 +281,7 @@ class ChromeToolProvider extends BaseToolProvider {
           const isConnected = this.chromeService.isConnected();
           const client = this.chromeService.getCurrentClient();
           
-          const statusData = {
+          const statusData: any = {
             connected: isConnected,
             serviceUrl: 'chrome://localhost:9222', // TODO: Get from config
             activeSessions: client ? 1 : 0,
