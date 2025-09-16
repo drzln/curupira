@@ -41,27 +41,225 @@ describe('NetworkToolProvider', () => {
       expect(tools).toHaveLength(7)
       
       const toolNames = tools.map(t => t.name)
-      expect(toolNames).toContain('network_enable_request_interception')
-      expect(toolNames).toContain('network_disable_request_interception')
-      expect(toolNames).toContain('network_set_request_interception')
-      expect(toolNames).toContain('network_mock_response')
-      expect(toolNames).toContain('network_set_throttling')
-      expect(toolNames).toContain('network_set_headers')
+      expect(toolNames).toContain('network_mock_request')
       expect(toolNames).toContain('network_block_urls')
-      expect(toolNames).toContain('network_clear_browser_cache')
-      expect(toolNames).toContain('network_clear_browser_cookies')
+      expect(toolNames).toContain('network_throttle')
+      expect(toolNames).toContain('network_clear_cache')
+      expect(toolNames).toContain('network_get_requests')
+      expect(toolNames).toContain('network_modify_headers')
+      expect(toolNames).toContain('network_replay_request')
     })
   })
 
-  describe('network_enable_request_interception', () => {
+  describe('network_mock_request', () => {
 
-    it('should enable request interception', async () => {
+    it('should mock network request', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Fetch.enable
+        .mockResolvedValueOnce(undefined) // Runtime.evaluate
+
+      const handler = provider.getHandler('network_mock_request')!
+
+      const result = await handler.execute({
+        urlPattern: 'https://api.example.com/users',
+        response: {
+          status: 200,
+          body: { users: [{ id: 1, name: 'John' }] }
+        }
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Fetch.enable',
+        expect.objectContaining({
+          patterns: expect.arrayContaining([
+            expect.objectContaining({
+              urlPattern: 'https://api.example.com/users',
+              requestStage: 'Response'
+            })
+          ])
+        }),
+        testSessionId
+      )
+      expect(result).toEqual({
+        success: true,
+        data: {
+          urlPattern: 'https://api.example.com/users',
+          method: '*',
+          mockActive: true,
+          response: {
+            status: 200,
+            body: { users: [{ id: 1, name: 'John' }] }
+          }
+        }
+      })
+    })
+
+    it('should handle method-specific mocking', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Fetch.enable
+        .mockResolvedValueOnce(undefined) // Runtime.evaluate
+
+      const handler = provider.getHandler('network_mock_request')!
+
+      const result = await handler.execute({
+        urlPattern: '/api/users',
+        method: 'POST',
+        response: {
+          status: 201,
+          body: { id: 2, name: 'Jane' },
+          headers: { 'Content-Type': 'application/json' }
+        }
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.data?.method).toBe('POST')
+    })
+  })
+
+  describe('network_block_urls', () => {
+
+    it('should block URLs by patterns', async () => {
+      mockChromeClient.send.mockResolvedValueOnce(undefined) // Fetch.enable
+
+      const patterns = [
+        '*analytics*',
+        '*.tracking.js',
+        'https://ads.example.com/*'
+      ]
+      
+      const handler = provider.getHandler('network_block_urls')!
+
+      const result = await handler.execute({ urlPatterns: patterns })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Fetch.enable',
+        expect.objectContaining({
+          patterns: expect.arrayContaining([
+            expect.objectContaining({
+              urlPattern: '*analytics*',
+              requestStage: 'Request'
+            }),
+            expect.objectContaining({
+              urlPattern: '*.tracking.js',
+              requestStage: 'Request'
+            }),
+            expect.objectContaining({
+              urlPattern: 'https://ads.example.com/*',
+              requestStage: 'Request'
+            })
+          ])
+        }),
+        testSessionId
+      )
+      expect(result).toEqual({
+        success: true,
+        data: {
+          blockedPatterns: patterns,
+          status: 'active'
+        }
+      })
+    })
+  })
+
+  describe('network_throttle', () => {
+
+    it('should throttle network with profile', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Network.enable
-        .mockResolvedValueOnce(undefined) // Fetch.enable
-        .mockResolvedValueOnce(undefined) // Network.setRequestInterception
+        .mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
 
-      const handler = provider.getHandler('network_enable_request_interception')!
+      const handler = provider.getHandler('network_throttle')!
+
+      const result = await handler.execute({
+        profile: 'slow-3g'
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Network.emulateNetworkConditions',
+        expect.objectContaining({
+          offline: false,
+          downloadThroughput: 50 * 1024,
+          uploadThroughput: 50 * 1024,
+          latency: 2000
+        }),
+        testSessionId
+      )
+      expect(result).toEqual({
+        success: true,
+        data: {
+          profile: 'slow-3g',
+          conditions: {
+            offline: false,
+            downloadThroughput: 50 * 1024,
+            uploadThroughput: 50 * 1024,
+            latency: 2000
+          },
+          status: 'active'
+        }
+      })
+    })
+
+    it('should support custom throttling', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Network.enable
+        .mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
+
+      const handler = provider.getHandler('network_throttle')!
+
+      const custom = {
+        downloadThroughput: 1024 * 1024,  // 1 MB/s
+        uploadThroughput: 512 * 1024,     // 512 KB/s
+        latency: 100
+      }
+
+      const result = await handler.execute({
+        profile: 'custom',
+        custom
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Network.emulateNetworkConditions',
+        custom,
+        testSessionId
+      )
+      expect(result.success).toBe(true)
+      expect(result.data?.conditions).toEqual(custom)
+    })
+
+    it('should disable throttling with online profile', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Network.enable
+        .mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
+
+      const handler = provider.getHandler('network_throttle')!
+
+      const result = await handler.execute({
+        profile: 'online'
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Network.emulateNetworkConditions',
+        {
+          offline: false,
+          downloadThroughput: -1,
+          uploadThroughput: -1,
+          latency: 0
+        },
+        testSessionId
+      )
+      expect(result.success).toBe(true)
+    })
+  })
+
+  describe('network_clear_cache', () => {
+
+    it('should clear browser cache and cookies', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Network.enable
+        .mockResolvedValueOnce(undefined) // Network.clearBrowserCache
+        .mockResolvedValueOnce(undefined) // Network.clearBrowserCookies
+
+      const handler = provider.getHandler('network_clear_cache')!
 
       const result = await handler.execute({})
 
@@ -71,347 +269,10 @@ describe('NetworkToolProvider', () => {
         testSessionId
       )
       expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Fetch.enable',
-        { patterns: [{ urlPattern: '*' }] },
-        testSessionId
-      )
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.setRequestInterception',
-        { patterns: [{ urlPattern: '*' }] },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { enabled: true },
-      })
-    })
-
-    it('should enable with specific patterns', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Network.enable
-        .mockResolvedValueOnce(undefined) // Fetch.enable
-        .mockResolvedValueOnce(undefined) // Network.setRequestInterception
-
-      const patterns = ['*api/*', '*.json']
-      const handler = provider.getHandler('network_enable_request_interception')!
-
-      const result = await handler.execute({ patterns })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Fetch.enable',
-        { patterns: [{ urlPattern: '*api/*' }, { urlPattern: '*.json' }] },
-        testSessionId
-      )
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('network_disable_request_interception', () => {
-
-    it('should disable request interception', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Fetch.disable
-        .mockResolvedValueOnce(undefined) // Network.setRequestInterception
-
-      const handler = provider.getHandler('network_disable_request_interception')!
-
-      const result = await handler.execute({})
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Fetch.disable',
-        {},
-        testSessionId
-      )
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.setRequestInterception',
-        { patterns: [] },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { enabled: false },
-      })
-    })
-  })
-
-  describe('network_set_request_interception', () => {
-
-    it('should set request interception rules', async () => {
-      const rules = [
-        {
-          urlPattern: '*api/users*',
-          resourceType: 'XHR',
-          requestStage: 'Request',
-        },
-        {
-          urlPattern: '*.jpg',
-          resourceType: 'Image',
-          requestStage: 'HeadersReceived',
-        },
-      ]
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Network.enable
-        .mockResolvedValueOnce(undefined) // Network.setRequestInterception
-
-      const handler = provider.getHandler('network_set_request_interception')!
-
-      const result = await handler.execute({ rules })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.setRequestInterception',
-        { patterns: rules },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { rules },
-      })
-    })
-  })
-
-  describe('network_mock_response', () => {
-
-    it('should mock API response', async () => {
-      const mockConfig = {
-        url: 'https://api.example.com/users',
-        response: {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ users: [{ id: 1, name: 'John' }] }),
-        },
-      }
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { mocked: true },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('network_mock_response')!
-
-      const result = await handler.execute(mockConfig)
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('fetch ='),
-        }),
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { mocked: true },
-      })
-    })
-
-    it('should mock with regex pattern', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { mocked: true },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('network_mock_response')!
-
-      const result = await handler.execute({
-        url: '/api/.*/users',
-        regex: true,
-        response: {
-          status: 404,
-          body: JSON.stringify({ error: 'Not found' }),
-        },
-      })
-
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('network_set_throttling', () => {
-
-    it('should set network throttling', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
-
-      const handler = provider.getHandler('network_set_throttling')!
-
-      const result = await handler.execute({
-        downloadThroughput: 1.5 * 1024 * 1024, // 1.5 Mbps
-        uploadThroughput: 750 * 1024, // 750 Kbps
-        latency: 40, // 40ms
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.emulateNetworkConditions',
-        {
-          offline: false,
-          downloadThroughput: 1.5 * 1024 * 1024 / 8,
-          uploadThroughput: 750 * 1024 / 8,
-          latency: 40,
-        },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: {
-          downloadThroughput: 1.5 * 1024 * 1024,
-          uploadThroughput: 750 * 1024,
-          latency: 40,
-        },
-      })
-    })
-
-    it('should use preset profiles', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
-
-      const handler = provider.getHandler('network_set_throttling')!
-
-      const result = await handler.execute({
-        profile: 'Slow 3G',
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.emulateNetworkConditions',
-        expect.objectContaining({
-          downloadThroughput: 50 * 1024 / 8, // 50 KB/s converted to bytes/s
-          uploadThroughput: 50 * 1024 / 8,
-          latency: 2000,
-        }),
-        testSessionId
-      )
-      expect(result.success).toBe(true)
-    })
-
-    it('should disable throttling', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
-
-      const handler = provider.getHandler('network_set_throttling')!
-
-      const result = await handler.execute({
-        disabled: true,
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.emulateNetworkConditions',
-        {
-          offline: false,
-          downloadThroughput: -1,
-          uploadThroughput: -1,
-          latency: 0,
-        },
-        testSessionId
-      )
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('network_set_headers', () => {
-
-    it('should set extra headers', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.setExtraHTTPHeaders
-
-      const headers = {
-        'Authorization': 'Bearer token123',
-        'X-Custom-Header': 'value',
-      }
-      
-      const handler = provider.getHandler('network_set_headers')!
-
-      
-      const result = await handler.execute({ headers })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.setExtraHTTPHeaders',
-        { headers },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { headers },
-      })
-    })
-  })
-
-  describe('network_block_urls', () => {
-
-    it('should block URLs by patterns', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.setBlockedURLs
-
-      const patterns = [
-        '*analytics*',
-        '*.tracking.js',
-        'https://ads.example.com/*',
-      ]
-      
-      const handler = provider.getHandler('network_block_urls')!
-
-      
-      const result = await handler.execute({ patterns })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.setBlockedURLs',
-        { urls: patterns },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { blocked: patterns },
-      })
-    })
-
-    it('should clear blocked URLs with empty array', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.setBlockedURLs
-
-      const handler = provider.getHandler('network_block_urls')!
-
-      const result = await handler.execute({ patterns: [] })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.setBlockedURLs',
-        { urls: [] },
-        testSessionId
-      )
-      expect(result.data?.blocked).toEqual([])
-    })
-  })
-
-  describe('network_clear_browser_cache', () => {
-
-    it('should clear browser cache', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.clearBrowserCache
-
-      const handler = provider.getHandler('network_clear_browser_cache')!
-
-      const result = await handler.execute({})
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
         'Network.clearBrowserCache',
         {},
         testSessionId
       )
-      expect(result).toEqual({
-        success: true,
-        data: { cleared: 'cache' },
-      })
-    })
-  })
-
-  describe('network_clear_browser_cookies', () => {
-
-    it('should clear all browser cookies', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.clearBrowserCookies
-
-      const handler = provider.getHandler('network_clear_browser_cookies')!
-
-      const result = await handler.execute({})
-
       expect(mockChromeClient.send).toHaveBeenCalledWith(
         'Network.clearBrowserCookies',
         {},
@@ -419,29 +280,181 @@ describe('NetworkToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { cleared: 'all cookies' },
+        data: {
+          cleared: true,
+          timestamp: expect.any(String)
+        }
       })
     })
+  })
 
-    it('should clear cookies for specific domain', async () => {
+  describe('network_get_requests', () => {
+
+    it('should get recent network requests', async () => {
+      const mockRequests = {
+        requests: [
+          {
+            url: 'https://example.com/',
+            method: 'GET',
+            startTime: 123.45,
+            duration: 234.56,
+            transferSize: 1024,
+            type: 'navigation'
+          },
+          {
+            url: 'https://example.com/api/data',
+            startTime: 456.78,
+            duration: 123.45,
+            transferSize: 512,
+            type: 'resource'
+          }
+        ],
+        total: 2
+      }
+      
       mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Network.deleteCookies
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse(mockRequests)) // Runtime.evaluate returns result.value directly
 
-      const handler = provider.getHandler('network_clear_browser_cookies')!
+      const handler = provider.getHandler('network_get_requests')!
 
-      const result = await handler.execute({
-        domain: 'example.com',
-      })
+      const result = await handler.execute({})
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Network.deleteCookies',
-        { domain: 'example.com' },
+        'Runtime.evaluate',
+        expect.objectContaining({
+          expression: expect.stringContaining('performance.getEntriesByType'),
+          returnByValue: true
+        }),
         testSessionId
       )
       expect(result).toEqual({
         success: true,
-        data: { cleared: 'cookies for domain: example.com' },
+        data: mockRequests
       })
+    })
+
+    it('should filter requests by pattern', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(
+          createCDPResponse({
+            requests: [],
+            total: 0
+          })
+        )
+
+      const handler = provider.getHandler('network_get_requests')!
+
+      const result = await handler.execute({
+        filter: 'api',
+        limit: 10
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Runtime.evaluate',
+        expect.objectContaining({
+          expression: expect.stringContaining('api')
+        }),
+        testSessionId
+      )
+      expect(result.success).toBe(true)
+    })
+  })
+
+  describe('network_modify_headers', () => {
+
+    it('should modify request headers', async () => {
+      mockChromeClient.send.mockResolvedValueOnce(undefined) // Fetch.enable
+
+      const requestHeaders = {
+        'Authorization': 'Bearer token123',
+        'X-Custom-Header': 'value'
+      }
+      
+      const handler = provider.getHandler('network_modify_headers')!
+
+      const result = await handler.execute({
+        urlPattern: '*api/*',
+        requestHeaders
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Fetch.enable',
+        expect.objectContaining({
+          patterns: [{
+            urlPattern: '*api/*',
+            requestStage: 'Request'
+          }]
+        }),
+        testSessionId
+      )
+      expect(result).toEqual({
+        success: true,
+        data: {
+          urlPattern: '*api/*',
+          requestHeaders,
+          responseHeaders: undefined,
+          status: 'active'
+        }
+      })
+    })
+
+    it('should modify response headers', async () => {
+      mockChromeClient.send.mockResolvedValueOnce(undefined) // Fetch.enable
+
+      const responseHeaders = {
+        'X-Custom-Response': 'value',
+        'Cache-Control': 'no-cache'
+      }
+      
+      const handler = provider.getHandler('network_modify_headers')!
+
+      const result = await handler.execute({
+        urlPattern: '*.json',
+        responseHeaders
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Fetch.enable',
+        expect.objectContaining({
+          patterns: [{
+            urlPattern: '*.json',
+            requestStage: 'Response'
+          }]
+        }),
+        testSessionId
+      )
+      expect(result.data?.responseHeaders).toEqual(responseHeaders)
+    })
+  })
+
+  describe('network_replay_request', () => {
+
+    it('should return placeholder for replay request', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(
+          createCDPResponse({
+            message: 'Request replay requires request history tracking',
+            requestId: 'req-123',
+            note: 'Enable Network domain events to capture requests for replay'
+          })
+        )
+
+      const handler = provider.getHandler('network_replay_request')!
+
+      const result = await handler.execute({
+        requestId: 'req-123'
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.data).toEqual({
+        message: 'Request replay requires request history tracking',
+        requestId: 'req-123',
+        note: 'Enable Network domain events to capture requests for replay'
+      })
+      expect(result.warnings).toContain('Full request replay requires request history tracking')
     })
   })
 
@@ -450,26 +463,32 @@ describe('NetworkToolProvider', () => {
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Network domain not enabled'))
 
-      const handler = provider.getHandler('network_enable_request_interception')!
-      const result = await handler.execute({})
+      const handler = provider.getHandler('network_mock_request')!
+      const result = await handler.execute({
+        urlPattern: '/api/*',
+        response: {
+          status: 200,
+          body: {}
+        }
+      })
 
       expect(result).toEqual({
         success: false,
-        error: 'Network domain not enabled',
+        error: 'Network domain not enabled'
       })
     })
 
     it('should handle invalid parameters', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Invalid pattern'))
 
-      const handler = provider.getHandler('network_enable_request_interception')!
+      const handler = provider.getHandler('network_block_urls')!
       const result = await handler.execute({
-        patterns: ['invalid pattern'],
+        urlPatterns: ['[invalid regex']
       })
 
       expect(result).toEqual({
         success: false,
-        error: 'Invalid pattern',
+        error: 'Invalid pattern'
       })
     })
   })

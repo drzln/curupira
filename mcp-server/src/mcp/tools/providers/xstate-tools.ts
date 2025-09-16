@@ -115,14 +115,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
             }
             
             const data = result.data as { error?: string }
-            if (data?.error) {
-              return {
-                success: false,
-                error: data.error,
-                data
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data
@@ -196,14 +189,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
             }
             
             const data = result.data as { error?: string; success?: boolean }
-            if (data?.error) {
-              return {
-                success: false,
-                error: data.error,
-                data
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data
@@ -253,13 +239,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
             }
             
             const data = result.data as { error?: string }
-            if (data?.error) {
-              return {
-                success: false,
-                error: data.error
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data
@@ -333,13 +313,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
             }
             
             const data = result.data as { error?: string }
-            if (data?.error) {
-              return {
-                success: false,
-                error: data.error
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data

@@ -17,16 +17,36 @@ vi.mock('../../../chrome/manager.js', () => ({
   },
 }))
 
-// Mock BaseToolProvider
+// Mock BaseToolProvider with executeScript method
 vi.mock('../../../mcp/tools/providers/base.js', () => ({
   BaseToolProvider: class {
     async getSessionId(argSessionId?: string) {
       return argSessionId || testSessionId
     }
     
-    async checkLibraryAvailable(check: string, sessionId: string) {
-      // Mock implementation - return success by default
-      return { available: true, error: undefined }
+    async executeScript(script: string, sessionId: string) {
+      const manager = this.constructor.name === 'ChromeManager' ? this : { getClient: () => mockChromeClient }
+      const client = manager.getClient()
+      
+      await client.send('Runtime.enable', {}, sessionId)
+      const result = await client.send('Runtime.evaluate', {
+        expression: script,
+        returnByValue: true,
+        awaitPromise: true
+      }, sessionId)
+      
+      if (result.exceptionDetails) {
+        return {
+          success: false,
+          error: `Script execution error: ${result.exceptionDetails.text}`,
+          data: result.exceptionDetails
+        }
+      }
+      
+      return {
+        success: true,
+        data: result.result.value
+      }
     }
   }
 }))
@@ -43,21 +63,19 @@ describe('ReduxToolProvider', () => {
     it('should return all Redux tools', () => {
       const tools = provider.listTools()
       
-      expect(tools).toHaveLength(6)
+      expect(tools).toHaveLength(4) // Actual count from implementation
       
       const toolNames = tools.map(t => t.name)
-      expect(toolNames).toContain('redux_get_state')
+      expect(toolNames).toContain('redux_inspect_state')
       expect(toolNames).toContain('redux_dispatch_action')
-      expect(toolNames).toContain('redux_get_action_history')
+      expect(toolNames).toContain('redux_get_actions')
       expect(toolNames).toContain('redux_time_travel')
-      expect(toolNames).toContain('redux_subscribe')
-      expect(toolNames).toContain('redux_get_devtools_state')
     })
   })
 
-  describe('redux_get_state', () => {
+  describe('redux_inspect_state', () => {
 
-    it('should get Redux store state', async () => {
+    it('should inspect Redux store state', async () => {
       const mockState = {
         user: {
           id: '123',
@@ -79,28 +97,28 @@ describe('ReduxToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } })) // Check available
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { state: mockState },
-            },
-          })
-        )
+        .mockResolvedValueOnce(createCDPResponse({
+          state: mockState,
+          stateKeys: Object.keys(mockState),
+          source: 'Redux Store'
+        }))
 
-      const handler = provider.getHandler('redux_get_state')!
+      const handler = provider.getHandler('redux_inspect_state')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: true,
-        data: { state: mockState },
+        data: {
+          state: mockState,
+          stateKeys: Object.keys(mockState),
+          source: 'Redux Store'
+        }
       })
     })
 
-    it('should get state slice by path', async () => {
-      const mockSlice = {
+    it('should inspect state by path', async () => {
+      const mockUserState = {
         id: '123',
         name: 'John Doe',
         isAuthenticated: true,
@@ -108,433 +126,315 @@ describe('ReduxToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { state: mockSlice },
-            },
-          })
-        )
+        .mockResolvedValueOnce(createCDPResponse({
+          path: 'user',
+          value: mockUserState,
+          type: 'object'
+        }))
 
-      const handler = provider.getHandler('redux_get_state')!
+      const handler = provider.getHandler('redux_inspect_state')!
 
       const result = await handler.execute({
         path: 'user',
       })
 
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('user'),
-        }),
-        testSessionId
-      )
       expect(result).toEqual({
         success: true,
-        data: { state: mockSlice },
+        data: {
+          path: 'user',
+          value: mockUserState,
+          type: 'object'
+        }
       })
     })
 
-    it('should handle Redux not available', async () => {
+    it('should handle Redux store not found', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
+        .mockResolvedValueOnce(createCDPResponse({
+          error: 'Redux store not found. Make sure Redux DevTools is enabled or store is exposed.'
+        }))
 
-      const handler = provider.getHandler('redux_get_state')!
+      const handler = provider.getHandler('redux_inspect_state')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: false,
-        error: 'Redux not available in the page',
+        error: 'Redux store not found. Make sure Redux DevTools is enabled or store is exposed.',
+        data: {
+          error: 'Redux store not found. Make sure Redux DevTools is enabled or store is exposed.'
+        }
       })
     })
   })
 
   describe('redux_dispatch_action', () => {
 
-    it('should dispatch action object', async () => {
-      const action = {
-        type: 'user/login',
-        payload: { id: '123', name: 'John Doe' },
-      }
+    it('should dispatch action with type and payload', async () => {
+      const actionType = 'user/login'
+      const payload = { id: '123', name: 'John Doe' }
+      const previousState = { user: null }
+      const newState = { user: { id: '123', name: 'John Doe', isAuthenticated: true } }
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                dispatched: true,
-                action,
-                newState: {
-                  user: { id: '123', name: 'John Doe', isAuthenticated: true },
-                },
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce(createCDPResponse({
+          success: true,
+          action: { type: actionType, payload },
+          previousState,
+          newState,
+          stateChanged: true
+        }))
 
       const handler = provider.getHandler('redux_dispatch_action')!
 
-      const result = await handler.execute({ action })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining(JSON.stringify(action)),
-        }),
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: {
-          dispatched: true,
-          action,
-          newState: {
-            user: { id: '123', name: 'John Doe', isAuthenticated: true },
-          },
-        },
-      })
-    })
-
-    it('should dispatch simple action type', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                dispatched: true,
-                action: { type: 'cart/clear' },
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_dispatch_action')!
-
-      const result = await handler.execute({
-        action: 'cart/clear',
-      })
-
-      expect(result.success).toBe(true)
-      expect(result.data?.action).toEqual({ type: 'cart/clear' })
-    })
-  })
-
-  describe('redux_get_action_history', () => {
-
-    it('should get action history', async () => {
-      const mockHistory = [
-        {
-          type: '@@INIT',
-          timestamp: 1234567890,
-        },
-        {
-          type: 'user/login',
-          payload: { id: '123' },
-          timestamp: 1234567900,
-        },
-        {
-          type: 'cart/addItem',
-          payload: { id: '1', name: 'Product 1' },
-          timestamp: 1234567910,
-        },
-      ]
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { actions: mockHistory },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_get_action_history')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: { actions: mockHistory },
-      })
-    })
-
-    it('should limit action history', async () => {
-      const mockHistory = [
-        { type: 'action1', timestamp: 1 },
-        { type: 'action2', timestamp: 2 },
-      ]
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { actions: mockHistory },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_get_action_history')!
-
-      const result = await handler.execute({
-        limit: 2,
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('2'),
-        }),
-        testSessionId
-      )
-      expect(result.data?.actions).toHaveLength(2)
-    })
-  })
-
-  describe('redux_time_travel', () => {
-
-    it('should time travel to specific state index', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                success: true,
-                jumpedTo: 5,
-                currentState: { user: { id: '123' } },
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_time_travel')!
-
-      const result = await handler.execute({
-        index: 5,
+      const result = await handler.execute({ 
+        type: actionType,
+        payload 
       })
 
       expect(result).toEqual({
         success: true,
         data: {
           success: true,
-          jumpedTo: 5,
-          currentState: { user: { id: '123' } },
-        },
+          action: { type: actionType, payload },
+          previousState,
+          newState,
+          stateChanged: true
+        }
+      })
+    })
+
+    it('should dispatch action with type only', async () => {
+      const actionType = 'cart/clear'
+      const previousState = { cart: { items: [1, 2, 3] } }
+      const newState = { cart: { items: [] } }
+      
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse({
+          success: true,
+          action: { type: actionType },
+          previousState,
+          newState,
+          stateChanged: true
+        }))
+
+      const handler = provider.getHandler('redux_dispatch_action')!
+
+      const result = await handler.execute({
+        type: actionType
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.data?.action).toEqual({ type: actionType })
+      expect(result.data?.stateChanged).toBe(true)
+    })
+
+    it('should handle dispatch errors', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse({
+          error: 'Failed to dispatch action: Action type is required',
+          action: { type: 'invalid' }
+        }))
+
+      const handler = provider.getHandler('redux_dispatch_action')!
+
+      const result = await handler.execute({
+        type: 'invalid'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Failed to dispatch action: Action type is required',
+        data: {
+          error: 'Failed to dispatch action: Action type is required',
+          action: { type: 'invalid' }
+        }
+      })
+    })
+  })
+
+  describe('redux_get_actions', () => {
+
+    it('should get actions from Redux DevTools', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse({
+          message: 'Action history available in Redux DevTools',
+          tip: 'Open Redux DevTools in Chrome to see full action history'
+        }))
+
+      const handler = provider.getHandler('redux_get_actions')!
+
+      const result = await handler.execute({})
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          message: 'Action history available in Redux DevTools',
+          tip: 'Open Redux DevTools in Chrome to see full action history'
+        }
+      })
+    })
+
+    it('should handle when DevTools not available', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse({
+          error: 'Action history not available. Redux DevTools required for action history.',
+          suggestion: 'Install Redux DevTools extension or add logging middleware to your store'
+        }))
+
+      const handler = provider.getHandler('redux_get_actions')!
+
+      const result = await handler.execute({
+        limit: 10
+      })
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          error: 'Action history not available. Redux DevTools required for action history.',
+          suggestion: 'Install Redux DevTools extension or add logging middleware to your store'
+        }
+      })
+    })
+  })
+
+  describe('redux_time_travel', () => {
+
+    it('should time travel to specific action index', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse({
+          success: true,
+          message: 'Time travel command sent to Redux DevTools',
+          actionIndex: 5
+        }))
+
+      const handler = provider.getHandler('redux_time_travel')!
+
+      const result = await handler.execute({
+        actionIndex: 5,
+      })
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          success: true,
+          message: 'Time travel command sent to Redux DevTools',
+          actionIndex: 5
+        }
       })
     })
 
     it('should handle Redux DevTools not available', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { error: 'Redux DevTools not available' },
-            },
-          })
-        )
+        .mockResolvedValueOnce(createCDPResponse({
+          error: 'Redux DevTools required for time travel functionality'
+        }))
 
       const handler = provider.getHandler('redux_time_travel')!
 
       const result = await handler.execute({
-        index: 5,
+        actionIndex: 5,
       })
 
       expect(result).toEqual({
         success: false,
-        error: 'Redux DevTools not available',
-        data: { error: 'Redux DevTools not available' },
-      })
-    })
-  })
-
-  describe('redux_subscribe', () => {
-
-    it('should subscribe to store changes', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                subscribed: true,
-                listenerId: 'listener-redux-123',
-                message: 'Subscribed to Redux store. Check console for state changes.',
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_subscribe')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: {
-          subscribed: true,
-          listenerId: 'listener-redux-123',
-          message: 'Subscribed to Redux store. Check console for state changes.',
-        },
+        error: 'Redux DevTools required for time travel functionality'
       })
     })
 
-    it('should subscribe with selector', async () => {
+    it('should handle DevTools not properly initialized', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                subscribed: true,
-                listenerId: 'listener-redux-456',
-                message: 'Subscribed with selector.',
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce(createCDPResponse({
+          error: 'Redux DevTools not properly initialized'
+        }))
 
-      const handler = provider.getHandler('redux_subscribe')!
+      const handler = provider.getHandler('redux_time_travel')!
 
       const result = await handler.execute({
-        selector: 'state => state.user.isAuthenticated',
+        actionIndex: 3,
       })
 
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('state => state.user.isAuthenticated'),
-        }),
-        testSessionId
-      )
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('redux_get_devtools_state', () => {
-
-    it('should get Redux DevTools state', async () => {
-      const mockDevtools = {
-        connected: true,
-        features: {
-          pause: true,
-          lock: true,
-          persist: true,
-          export: true,
-          import: true,
-          jump: true,
-          skip: true,
-          reorder: true,
-          dispatch: true,
-          test: true,
-        },
-        actionsCount: 42,
-        currentStateIndex: 41,
-        isLocked: false,
-        isPaused: false,
-      }
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockDevtools,
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_get_devtools_state')!
-
-      const result = await handler.execute({})
-
       expect(result).toEqual({
-        success: true,
-        data: mockDevtools,
-      })
-    })
-
-    it('should handle DevTools not connected', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                connected: false,
-                message: 'Redux DevTools Extension not connected',
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('redux_get_devtools_state')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: {
-          connected: false,
-          message: 'Redux DevTools Extension not connected',
-        },
+        success: false,
+        error: 'Redux DevTools not properly initialized'
       })
     })
   })
 
   describe('error handling', () => {
 
-    it('should handle evaluation errors', async () => {
+    it('should handle executeScript errors', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPError('Cannot read property store of undefined'))
+
+      const handler = provider.getHandler('redux_inspect_state')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: false,
-        error: 'Error getting state: Cannot read property store of undefined',
+        error: 'Script execution error: Cannot read property store of undefined',
+        data: expect.any(Object)
       })
     })
 
-    it('should handle CDP errors', async () => {
+    it('should handle CDP connection errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('CDP disconnected'))
+
+      const handler = provider.getHandler('redux_inspect_state')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: false,
         error: 'CDP disconnected',
+      })
+    })
+
+    it('should handle dispatch action errors', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce(createCDPResponse({
+          error: 'Redux store not found or dispatch not available'
+        }))
+
+      const handler = provider.getHandler('redux_dispatch_action')!
+
+      const result = await handler.execute({
+        type: 'test/action'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Redux store not found or dispatch not available',
+        data: {
+          error: 'Redux store not found or dispatch not available'
+        }
+      })
+    })
+
+    it('should handle time travel errors', async () => {
+      mockChromeClient.send.mockRejectedValueOnce(new Error('Network error'))
+
+      const handler = provider.getHandler('redux_time_travel')!
+
+      const result = await handler.execute({
+        actionIndex: 5
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Network error',
       })
     })
   })

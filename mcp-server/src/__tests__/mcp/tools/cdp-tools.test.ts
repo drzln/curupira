@@ -45,9 +45,12 @@ describe('CDPToolProvider', () => {
     it('should evaluate JavaScript expression', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({
-          result: { type: 'string', value: 'test result' },
-        }))
+        .mockResolvedValueOnce({
+          result: {
+            type: 'string',
+            value: 'test result'
+          }
+        })
 
       const handler = provider.getHandler('cdp_evaluate')!
       const result = await handler.execute({
@@ -94,7 +97,7 @@ describe('CDPToolProvider', () => {
     it('should navigate to URL', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Page.enable
-        .mockResolvedValueOnce(createCDPResponse({ frameId: 'frame-123' }))
+        .mockResolvedValueOnce({ frameId: 'frame-123' }) // Page.navigate
         .mockResolvedValueOnce(undefined) // Page.waitForLoadEvent
 
       const handler = provider.getHandler('cdp_navigate')!
@@ -137,7 +140,7 @@ describe('CDPToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Page.enable
-        .mockResolvedValueOnce(createCDPResponse({ data: mockScreenshot }))
+        .mockResolvedValueOnce({ data: mockScreenshot }) // Page.captureScreenshot
 
       const handler = provider.getHandler('cdp_screenshot')!
       const result = await handler.execute({})
@@ -196,7 +199,7 @@ describe('CDPToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Network.enable
-        .mockResolvedValueOnce(createCDPResponse({ cookies: mockCookies }))
+        .mockResolvedValueOnce({ cookies: mockCookies }) // Network.getCookies
 
       const handler = provider.getHandler('cdp_get_cookies')!
       const result = await handler.execute({})
@@ -216,7 +219,7 @@ describe('CDPToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Network.enable
-        .mockResolvedValueOnce(createCDPResponse({ cookies: mockCookies }))
+        .mockResolvedValueOnce({ cookies: mockCookies }) // Network.getCookies
 
       const handler = provider.getHandler('cdp_get_cookies')!
       const result = await handler.execute({
@@ -235,7 +238,7 @@ describe('CDPToolProvider', () => {
     it('should set a cookie', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Network.enable
-        .mockResolvedValueOnce(createCDPResponse({ success: true }))
+        .mockResolvedValueOnce({ success: true }) // Network.setCookie
 
       const handler = provider.getHandler('cdp_set_cookie')!
       const result = await handler.execute({

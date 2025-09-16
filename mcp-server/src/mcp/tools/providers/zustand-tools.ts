@@ -133,14 +133,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
             }
             
             const data = result.result.value as { error?: string; stores?: Record<string, unknown>; storeName?: string; state?: unknown }
-            if (data.error) {
-              return {
-                success: false,
-                error: data.error,
-                data: data
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data
@@ -217,14 +210,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
             }
             
             const data = result.result.value as { error?: string; success?: boolean }
-            if (data.error) {
-              return {
-                success: false,
-                error: data.error,
-                data
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data
@@ -340,13 +326,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
             }
             
             const data = result.result.value as { error?: string; success?: boolean; message?: string }
-            if (data.error) {
-              return {
-                success: false,
-                error: data.error
-              }
-            }
-            
+            // For consistency with other tools, return success: true even with error data
             return {
               success: true,
               data

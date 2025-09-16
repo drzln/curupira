@@ -41,123 +41,101 @@ describe('DebuggerToolProvider', () => {
       expect(tools).toHaveLength(10)
       
       const toolNames = tools.map(t => t.name)
-      expect(toolNames).toContain('debugger_enable')
-      expect(toolNames).toContain('debugger_disable')
       expect(toolNames).toContain('debugger_set_breakpoint')
       expect(toolNames).toContain('debugger_remove_breakpoint')
-      expect(toolNames).toContain('debugger_set_breakpoint_by_url')
       expect(toolNames).toContain('debugger_pause')
       expect(toolNames).toContain('debugger_resume')
       expect(toolNames).toContain('debugger_step_over')
       expect(toolNames).toContain('debugger_step_into')
       expect(toolNames).toContain('debugger_step_out')
+      expect(toolNames).toContain('debugger_get_call_stack')
+      expect(toolNames).toContain('debugger_evaluate_on_call_frame')
+      expect(toolNames).toContain('debugger_get_scope_variables')
     })
   })
 
-  describe('debugger_enable', () => {
+  describe('debugger_set_breakpoint', () => {
 
-    it('should enable debugger', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.enable
+    it('should set breakpoint by URL', async () => {
+      const mockBreakpointId = 'breakpoint:1:0:100'
+      const mockLocations = [{
+        scriptId: '123',
+        lineNumber: 100,
+        columnNumber: 0,
+      }]
+      
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Debugger.enable
+        .mockResolvedValueOnce({
+          breakpointId: mockBreakpointId,
+          locations: mockLocations,
+        }) // Debugger.setBreakpointByUrl
 
-      const handler = provider.getHandler('debugger_enable')!
+      const handler = provider.getHandler('debugger_set_breakpoint')!
 
-      const result = await handler.execute({})
+      const result = await handler.execute({
+        url: 'https://example.com/app.js',
+        lineNumber: 100,
+      })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
         'Debugger.enable',
         {},
         testSessionId
       )
-      expect(result).toEqual({
-        success: true,
-        data: { enabled: true },
-      })
-    })
-  })
-
-  describe('debugger_disable', () => {
-
-    it('should disable debugger', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.disable
-
-      const handler = provider.getHandler('debugger_disable')!
-
-      const result = await handler.execute({})
-
       expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Debugger.disable',
-        {},
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: { enabled: false },
-      })
-    })
-  })
-
-  describe('debugger_set_breakpoint', () => {
-
-    it('should set breakpoint at location', async () => {
-      const mockBreakpointId = 'breakpoint:1:0:100'
-      const mockLocation = {
-        scriptId: '123',
-        lineNumber: 100,
-        columnNumber: 0,
-      }
-      
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPResponse({
-          breakpointId: mockBreakpointId,
-          actualLocation: mockLocation,
-        })
-      )
-
-      const handler = provider.getHandler('debugger_set_breakpoint')!
-
-      const result = await handler.execute({
-        location: mockLocation,
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Debugger.setBreakpoint',
-        { location: mockLocation },
+        'Debugger.setBreakpointByUrl',
+        {
+          url: 'https://example.com/app.js',
+          lineNumber: 100,
+          columnNumber: undefined,
+          condition: undefined
+        },
         testSessionId
       )
       expect(result).toEqual({
         success: true,
         data: {
           breakpointId: mockBreakpointId,
-          actualLocation: mockLocation,
+          locations: mockLocations,
+          url: 'https://example.com/app.js',
+          lineNumber: 100
         },
       })
     })
 
     it('should set conditional breakpoint', async () => {
       const mockBreakpointId = 'breakpoint:1:0:50'
-      const location = {
+      const mockLocations = [{
         scriptId: '123',
         lineNumber: 50,
-      }
+        columnNumber: 0,
+      }]
       const condition = 'x > 10'
       
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPResponse({
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Debugger.enable
+        .mockResolvedValueOnce({
           breakpointId: mockBreakpointId,
-          actualLocation: { ...location, columnNumber: 0 },
+          locations: mockLocations,
         })
-      )
 
       const handler = provider.getHandler('debugger_set_breakpoint')!
 
       const result = await handler.execute({
-        location,
+        url: 'https://example.com/app.js',
+        lineNumber: 50,
         condition,
       })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Debugger.setBreakpoint',
-        { location, condition },
+        'Debugger.setBreakpointByUrl',
+        {
+          url: 'https://example.com/app.js',
+          lineNumber: 50,
+          columnNumber: undefined,
+          condition
+        },
         testSessionId
       )
       expect(result.success).toBe(true)
@@ -181,91 +159,30 @@ describe('DebuggerToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { removed: breakpointId },
-      })
-    })
-  })
-
-  describe('debugger_set_breakpoint_by_url', () => {
-
-    it('should set breakpoint by URL and line', async () => {
-      const mockBreakpointId = 'breakpoint:url:1'
-      const mockLocations = [
-        {
-          scriptId: '123',
-          lineNumber: 42,
-          columnNumber: 0,
-        },
-      ]
-      
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPResponse({
-          breakpointId: mockBreakpointId,
-          locations: mockLocations,
-        })
-      )
-
-      const handler = provider.getHandler('debugger_set_breakpoint_by_url')!
-
-      const result = await handler.execute({
-        url: 'https://example.com/app.js',
-        lineNumber: 42,
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Debugger.setBreakpointByUrl',
-        {
-          url: 'https://example.com/app.js',
-          lineNumber: 42,
-        },
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
         data: {
-          breakpointId: mockBreakpointId,
-          locations: mockLocations,
+          breakpointId,
+          removed: true
         },
       })
-    })
-
-    it('should set breakpoint by URL regex', async () => {
-      const mockBreakpointId = 'breakpoint:regex:1'
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPResponse({
-          breakpointId: mockBreakpointId,
-          locations: [],
-        })
-      )
-
-      const handler = provider.getHandler('debugger_set_breakpoint_by_url')!
-
-      const result = await handler.execute({
-        urlRegex: '.*\\.js$',
-        lineNumber: 100,
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Debugger.setBreakpointByUrl',
-        {
-          urlRegex: '.*\\.js$',
-          lineNumber: 100,
-        },
-        testSessionId
-      )
-      expect(result.success).toBe(true)
     })
   })
 
   describe('debugger_pause', () => {
 
     it('should pause execution', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.pause
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Debugger.enable
+        .mockResolvedValueOnce(undefined) // Debugger.pause
 
       const handler = provider.getHandler('debugger_pause')!
 
       const result = await handler.execute({})
 
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Debugger.enable',
+        {},
+        testSessionId
+      )
       expect(mockChromeClient.send).toHaveBeenCalledWith(
         'Debugger.pause',
         {},
@@ -273,7 +190,10 @@ describe('DebuggerToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { paused: true },
+        data: {
+          paused: true,
+          timestamp: expect.any(String)
+        },
       })
     })
   })
@@ -294,7 +214,10 @@ describe('DebuggerToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { resumed: true },
+        data: {
+          resumed: true,
+          timestamp: expect.any(String)
+        },
       })
     })
   })
@@ -315,7 +238,10 @@ describe('DebuggerToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { action: 'stepOver' },
+        data: {
+          stepped: 'over',
+          timestamp: expect.any(String)
+        },
       })
     })
   })
@@ -336,7 +262,10 @@ describe('DebuggerToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { action: 'stepInto' },
+        data: {
+          stepped: 'into',
+          timestamp: expect.any(String)
+        },
       })
     })
   })
@@ -357,7 +286,145 @@ describe('DebuggerToolProvider', () => {
       )
       expect(result).toEqual({
         success: true,
-        data: { action: 'stepOut' },
+        data: {
+          stepped: 'out',
+          timestamp: expect.any(String)
+        },
+      })
+    })
+  })
+
+  describe('debugger_get_call_stack', () => {
+
+    it('should get call stack when paused', async () => {
+      const mockCallFrames = [
+        {
+          callFrameId: 'frame-1',
+          functionName: 'myFunction',
+          url: 'https://example.com/app.js',
+          location: { lineNumber: 42, columnNumber: 0 },
+          scopeChain: [
+            { type: 'local', name: 'Local' },
+            { type: 'closure', name: 'Closure' }
+          ]
+        }
+      ]
+
+      // Mock the pause event listener setup
+      let pauseListener: (params: any) => void
+      mockChromeClient.on = vi.fn((event, listener) => {
+        if (event === 'Debugger.paused') {
+          pauseListener = listener
+          // Simulate paused event immediately
+          setTimeout(() => {
+            pauseListener({ callFrames: mockCallFrames })
+          }, 0)
+        }
+      })
+
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Debugger.pause
+        .mockResolvedValueOnce(undefined) // Debugger.resume
+
+      const handler = provider.getHandler('debugger_get_call_stack')!
+
+      const result = await handler.execute({})
+
+      expect(result.success).toBe(true)
+      expect(result.data).toEqual({
+        callStack: expect.arrayContaining([
+          expect.objectContaining({
+            functionName: 'myFunction',
+            url: 'https://example.com/app.js',
+            lineNumber: 42,
+            columnNumber: 0,
+            callFrameId: 'frame-1'
+          })
+        ]),
+        depth: expect.any(Number)
+      })
+    })
+  })
+
+  describe('debugger_evaluate_on_call_frame', () => {
+
+    it('should evaluate expression on call frame', async () => {
+      const mockResult = {
+        result: {
+          type: 'number',
+          value: 42,
+          className: 'Number'
+        }
+      }
+
+      mockChromeClient.send.mockResolvedValueOnce(mockResult)
+
+      const handler = provider.getHandler('debugger_evaluate_on_call_frame')!
+
+      const result = await handler.execute({
+        callFrameId: 'frame-1',
+        expression: 'x + y'
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Debugger.evaluateOnCallFrame',
+        {
+          callFrameId: 'frame-1',
+          expression: 'x + y',
+          returnByValue: true,
+          generatePreview: true
+        },
+        testSessionId
+      )
+      expect(result).toEqual({
+        success: true,
+        data: {
+          result: 42,
+          type: 'number',
+          className: 'Number'
+        }
+      })
+    })
+
+    it('should handle evaluation errors', async () => {
+      const mockError = {
+        exceptionDetails: {
+          text: 'ReferenceError: x is not defined'
+        }
+      }
+
+      mockChromeClient.send.mockResolvedValueOnce(mockError)
+
+      const handler = provider.getHandler('debugger_evaluate_on_call_frame')!
+
+      const result = await handler.execute({
+        callFrameId: 'frame-1',
+        expression: 'undefinedVariable'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Evaluation error: ReferenceError: x is not defined',
+        data: mockError.exceptionDetails
+      })
+    })
+  })
+
+  describe('debugger_get_scope_variables', () => {
+
+    it('should return error when not paused', async () => {
+      // No pause event listener setup means no target frame
+      mockChromeClient.on = vi.fn()
+
+      const handler = provider.getHandler('debugger_get_scope_variables')!
+
+      const result = await handler.execute({
+        callFrameId: 'frame-1'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Call frame not found. Debugger must be paused at this frame.'
       })
     })
   })
@@ -367,11 +434,10 @@ describe('DebuggerToolProvider', () => {
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Debugger not enabled'))
 
+      const handler = provider.getHandler('debugger_set_breakpoint')!
       const result = await handler.execute({
-        location: {
-          scriptId: '123',
-          lineNumber: 100,
-        },
+        url: 'https://example.com/app.js',
+        lineNumber: 100,
       })
 
       expect(result).toEqual({
@@ -381,15 +447,14 @@ describe('DebuggerToolProvider', () => {
     })
 
     it('should handle invalid script ID', async () => {
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPError('Script not found')
-      )
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Debugger.enable
+        .mockRejectedValueOnce(new Error('Script not found'))
 
+      const handler = provider.getHandler('debugger_set_breakpoint')!
       const result = await handler.execute({
-        location: {
-          scriptId: 'invalid',
-          lineNumber: 100,
-        },
+        url: 'invalid://script',
+        lineNumber: 100,
       })
 
       expect(result).toEqual({

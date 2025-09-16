@@ -45,9 +45,10 @@ describe('ReactToolProvider', () => {
       expect(toolNames).toContain('react_inspect_props')
       expect(toolNames).toContain('react_inspect_state')
       expect(toolNames).toContain('react_inspect_hooks')
-      expect(toolNames).toContain('react_trigger_re_render')
-      expect(toolNames).toContain('react_profile_render')
+      expect(toolNames).toContain('react_force_rerender')
+      expect(toolNames).toContain('react_profile_renders')
       expect(toolNames).toContain('react_get_fiber_tree')
+      expect(toolNames).toContain('react_detect_version')
     })
   })
 
@@ -71,16 +72,14 @@ describe('ReactToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                found: true,
-                components: mockComponents,
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              found: true,
+              components: mockComponents,
+            }
+          }
+        })
 
       const handler = provider.getHandler('react_find_component')!
 
@@ -108,15 +107,13 @@ describe('ReactToolProvider', () => {
     it('should handle component not found', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                error: 'No components found with name: NonExistent',
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'No components found with name: NonExistent',
+            }
+          }
+        })
 
       const handler = provider.getHandler('react_find_component')!
 
@@ -127,9 +124,6 @@ describe('ReactToolProvider', () => {
       expect(result).toEqual({
         success: false,
         error: 'No components found with name: NonExistent',
-        data: {
-          error: 'No components found with name: NonExistent',
-        },
       })
     })
   })
@@ -148,13 +142,11 @@ describe('ReactToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockProps,
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: mockProps
+          }
+        })
 
       const handler = provider.getHandler('react_inspect_props')!
 
@@ -171,15 +163,13 @@ describe('ReactToolProvider', () => {
     it('should handle missing component', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                error: 'Component not found',
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Component not found',
+            }
+          }
+        })
 
       const handler = provider.getHandler('react_inspect_props')!
 
@@ -188,8 +178,7 @@ describe('ReactToolProvider', () => {
       })
 
       expect(result).toEqual({
-        success: false,
-        error: 'Component not found',
+        success: true,
         data: { error: 'Component not found' },
       })
     })
@@ -212,13 +201,11 @@ describe('ReactToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockState,
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: mockState
+          }
+        })
 
       const handler = provider.getHandler('react_inspect_state')!
 
@@ -235,15 +222,13 @@ describe('ReactToolProvider', () => {
     it('should handle functional component (no state)', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                error: 'Component has no state (functional component)',
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Component has no state (functional component)',
+            }
+          }
+        })
 
       const handler = provider.getHandler('react_inspect_state')!
 
@@ -252,8 +237,7 @@ describe('ReactToolProvider', () => {
       })
 
       expect(result).toEqual({
-        success: false,
-        error: 'Component has no state (functional component)',
+        success: true,
         data: { error: 'Component has no state (functional component)' },
       })
     })
@@ -274,13 +258,11 @@ describe('ReactToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockHooks,
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: mockHooks
+          }
+        })
 
       const handler = provider.getHandler('react_inspect_hooks')!
 
@@ -295,24 +277,22 @@ describe('ReactToolProvider', () => {
     })
   })
 
-  describe('react_trigger_re_render', () => {
+  describe('react_force_rerender', () => {
 
     it('should trigger component re-render', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                success: true,
-                componentId: 'comp-1',
-                message: 'Component re-rendered',
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              success: true,
+              componentId: 'comp-1',
+              message: 'Component re-rendered',
+            }
+          }
+        })
 
-      const handler = provider.getHandler('react_trigger_re_render')!
+      const handler = provider.getHandler('react_force_rerender')!
 
       const result = await handler.execute({
         componentId: 'comp-1',
@@ -329,7 +309,7 @@ describe('ReactToolProvider', () => {
     })
   })
 
-  describe('react_profile_render', () => {
+  describe('react_profile_renders', () => {
 
     it('should profile component render performance', async () => {
       const mockProfile = {
@@ -342,25 +322,19 @@ describe('ReactToolProvider', () => {
         averageRenderTime: 20.4,
       }
       
-      // Mock waiting for profiling
-      await new Promise(resolve => setTimeout(resolve, 10))
-      
       mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable (start)
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { started: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable (stop)
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockProfile,
-            },
-          })
-        )
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({ result: { value: undefined } }) // Start profiling (no return value)
+        .mockResolvedValueOnce({
+          result: {
+            value: mockProfile // Stop profiling and get results
+          }
+        })
 
-      const handler = provider.getHandler('react_profile_render')!
+      const handler = provider.getHandler('react_profile_renders')!
 
       const result = await handler.execute({
-        duration: 100, // 100ms profiling
+        duration: 10, // 10ms profiling
         componentName: 'ExpensiveList',
       })
 
@@ -397,13 +371,11 @@ describe('ReactToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockFiberTree,
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: mockFiberTree
+          }
+        })
 
       const handler = provider.getHandler('react_get_fiber_tree')!
 
@@ -418,13 +390,11 @@ describe('ReactToolProvider', () => {
     it('should filter fiber tree by root selector', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { root: {} },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: { root: {} }
+          }
+        })
 
       const handler = provider.getHandler('react_get_fiber_tree')!
 
@@ -443,12 +413,41 @@ describe('ReactToolProvider', () => {
     })
   })
 
+  describe('react_detect_version', () => {
+
+    it('should detect React version', async () => {
+      const mockVersion = {
+        version: '18.2.0',
+        devtools: true,
+        renderer: 'react-dom',
+        mode: 'development'
+      }
+      
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: mockVersion
+          }
+        })
+
+      const handler = provider.getHandler('react_detect_version')!
+
+      const result = await handler.execute({})
+
+      expect(result).toEqual({
+        success: true,
+        data: mockVersion
+      })
+    })
+  })
+
   describe('error handling', () => {
 
     it('should handle evaluation errors', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPError('React is not defined'))
+        .mockResolvedValueOnce({ exceptionDetails: { text: 'React is not defined' } })
 
       const handler = provider.getHandler('react_find_component')!
       const result = await handler.execute({

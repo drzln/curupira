@@ -41,7 +41,11 @@ export function resetAllMocks() {
 
 // Create mock CDP response
 export function createCDPResponse<T>(result: T) {
-  return result
+  return {
+    result: {
+      value: result
+    }
+  }
 }
 
 // Create mock CDP error response

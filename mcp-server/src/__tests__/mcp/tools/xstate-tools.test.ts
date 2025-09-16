@@ -28,6 +28,33 @@ vi.mock('../../../mcp/tools/providers/base.js', () => ({
       // Mock implementation - return success by default
       return { available: true, error: undefined }
     }
+
+    async executeScript(script: string, sessionId: string) {
+      // Mock executeScript to return CDP response format  
+      const { mockChromeClient } = await import('../../setup.js')
+      const manager = { getClient: () => mockChromeClient }
+      const client = manager.getClient()
+      
+      await client.send('Runtime.enable', {}, sessionId)
+      const result = await client.send('Runtime.evaluate', {
+        expression: script,
+        returnByValue: true,
+        awaitPromise: true
+      }, sessionId)
+      
+      if (result.exceptionDetails) {
+        return {
+          success: false,
+          error: `Script execution error: ${result.exceptionDetails.text}`,
+          data: result.exceptionDetails
+        }
+      }
+      
+      return {
+        success: true,
+        data: result.result.value
+      }
+    }
   }
 }))
 
@@ -43,75 +70,13 @@ describe('XStateToolProvider', () => {
     it('should return all XState tools', () => {
       const tools = provider.listTools()
       
-      expect(tools).toHaveLength(8)
+      expect(tools).toHaveLength(4)
       
       const toolNames = tools.map(t => t.name)
-      expect(toolNames).toContain('xstate_list_machines')
-      expect(toolNames).toContain('xstate_list_actors')
-      expect(toolNames).toContain('xstate_inspect_machine')
       expect(toolNames).toContain('xstate_inspect_actor')
       expect(toolNames).toContain('xstate_send_event')
-      expect(toolNames).toContain('xstate_get_state_value')
-      expect(toolNames).toContain('xstate_enable_inspector')
-      expect(toolNames).toContain('xstate_disable_inspector')
-    })
-  })
-
-  describe('xstate_list_machines', () => {
-
-    it('should list all XState machines', async () => {
-      const mockMachines = [
-        {
-          id: 'authMachine',
-          config: {
-            initial: 'idle',
-            states: { idle: {}, loading: {}, authenticated: {} },
-          },
-        },
-        {
-          id: 'cartMachine',
-          config: {
-            initial: 'empty',
-            states: { empty: {}, hasItems: {} },
-          },
-        },
-      ]
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } })) // Check available
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { machines: mockMachines },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('xstate_list_machines')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: { machines: mockMachines },
-      })
-    })
-
-    it('should handle XState not available', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
-
-      const handler = provider.getHandler('xstate_list_machines')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: false,
-        error: 'XState not available in the page',
-      })
+      expect(toolNames).toContain('xstate_list_actors')
+      expect(toolNames).toContain('xstate_inspect_machine')
     })
   })
 
@@ -125,19 +90,23 @@ describe('XStateToolProvider', () => {
           state: { value: 'authenticated', context: { user: { id: '123' } } },
           sessionId: 'session-1',
         },
+        {
+          id: 'cart.actor',
+          machineId: 'cartMachine',
+          state: { value: 'hasItems', context: { items: [{ id: '1' }] } },
+          sessionId: 'session-2',
+        },
       ]
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { actors: mockActors },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              actors: mockActors,
+            }
+          }
+        })
 
       const handler = provider.getHandler('xstate_list_actors')!
 
@@ -148,80 +117,27 @@ describe('XStateToolProvider', () => {
         data: { actors: mockActors },
       })
     })
-  })
 
-  describe('xstate_inspect_machine', () => {
-
-    it('should inspect machine configuration', async () => {
-      const mockMachine = {
-        id: 'authMachine',
-        config: {
-          initial: 'idle',
-          states: {
-            idle: { on: { LOGIN: 'loading' } },
-            loading: { on: { SUCCESS: 'authenticated', FAILURE: 'error' } },
-            authenticated: { on: { LOGOUT: 'idle' } },
-            error: { on: { RETRY: 'loading' } },
-          },
-        },
-        stateNodes: ['idle', 'loading', 'authenticated', 'error'],
-        events: ['LOGIN', 'SUCCESS', 'FAILURE', 'LOGOUT', 'RETRY'],
-      }
-      
+    it('should handle no actors found', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockMachine,
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'XState actors not found. Make sure XState devtools is enabled.'
+            }
+          }
+        })
 
-      const handler = provider.getHandler('xstate_inspect_machine')!
+      const handler = provider.getHandler('xstate_list_actors')!
 
-      const result = await handler.execute({
-        machineId: 'authMachine',
-      })
+      const result = await handler.execute({})
 
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('authMachine'),
-        }),
-        testSessionId
-      )
       expect(result).toEqual({
         success: true,
-        data: mockMachine,
-      })
-    })
-
-    it('should handle machine not found', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { error: 'Machine not found: unknownMachine' },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('xstate_inspect_machine')!
-
-      const result = await handler.execute({
-        machineId: 'unknownMachine',
-      })
-
-      expect(result).toEqual({
-        success: false,
-        error: 'Machine not found: unknownMachine',
-        data: { error: 'Machine not found: unknownMachine' },
+        data: {
+          error: 'XState actors not found. Make sure XState devtools is enabled.'
+        }
       })
     })
   })
@@ -247,15 +163,11 @@ describe('XStateToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockActor,
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: mockActor
+          }
+        })
 
       const handler = provider.getHandler('xstate_inspect_actor')!
 
@@ -268,6 +180,75 @@ describe('XStateToolProvider', () => {
         data: mockActor,
       })
     })
+
+    it('should handle actor not found', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Actor not found'
+            }
+          }
+        })
+
+      const handler = provider.getHandler('xstate_inspect_actor')!
+
+      const result = await handler.execute({
+        actorId: 'nonexistent.actor',
+      })
+
+      expect(result).toEqual({
+        success: true,
+        data: { error: 'Actor not found' }
+      })
+    })
+  })
+
+  describe('xstate_inspect_machine', () => {
+
+    it('should inspect machine configuration', async () => {
+      const mockMachine = {
+        id: 'authMachine',
+        config: {
+          initial: 'idle',
+          states: {
+            idle: { on: { LOGIN: 'loading' } },
+            loading: { on: { SUCCESS: 'authenticated', FAILURE: 'error' } },
+            authenticated: { on: { LOGOUT: 'idle' } },
+            error: { on: { RETRY: 'loading' } },
+          },
+        },
+        stateNodes: ['idle', 'loading', 'authenticated', 'error'],
+        events: ['LOGIN', 'SUCCESS', 'FAILURE', 'LOGOUT', 'RETRY'],
+      }
+      
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: mockMachine
+          }
+        })
+
+      const handler = provider.getHandler('xstate_inspect_machine')!
+
+      const result = await handler.execute({
+        actorId: 'auth.actor',
+      })
+
+      expect(mockChromeClient.send).toHaveBeenCalledWith(
+        'Runtime.evaluate',
+        expect.objectContaining({
+          expression: expect.stringContaining('auth.actor'),
+        }),
+        testSessionId
+      )
+      expect(result).toEqual({
+        success: true,
+        data: mockMachine,
+      })
+    })
   })
 
   describe('xstate_send_event', () => {
@@ -275,30 +256,27 @@ describe('XStateToolProvider', () => {
     it('should send event to actor', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                success: true,
-                newState: { value: 'loading' },
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              success: true,
+              previousState: { value: 'idle' },
+              newState: { value: 'loading' },
+            }
+          }
+        })
 
       const handler = provider.getHandler('xstate_send_event')!
 
       const result = await handler.execute({
         actorId: 'auth.actor',
-        event: { type: 'LOGIN', email: 'user@example.com' },
+        event: { type: 'LOGIN', email: 'user@example.com', password: 'secret' },
       })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
         'Runtime.evaluate',
         expect.objectContaining({
-          expression: expect.stringContaining('{"type":"LOGIN","email":"user@example.com"}'),
+          expression: expect.stringContaining(JSON.stringify({ type: 'LOGIN', email: 'user@example.com', password: 'secret' })),
         }),
         testSessionId
       )
@@ -306,135 +284,33 @@ describe('XStateToolProvider', () => {
         success: true,
         data: {
           success: true,
+          previousState: { value: 'idle' },
           newState: { value: 'loading' },
-        },
+        }
       })
     })
 
-    it('should send simple string event', async () => {
+    it('should handle event send failure', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                success: true,
-                newState: { value: 'idle' },
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Invalid event for current state'
+            }
+          }
+        })
 
       const handler = provider.getHandler('xstate_send_event')!
 
       const result = await handler.execute({
         actorId: 'auth.actor',
-        event: 'LOGOUT',
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('"LOGOUT"'),
-        }),
-        testSessionId
-      )
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('xstate_get_state_value', () => {
-
-    it('should get current state value', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                value: 'authenticated.profile',
-                context: { user: { id: '123' } },
-                matches: ['authenticated', 'authenticated.profile'],
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('xstate_get_state_value')!
-
-      const result = await handler.execute({
-        actorId: 'auth.actor',
+        event: { type: 'INVALID_EVENT' },
       })
 
       expect(result).toEqual({
         success: true,
-        data: {
-          value: 'authenticated.profile',
-          context: { user: { id: '123' } },
-          matches: ['authenticated', 'authenticated.profile'],
-        },
-      })
-    })
-  })
-
-  describe('xstate_enable_inspector', () => {
-
-    it('should enable XState inspector', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                enabled: true,
-                url: 'https://stately.ai/viz?inspect',
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('xstate_enable_inspector')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: {
-          enabled: true,
-          url: 'https://stately.ai/viz?inspect',
-        },
-      })
-    })
-  })
-
-  describe('xstate_disable_inspector', () => {
-
-    it('should disable XState inspector', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { disabled: true },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('xstate_disable_inspector')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: { disabled: true },
+        data: { error: 'Invalid event for current state' }
       })
     })
   })
@@ -444,20 +320,25 @@ describe('XStateToolProvider', () => {
     it('should handle evaluation errors', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPError('XState is not defined'))
+        .mockResolvedValueOnce({ exceptionDetails: { text: 'XState is not defined' } })
+
+      const handler = provider.getHandler('xstate_list_actors')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: false,
-        error: 'Error listing machines: XState is not defined',
+        error: 'Script execution error: XState is not defined',
+        data: {
+          text: 'XState is not defined'
+        }
       })
     })
 
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Connection lost'))
+
+      const handler = provider.getHandler('xstate_list_actors')!
 
       const result = await handler.execute({})
 

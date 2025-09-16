@@ -66,9 +66,9 @@ describe('DOMToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // DOM.enable
-        .mockResolvedValueOnce(createCDPResponse({ root: { nodeId: 1 } })) // getDocument
-        .mockResolvedValueOnce(createCDPResponse({ nodeId: 123 })) // querySelector
-        .mockResolvedValueOnce(createCDPResponse({ node: mockNode })) // describeNode
+        .mockResolvedValueOnce({ root: { nodeId: 1 } }) // DOM.getDocument
+        .mockResolvedValueOnce({ nodeId: 123 }) // DOM.querySelector
+        .mockResolvedValueOnce({ node: mockNode }) // DOM.describeNode
 
       const result = await handler.execute({
         selector: '.container',
@@ -90,8 +90,8 @@ describe('DOMToolProvider', () => {
     it('should handle element not found', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // DOM.enable
-        .mockResolvedValueOnce(createCDPResponse({ root: { nodeId: 1 } })) // getDocument
-        .mockResolvedValueOnce(createCDPResponse({ nodeId: 0 })) // No element found
+        .mockResolvedValueOnce({ root: { nodeId: 1 } }) // DOM.getDocument
+        .mockResolvedValueOnce({ nodeId: 0 }) // DOM.querySelector - no element found
 
       const handler = provider.getHandler('dom_query_selector')!
       const result = await handler.execute({
@@ -116,10 +116,10 @@ describe('DOMToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // DOM.enable
-        .mockResolvedValueOnce(createCDPResponse({ root: { nodeId: 1 } })) // getDocument
-        .mockResolvedValueOnce(createCDPResponse({ nodeIds: [123, 124] })) // querySelectorAll
-        .mockResolvedValueOnce(createCDPResponse({ node: mockNodes[0] })) // describeNode
-        .mockResolvedValueOnce(createCDPResponse({ node: mockNodes[1] })) // describeNode
+        .mockResolvedValueOnce({ root: { nodeId: 1 } }) // DOM.getDocument
+        .mockResolvedValueOnce({ nodeIds: [123, 124] }) // DOM.querySelectorAll
+        .mockResolvedValueOnce({ node: mockNodes[0] }) // DOM.describeNode
+        .mockResolvedValueOnce({ node: mockNodes[1] }) // DOM.describeNode
 
       const result = await handler.execute({
         selector: 'div',
@@ -149,11 +149,9 @@ describe('DOMToolProvider', () => {
     it('should get element attributes', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // DOM.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            attributes: ['class', 'container', 'id', 'main', 'data-test', 'true'],
-          })
-        )
+        .mockResolvedValueOnce({
+          attributes: ['class', 'container', 'id', 'main', 'data-test', 'true'],
+        }) // DOM.getAttributes
 
       const result = await handler.execute({
         nodeId: 123,
@@ -234,7 +232,7 @@ describe('DOMToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // DOM.enable
-        .mockResolvedValueOnce(createCDPResponse({ outerHTML: mockHtml }))
+        .mockResolvedValueOnce({ outerHTML: mockHtml }) // DOM.getOuterHTML
 
       const result = await handler.execute({
         nodeId: 123,
@@ -289,7 +287,7 @@ describe('DOMToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // DOM.enable
-        .mockResolvedValueOnce(createCDPResponse({ model: mockBoxModel })) // getBoxModel
+        .mockResolvedValueOnce({ model: mockBoxModel }) // DOM.getBoxModel
         .mockResolvedValueOnce(undefined) // mousePressed
         .mockResolvedValueOnce(undefined) // mouseReleased
 

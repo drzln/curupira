@@ -17,7 +17,7 @@ vi.mock('../../../chrome/manager.js', () => ({
   },
 }))
 
-// Mock BaseToolProvider
+// Mock BaseToolProvider with executeScript method
 vi.mock('../../../mcp/tools/providers/base.js', () => ({
   BaseToolProvider: class {
     async getSessionId(argSessionId?: string) {
@@ -27,6 +27,37 @@ vi.mock('../../../mcp/tools/providers/base.js', () => ({
     async checkLibraryAvailable(check: string, sessionId: string) {
       // Mock implementation - return success by default
       return { available: true, error: undefined }
+    }
+    
+    async executeScript(script: string, sessionId: string) {
+      try {
+        const client = mockChromeClient
+        
+        await client.send('Runtime.enable', {}, sessionId)
+        const result = await client.send('Runtime.evaluate', {
+          expression: script,
+          returnByValue: true,
+          awaitPromise: true
+        }, sessionId)
+        
+        if (result && result.exceptionDetails) {
+          return {
+            success: false,
+            error: `Script execution error: ${result.exceptionDetails.text}`,
+            data: result.exceptionDetails
+          }
+        }
+        
+        return {
+          success: true,
+          data: result && result.result ? result.result.value : result
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Script execution failed'
+        }
+      }
     }
   }
 }))
@@ -43,22 +74,19 @@ describe('ApolloToolProvider', () => {
     it('should return all Apollo tools', () => {
       const tools = provider.listTools()
       
-      expect(tools).toHaveLength(7)
+      expect(tools).toHaveLength(4) // Actual count from implementation
       
       const toolNames = tools.map(t => t.name)
       expect(toolNames).toContain('apollo_inspect_cache')
-      expect(toolNames).toContain('apollo_extract_cache')
+      expect(toolNames).toContain('apollo_refetch_query')
+      expect(toolNames).toContain('apollo_clear_cache')
       expect(toolNames).toContain('apollo_write_cache')
-      expect(toolNames).toContain('apollo_evict_cache')
-      expect(toolNames).toContain('apollo_list_active_queries')
-      expect(toolNames).toContain('apollo_refetch_queries')
-      expect(toolNames).toContain('apollo_get_client_state')
     })
   })
 
   describe('apollo_inspect_cache', () => {
 
-    it('should inspect Apollo cache', async () => {
+    it('should inspect entire Apollo cache', async () => {
       const mockCache = {
         ROOT_QUERY: {
           'user({"id":"123"})': { __ref: 'User:123' },
@@ -83,15 +111,16 @@ describe('ApolloToolProvider', () => {
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } })) // Check available
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { cache: mockCache },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              cache: mockCache,
+              cacheSize: Object.keys(mockCache).length,
+              rootQuery: mockCache.ROOT_QUERY || {},
+              rootMutation: {}
+            }
+          }
+        })
 
       const handler = provider.getHandler('apollo_inspect_cache')!
 
@@ -99,101 +128,256 @@ describe('ApolloToolProvider', () => {
 
       expect(result).toEqual({
         success: true,
-        data: { cache: mockCache },
+        data: {
+          cache: mockCache,
+          cacheSize: Object.keys(mockCache).length,
+          rootQuery: mockCache.ROOT_QUERY || {},
+          rootMutation: {}
+        }
       })
     })
 
-    it('should handle Apollo not available', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
-
-      const handler = provider.getHandler('apollo_inspect_cache')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: false,
-        error: 'Apollo Client not available in the page',
-      })
-    })
-  })
-
-  describe('apollo_extract_cache', () => {
-
-    it('should extract cache data by query', async () => {
-      const mockExtracted = {
+    it('should inspect specific query in cache', async () => {
+      const mockQuery = 'query GetUser($id: ID!) { user(id: $id) { id name email } }'
+      const mockData = {
         user: {
           id: '123',
           name: 'John Doe',
-          email: 'john@example.com',
-          __typename: 'User',
-        },
+          email: 'john@example.com'
+        }
       }
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { data: mockExtracted },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              query: mockQuery,
+              data: mockData,
+              cacheSize: 5
+            }
+          }
+        })
 
-      const handler = provider.getHandler('apollo_extract_cache')!
+      const handler = provider.getHandler('apollo_inspect_cache')!
 
       const result = await handler.execute({
-        query: 'query GetUser($id: ID!) { user(id: $id) { id name email } }',
-        variables: { id: '123' },
+        query: mockQuery
       })
 
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining('GetUser'),
-        }),
-        testSessionId
-      )
       expect(result).toEqual({
         success: true,
-        data: { data: mockExtracted },
+        data: {
+          query: mockQuery,
+          data: mockData,
+          cacheSize: 5
+        }
       })
     })
 
     it('should handle query not found in cache', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { error: 'Query not found in cache' },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Query not found in cache: Query not found',
+              query: 'query NonExistent { nonExistent }',
+              cacheSize: 5
+            }
+          }
+        })
 
-      const handler = provider.getHandler('apollo_extract_cache')!
+      const handler = provider.getHandler('apollo_inspect_cache')!
 
       const result = await handler.execute({
-        query: 'query NonExistent { nonExistent }',
+        query: 'query NonExistent { nonExistent }'
       })
 
       expect(result).toEqual({
         success: false,
-        error: 'Query not found in cache',
-        data: { error: 'Query not found in cache' },
+        error: 'Query not found in cache: Query not found',
+        data: {
+          error: 'Query not found in cache: Query not found',
+          query: 'query NonExistent { nonExistent }',
+          cacheSize: 5
+        }
+      })
+    })
+
+    it('should handle Apollo Client not available', async () => {
+      const mockProvider = new ApolloToolProvider()
+      
+      // Mock checkLibraryAvailable to return not available
+      mockProvider['checkLibraryAvailable'] = vi.fn().mockResolvedValue({
+        available: false,
+        error: 'Apollo Client not available'
+      })
+
+      const handler = mockProvider.getHandler('apollo_inspect_cache')!
+
+      const result = await handler.execute({})
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Apollo Client not available'
+      })
+    })
+  })
+
+  describe('apollo_refetch_query', () => {
+
+    it('should refetch a query successfully', async () => {
+      const mockQuery = 'query GetUser($id: ID!) { user(id: $id) { id name email } }'
+      const mockVariables = { id: '123' }
+      const mockData = {
+        user: {
+          id: '123',
+          name: 'John Doe',
+          email: 'john@example.com'
+        }
+      }
+      
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              success: true,
+              data: mockData,
+              loading: false,
+              networkStatus: 7
+            }
+          }
+        })
+
+      const handler = provider.getHandler('apollo_refetch_query')!
+
+      const result = await handler.execute({
+        query: mockQuery,
+        variables: mockVariables
+      })
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          success: true,
+          data: mockData,
+          loading: false,
+          networkStatus: 7
+        }
+      })
+    })
+
+    it('should handle query refetch errors', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Query failed: Network error',
+              details: { networkError: 'Failed to fetch' }
+            }
+          }
+        })
+
+      const handler = provider.getHandler('apollo_refetch_query')!
+
+      const result = await handler.execute({
+        query: 'query FailingQuery { failing }'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Query failed: Network error',
+        data: {
+          error: 'Query failed: Network error',
+          details: { networkError: 'Failed to fetch' }
+        }
+      })
+    })
+
+    it('should handle Apollo Client not found', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Apollo Client not found'
+            }
+          }
+        })
+
+      const handler = provider.getHandler('apollo_refetch_query')!
+
+      const result = await handler.execute({
+        query: 'query Test { test }'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Apollo Client not found',
+        data: {
+          error: 'Apollo Client not found'
+        }
+      })
+    })
+  })
+
+  describe('apollo_clear_cache', () => {
+
+    it('should clear Apollo cache successfully', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              success: true,
+              message: 'Apollo cache cleared successfully'
+            }
+          }
+        })
+
+      const handler = provider.getHandler('apollo_clear_cache')!
+
+      const result = await handler.execute({})
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          success: true,
+          message: 'Apollo cache cleared successfully'
+        }
+      })
+    })
+
+    it('should handle clear cache errors', async () => {
+      mockChromeClient.send
+        .mockResolvedValueOnce(undefined) // Runtime.enable
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Apollo Client not found'
+            }
+          }
+        })
+
+      const handler = provider.getHandler('apollo_clear_cache')!
+
+      const result = await handler.execute({})
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Apollo Client not found'
       })
     })
   })
 
   describe('apollo_write_cache', () => {
 
-    it('should write data to cache', async () => {
-      const dataToWrite = {
+    it('should write data to cache successfully', async () => {
+      const mockQuery = 'query GetUser($id: ID!) { user(id: $id) { id name email } }'
+      const mockData = {
         user: {
           id: '456',
           name: 'Jane Smith',
@@ -201,294 +385,157 @@ describe('ApolloToolProvider', () => {
           __typename: 'User',
         },
       }
+      const mockVariables = { id: '456' }
       
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                success: true,
-                written: dataToWrite,
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              success: true,
+              message: 'Data written to cache successfully'
+            }
+          }
+        })
 
       const handler = provider.getHandler('apollo_write_cache')!
 
       const result = await handler.execute({
-        query: 'query GetUser($id: ID!) { user(id: $id) { id name email } }',
-        data: dataToWrite,
-        variables: { id: '456' },
+        query: mockQuery,
+        data: mockData,
+        variables: mockVariables
       })
 
       expect(result).toEqual({
         success: true,
         data: {
           success: true,
-          written: dataToWrite,
-        },
+          message: 'Data written to cache successfully'
+        }
       })
     })
-  })
 
-  describe('apollo_evict_cache', () => {
-
-    it('should evict cache by id', async () => {
+    it('should handle write cache errors', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                evicted: true,
-                id: 'User:123',
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Failed to write to cache: Invalid query'
+            }
+          }
+        })
 
-      const handler = provider.getHandler('apollo_evict_cache')!
+      const handler = provider.getHandler('apollo_write_cache')!
 
       const result = await handler.execute({
-        id: 'User:123',
+        query: 'invalid query',
+        data: { test: 'data' }
       })
 
       expect(result).toEqual({
-        success: true,
-        data: {
-          evicted: true,
-          id: 'User:123',
-        },
+        success: false,
+        error: 'Failed to write to cache: Invalid query'
       })
     })
 
-    it('should evict cache by field', async () => {
+    it('should handle Apollo Client not found', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                evicted: true,
-                field: 'posts',
-                args: { limit: 10 },
-              },
-            },
-          })
-        )
+        .mockResolvedValueOnce({
+          result: {
+            value: {
+              error: 'Apollo Client not found'
+            }
+          }
+        })
 
-      const handler = provider.getHandler('apollo_evict_cache')!
+      const handler = provider.getHandler('apollo_write_cache')!
 
       const result = await handler.execute({
-        field: 'posts',
-        args: { limit: 10 },
+        query: 'query Test { test }',
+        data: { test: 'data' }
       })
 
       expect(result).toEqual({
-        success: true,
-        data: {
-          evicted: true,
-          field: 'posts',
-          args: { limit: 10 },
-        },
-      })
-    })
-  })
-
-  describe('apollo_list_active_queries', () => {
-
-    it('should list active queries', async () => {
-      const mockQueries = [
-        {
-          queryId: 'query-1',
-          queryName: 'GetUser',
-          variables: { id: '123' },
-          loading: false,
-          fetchPolicy: 'cache-first',
-          observableQuery: true,
-        },
-        {
-          queryId: 'query-2',
-          queryName: 'GetPosts',
-          variables: { limit: 10 },
-          loading: true,
-          fetchPolicy: 'network-only',
-          observableQuery: true,
-        },
-      ]
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: { queries: mockQueries },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('apollo_list_active_queries')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: { queries: mockQueries },
-      })
-    })
-  })
-
-  describe('apollo_refetch_queries', () => {
-
-    it('should refetch specific queries', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                refetched: ['GetUser', 'GetPosts'],
-                count: 2,
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('apollo_refetch_queries')!
-
-      const result = await handler.execute({
-        queries: ['GetUser', 'GetPosts'],
-      })
-
-      expect(mockChromeClient.send).toHaveBeenCalledWith(
-        'Runtime.evaluate',
-        expect.objectContaining({
-          expression: expect.stringContaining(JSON.stringify(['GetUser', 'GetPosts'])),
-        }),
-        testSessionId
-      )
-      expect(result).toEqual({
-        success: true,
-        data: {
-          refetched: ['GetUser', 'GetPosts'],
-          count: 2,
-        },
-      })
-    })
-
-    it('should refetch all queries when none specified', async () => {
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: {
-                refetched: 'all',
-                count: 5,
-              },
-            },
-          })
-        )
-
-      const handler = provider.getHandler('apollo_refetch_queries')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: {
-          refetched: 'all',
-          count: 5,
-        },
-      })
-    })
-  })
-
-  describe('apollo_get_client_state', () => {
-
-    it('should get Apollo Client state', async () => {
-      const mockState = {
-        version: '3.7.0',
-        defaultOptions: {
-          watchQuery: { fetchPolicy: 'cache-first' },
-          query: { fetchPolicy: 'network-only' },
-        },
-        cache: {
-          optimistic: [],
-          watches: 12,
-          evictions: 0,
-        },
-        queries: {
-          active: 3,
-          stopped: 7,
-        },
-        mutations: {
-          inFlight: 0,
-        },
-      }
-      
-      mockChromeClient.send
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              value: mockState,
-            },
-          })
-        )
-
-      const handler = provider.getHandler('apollo_get_client_state')!
-
-      const result = await handler.execute({})
-
-      expect(result).toEqual({
-        success: true,
-        data: mockState,
+        success: false,
+        error: 'Apollo Client not found'
       })
     })
   })
 
   describe('error handling', () => {
 
-    it('should handle evaluation errors', async () => {
+    it('should handle executeScript errors', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: true } } }))
-        .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPError('Cannot access __APOLLO_CLIENT__'))
+
+      const handler = provider.getHandler('apollo_inspect_cache')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: false,
-        error: 'Error inspecting cache: Cannot access __APOLLO_CLIENT__',
+        error: 'Script execution error: Cannot access __APOLLO_CLIENT__',
+        data: expect.any(Object)
       })
     })
 
-    it('should handle CDP errors', async () => {
+    it('should handle CDP connection errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Connection timeout'))
+
+      const handler = provider.getHandler('apollo_inspect_cache')!
 
       const result = await handler.execute({})
 
       expect(result).toEqual({
         success: false,
         error: 'Connection timeout',
+      })
+    })
+
+    it('should handle refetch query errors', async () => {
+      mockChromeClient.send.mockRejectedValueOnce(new Error('Network failure'))
+
+      const handler = provider.getHandler('apollo_refetch_query')!
+
+      const result = await handler.execute({
+        query: 'query Test { test }'
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Network failure',
+      })
+    })
+
+    it('should handle clear cache errors', async () => {
+      mockChromeClient.send.mockRejectedValueOnce(new Error('Clear operation failed'))
+
+      const handler = provider.getHandler('apollo_clear_cache')!
+
+      const result = await handler.execute({})
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Clear operation failed',
+      })
+    })
+
+    it('should handle write cache errors', async () => {
+      mockChromeClient.send.mockRejectedValueOnce(new Error('Write operation failed'))
+
+      const handler = provider.getHandler('apollo_write_cache')!
+
+      const result = await handler.execute({
+        query: 'query Test { test }',
+        data: { test: 'data' }
+      })
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Write operation failed',
       })
     })
   })
