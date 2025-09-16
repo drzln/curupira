@@ -40,6 +40,12 @@ import { ScreenshotToolProviderFactory } from '../../mcp/tools/providers/screens
 import { SecurityToolProviderFactory } from '../../mcp/tools/providers/security-tools.factory.js';
 import { StorageToolProviderFactory } from '../../mcp/tools/providers/storage-tools.factory.js';
 
+// Resource provider factories
+import { createBrowserResourceProvider } from '../../mcp/resources/browser.js';
+import { createDOMResourceProvider } from '../../mcp/resources/dom.js';
+import { createNetworkResourceProvider } from '../../mcp/resources/network.js';
+import { createStateResourceProvider } from '../../mcp/resources/state.js';
+
 export function createApplicationContainer(): Container {
   const container = new DIContainer();
 
@@ -127,7 +133,35 @@ export function registerToolProviders(container: Container): void {
  */
 export function registerResourceProviders(container: Container): void {
   const resourceRegistry = container.resolve(ResourceRegistryToken);
+  const providerDeps = {
+    chromeService: container.resolve(ChromeServiceToken),
+    logger: container.resolve(LoggerToken)
+  };
+
+  // Create and register resource providers
+  const browserProvider = createBrowserResourceProvider(
+    providerDeps.chromeService,
+    providerDeps.logger
+  );
   
-  // Resource providers would be registered here
-  // Currently, the application focuses on tools rather than resources
+  const domProvider = createDOMResourceProvider(
+    providerDeps.chromeService,
+    providerDeps.logger
+  );
+  
+  const networkProvider = createNetworkResourceProvider(
+    providerDeps.chromeService,
+    providerDeps.logger
+  );
+  
+  const stateProvider = createStateResourceProvider(
+    providerDeps.chromeService,
+    providerDeps.logger
+  );
+
+  // Register providers with the registry
+  resourceRegistry.register(browserProvider);
+  resourceRegistry.register(domProvider);
+  resourceRegistry.register(networkProvider);
+  resourceRegistry.register(stateProvider);
 }

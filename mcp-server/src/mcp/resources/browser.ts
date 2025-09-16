@@ -37,7 +37,7 @@ export function createBrowserResourceProvider(
         try {
           const client = chromeService.getCurrentClient()
           
-          return {
+          const statusData = {
             connected: !!client,
             serviceUrl: 'chrome://localhost:9222',
             activeSessions: client ? 1 : 0,
@@ -54,11 +54,23 @@ export function createBrowserResourceProvider(
               debugging: true
             }
           }
+          
+          return {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(statusData, null, 2)
+          }
         } catch (error) {
           logger.error({ error }, 'Failed to get browser status')
-          return {
+          const errorData = {
             connected: false,
             error: error instanceof Error ? error.message : String(error)
+          }
+          
+          return {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(errorData, null, 2)
           }
         }
       }
