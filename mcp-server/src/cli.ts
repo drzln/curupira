@@ -8,7 +8,7 @@
 
 import { Command } from 'commander'
 import { CurupiraServer, ServerOptions } from './server/server.js'
-import { createApplicationContainer, registerToolProviders, registerResourceProviders } from './infrastructure/container/app.container.js'
+import { createApplicationContainer, registerToolProviders, registerResourceProviders, initializeConfiguration } from './infrastructure/container/app.container.js'
 import { createLogger } from '@curupira/shared/logging'
 import type { LogLevel } from '@curupira/shared/types'
 
@@ -62,6 +62,21 @@ program
   .option('--config <path>', 'Path to configuration file')
   .action(async (options) => {
     try {
+      // Load configuration from YAML first if provided
+      if (options.config) {
+        logger.info({ configPath: options.config }, 'Loading configuration from file');
+        await initializeConfiguration(options.config);
+      } else {
+        // Try default config locations
+        const defaultConfigPath = process.env.CURUPIRA_CONFIG_PATH || '/config/curupira.yaml';
+        try {
+          await initializeConfiguration(defaultConfigPath);
+          logger.info({ configPath: defaultConfigPath }, 'Loaded default configuration');
+        } catch (error) {
+          logger.debug({ error }, 'Could not load default configuration, using environment variables');
+        }
+      }
+      
       // Smart port detection if not specified
       const port = options.port || findAvailablePort()
       
@@ -70,17 +85,17 @@ program
         autoDetectedPort: !options.port 
       }, 'Starting Curupira MCP server with smart defaults')
 
-      // Configure environment based on options
-      if (options.host) process.env.HOST = options.host
-      if (port) process.env.PORT = port.toString()
-      if (options.logLevel) process.env.LOG_LEVEL = options.logLevel
+      // Configure environment based on options (these will override YAML config)
+      if (options.host) process.env.SERVER_HOST = options.host
+      if (port) process.env.SERVER_PORT = port.toString()
+      if (options.logLevel) process.env.LOGGING_LEVEL = options.logLevel
       
       // Configure transports via environment variables if CLI flags are used
       if (!options.websocket) {
-        process.env.CURUPIRA_TRANSPORT_WEBSOCKET = 'false'
+        process.env.TRANSPORT_WEBSOCKET_ENABLED = 'false'
       }
       if (!options.sse) {
-        process.env.CURUPIRA_TRANSPORT_SSE = 'false'
+        process.env.TRANSPORT_SSE_ENABLED = 'false'
       }
 
       // Create container and register providers

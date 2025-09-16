@@ -105,29 +105,52 @@ export type CurupiraConfig = z.infer<typeof ConfigSchema>;
 export class NexusConfigLoader {
   private configDir: string;
   
-  constructor(configDir: string = join(process.cwd(), 'config')) {
-    this.configDir = configDir;
+  constructor(configDir?: string) {
+    // If a specific config path is provided via environment, use its directory
+    if (process.env.CURUPIRA_CONFIG_PATH) {
+      const configPath = process.env.CURUPIRA_CONFIG_PATH;
+      if (configPath.endsWith('.yaml') || configPath.endsWith('.yml')) {
+        // If it's a file path, use its directory
+        this.configDir = join(configPath, '..');
+      } else {
+        // If it's a directory, use it directly
+        this.configDir = configPath;
+      }
+    } else {
+      // Default to the provided configDir or 'config' directory
+      this.configDir = configDir || join(process.cwd(), 'config');
+    }
   }
   
   /**
    * Load configuration following Nexus hierarchy:
-   * 1. Load base.yaml
+   * 1. Load base.yaml or specific config file
    * 2. Load environment-specific YAML (development.yaml, staging.yaml, production.yaml)
    * 3. Apply environment variable overrides
    */
   async load(): Promise<CurupiraConfig> {
-    // 1. Load base YAML configuration
-    const baseConfig = this.loadYaml('base.yaml');
+    let baseConfig = {};
     
-    // 2. Load environment-specific YAML
-    const environment = process.env.NODE_ENV || process.env.ENVIRONMENT || 'development';
-    const envConfig = this.loadYaml(`${environment}.yaml`);
-    
-    // 3. Merge configurations (env overrides base)
-    const mergedConfig = this.mergeConfigs(baseConfig, envConfig);
+    // Check if we should load a specific config file
+    if (process.env.CURUPIRA_CONFIG_PATH && 
+        (process.env.CURUPIRA_CONFIG_PATH.endsWith('.yaml') || 
+         process.env.CURUPIRA_CONFIG_PATH.endsWith('.yml'))) {
+      // Load the specific config file directly
+      baseConfig = this.loadYamlDirect(process.env.CURUPIRA_CONFIG_PATH);
+    } else {
+      // 1. Load base YAML configuration
+      baseConfig = this.loadYaml('base.yaml');
+      
+      // 2. Load environment-specific YAML
+      const environment = process.env.NODE_ENV || process.env.ENVIRONMENT || 'development';
+      const envConfig = this.loadYaml(`${environment}.yaml`);
+      
+      // 3. Merge configurations (env overrides base)
+      baseConfig = this.mergeConfigs(baseConfig, envConfig);
+    }
     
     // 4. Apply environment variable overrides
-    const finalConfig = this.applyEnvOverrides(mergedConfig);
+    const finalConfig = this.applyEnvOverrides(baseConfig);
     
     // 5. Validate and return
     return ConfigSchema.parse(finalConfig);
@@ -138,7 +161,8 @@ export class NexusConfigLoader {
     
     if (!existsSync(filepath)) {
       if (filename === 'base.yaml') {
-        throw new Error(`Base configuration file not found: ${filepath}`);
+        // Return empty config instead of throwing for base.yaml
+        return {};
       }
       // Environment-specific configs are optional
       return {};
@@ -149,6 +173,19 @@ export class NexusConfigLoader {
       return yaml.load(content) || {};
     } catch (error) {
       throw new Error(`Failed to load ${filename}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  
+  private loadYamlDirect(filepath: string): any {
+    if (!existsSync(filepath)) {
+      throw new Error(`Configuration file not found: ${filepath}`);
+    }
+    
+    try {
+      const content = readFileSync(filepath, 'utf-8');
+      return yaml.load(content) || {};
+    } catch (error) {
+      throw new Error(`Failed to load ${filepath}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   

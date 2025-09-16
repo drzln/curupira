@@ -49,31 +49,104 @@ import { createDOMResourceProvider } from '../../mcp/resources/dom.js';
 import { createNetworkResourceProvider } from '../../mcp/resources/network.js';
 import { createStateResourceProvider } from '../../mcp/resources/state.js';
 
+// Configuration loader
+import { loadConfig, CurupiraConfig } from '../../config/nexus-config.js';
+
+// Store configuration globally
+let globalConfig: CurupiraConfig | null = null;
+
+export async function initializeConfiguration(configPath?: string): Promise<CurupiraConfig> {
+  if (configPath) {
+    // If a config path is provided, use it
+    process.env.CURUPIRA_CONFIG_PATH = configPath;
+  }
+  globalConfig = await loadConfig();
+  return globalConfig;
+}
+
 export function createApplicationContainer(): Container {
   const container = new DIContainer();
 
-  // Register configuration
-  container.register(ChromeConfigToken, () => ({
-    host: process.env.CHROME_HOST || 'localhost',
-    port: parseInt(process.env.CHROME_PORT || '9222', 10),
-    secure: process.env.CHROME_SECURE === 'true',
-    defaultTimeout: parseInt(process.env.CHROME_TIMEOUT || '30000', 10)
-  }));
+  // Register configuration from loaded YAML config
+  container.register(ChromeConfigToken, () => {
+    if (!globalConfig) {
+      // Fallback to environment variables if config not loaded
+      return {
+        host: process.env.CHROME_HOST || 'localhost',
+        port: parseInt(process.env.CHROME_PORT || '9222', 10),
+        secure: process.env.CHROME_SECURE === 'true',
+        defaultTimeout: parseInt(process.env.CHROME_TIMEOUT || '30000', 10)
+      };
+    }
+    
+    // Parse Chrome service URL if provided
+    let host = globalConfig.chrome.serviceUrl;
+    let port = 9222;
+    let secure = false;
+    
+    try {
+      const url = new URL(globalConfig.chrome.serviceUrl);
+      host = url.hostname;
+      port = url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80);
+      secure = url.protocol === 'https:';
+    } catch {
+      // If not a valid URL, use as host
+      host = globalConfig.chrome.serviceUrl;
+    }
+    
+    return {
+      host,
+      port,
+      secure,
+      defaultTimeout: globalConfig.chrome.connectTimeout
+    };
+  });
 
-  container.register(ChromeDiscoveryConfigToken, () => ({
-    enabled: process.env.CHROME_DISCOVERY_ENABLED !== 'false',
-    hosts: (process.env.CHROME_DISCOVERY_HOSTS || 'localhost').split(','),
-    ports: (process.env.CHROME_DISCOVERY_PORTS || '9222,9223,9224,9225,9226').split(',').map(p => parseInt(p, 10)),
-    timeout: parseInt(process.env.CHROME_DISCOVERY_TIMEOUT || '5000', 10),
-    autoConnect: process.env.CHROME_DISCOVERY_AUTO_CONNECT === 'true',
-    preferredPatterns: (process.env.CHROME_DISCOVERY_PATTERNS || 'localhost,react,vite,next').split(',')
-  }));
+  container.register(ChromeDiscoveryConfigToken, () => {
+    if (!globalConfig) {
+      // Fallback to environment variables if config not loaded
+      return {
+        enabled: process.env.CHROME_DISCOVERY_ENABLED !== 'false',
+        hosts: (process.env.CHROME_DISCOVERY_HOSTS || 'localhost').split(','),
+        ports: (process.env.CHROME_DISCOVERY_PORTS || '9222,9223,9224,9225,9226').split(',').map(p => parseInt(p, 10)),
+        timeout: parseInt(process.env.CHROME_DISCOVERY_TIMEOUT || '5000', 10),
+        autoConnect: process.env.CHROME_DISCOVERY_AUTO_CONNECT === 'true',
+        preferredPatterns: (process.env.CHROME_DISCOVERY_PATTERNS || 'localhost,react,vite,next').split(',')
+      };
+    }
+    
+    return {
+      enabled: globalConfig.chrome.discovery.enabled,
+      hosts: globalConfig.chrome.discovery.hosts,
+      ports: globalConfig.chrome.discovery.ports,
+      timeout: globalConfig.chrome.discovery.timeout,
+      autoConnect: globalConfig.chrome.discovery.autoConnect,
+      preferredPatterns: globalConfig.chrome.discovery.preferredPatterns
+    };
+  });
 
-  container.register(ServerConfigToken, () => ({
-    port: parseInt(process.env.PORT || '3000', 10),
-    host: process.env.HOST || '0.0.0.0',
-    logLevel: (process.env.LOG_LEVEL || 'info') as any
-  }));
+  container.register(ServerConfigToken, () => {
+    if (!globalConfig) {
+      // Fallback to environment variables if config not loaded
+      return {
+        port: parseInt(process.env.PORT || '3000', 10),
+        host: process.env.HOST || '0.0.0.0',
+        logLevel: (process.env.LOG_LEVEL || 'info') as any
+      };
+    }
+    
+    return {
+      port: globalConfig.server.port,
+      host: globalConfig.server.host,
+      logLevel: globalConfig.logging.level,
+      name: globalConfig.server.name,
+      version: globalConfig.server.version,
+      environment: globalConfig.server.environment,
+      healthCheck: globalConfig.healthCheck.enabled,
+      healthCheckPath: globalConfig.healthCheck.path,
+      healthCheckInterval: globalConfig.healthCheck.interval
+    };
+  });
 
   // Register core services
   container.register(LoggerToken, (c) => {
