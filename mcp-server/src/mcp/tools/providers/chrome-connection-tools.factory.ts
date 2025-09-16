@@ -75,9 +75,9 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
         'chrome_discover',
         'Discover available Chrome instances with smart React app detection',
         discoverSchema,
-        async (args) => {
+        async (args, context) => {
           try {
-            this.logger.info({ args }, 'Discovering Chrome instances');
+            context.logger.info({ args }, 'Discovering Chrome instances');
             
             const result = await this.discoveryService.discoverInstances({
               hosts: args.hosts,
@@ -85,7 +85,7 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
               timeout: args.timeout
             });
 
-            this.logger.info({
+            context.logger.info({
               totalFound: result.totalFound,
               reactApps: result.instances.filter(i => i.isReactApp).length,
               devApps: result.instances.filter(i => i.isDevelopmentApp).length
@@ -109,7 +109,7 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
               }
             };
           } catch (error) {
-            this.logger.error({ error }, 'Chrome discovery failed');
+            context.logger.error({ error }, 'Chrome discovery failed');
             return {
               success: false,
               error: error instanceof Error ? error.message : 'Chrome discovery failed',
@@ -137,9 +137,9 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
         'chrome_connect',
         'Connect to a Chrome instance',
         connectSchema,
-        async (args) => {
+        async (args, context) => {
           try {
-            this.logger.info({ host: args.host, port: args.port }, 'Connecting to Chrome');
+            context.logger.info({ host: args.host, port: args.port }, 'Connecting to Chrome');
 
             const client = await this.chromeService.connect({
               host: args.host,
@@ -147,7 +147,7 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
               secure: args.secure
             });
 
-            this.logger.info('Chrome connection successful');
+            context.logger.info('Chrome connection successful');
 
             return {
               success: true,
@@ -174,7 +174,7 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
               }
             };
           } catch (error) {
-            this.logger.error({ error }, 'Chrome connection failed');
+            context.logger.error({ error }, 'Chrome connection failed');
             return {
               success: false,
               error: error instanceof Error ? error.message : 'Failed to connect to Chrome',
@@ -200,7 +200,7 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
-      handler: async () => {
+      handler: async (args, context) => {
         try {
           await this.chromeService.disconnect();
           return {
@@ -228,7 +228,7 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
-      handler: async () => {
+      handler: async (args, context) => {
         try {
           const isConnected = this.chromeService.isConnected();
           const client = this.chromeService.getCurrentClient();
