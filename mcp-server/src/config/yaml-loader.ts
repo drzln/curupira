@@ -72,6 +72,14 @@ const YamlConfigSchema = z.object({
       width: z.number().default(1920),
       height: z.number().default(1080),
     }).optional(),
+    discovery: z.object({
+      enabled: z.boolean().default(true),
+      hosts: z.array(z.string()).default(['localhost']),
+      ports: z.array(z.number()).default([9222, 9223, 9224, 9225, 9226]),
+      timeout: z.number().default(5000),
+      autoConnect: z.boolean().default(false),
+      preferredPatterns: z.array(z.string()).default(['localhost', 'react', 'vite', 'next']),
+    }).optional(),
   }).optional(),
 }).strict()
 
