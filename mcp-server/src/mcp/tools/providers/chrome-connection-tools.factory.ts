@@ -41,7 +41,7 @@ const connectSchema: Schema<{ host: string; port?: number; secure?: boolean }> =
     }
     return {
       host: obj.host,
-      port: typeof obj.port === 'number' ? obj.port : 9222,
+      port: typeof obj.port === 'number' ? obj.port : 3000,
       secure: typeof obj.secure === 'boolean' ? obj.secure : false
     };
   },
@@ -103,26 +103,42 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
                   `📍 Example: chrome_connect(host: "${result.instances[0].host}", port: ${result.instances[0].port})`
                 ] : [
                   '❌ No Chrome instances found',
-                  '🔧 Start Chrome with: chrome --remote-debugging-port=9222',
-                  '🔄 Or try different ports: 9223, 9224, 9225'
+                  '🔧 Start Browserless or Chrome with: --remote-debugging-port=3000'
                 ]
               }
             };
           } catch (error) {
             context.logger.error({ error }, 'Chrome discovery failed');
+            const errorMessage = error instanceof Error ? error.message : 'Chrome discovery failed';
+            const errorStack = error instanceof Error ? error.stack : undefined;
+            
             return {
               success: false,
-              error: error instanceof Error ? error.message : 'Chrome discovery failed',
+              error: errorMessage,
               data: {
+                errorDetails: {
+                  message: errorMessage,
+                  type: error instanceof Error ? error.constructor.name : typeof error,
+                  stack: errorStack,
+                  timestamp: new Date().toISOString()
+                },
+                discoveryAttempt: {
+                  hosts: args.hosts || ['chrome-headless.shared-services.svc.cluster.local'],
+                  ports: args.ports || [3000],
+                  timeout: args.timeout || 5000
+                },
                 troubleshooting: [
-                  '🔧 Ensure Chrome is running with --remote-debugging-port=9222',
-                  '🌐 Check if another application is using the debugging port',
+                  '🔧 Ensure Chrome/Browserless is running with debugging enabled',
+                  '🌐 Check if the service is accessible on the network',
                   '🔄 Try restarting Chrome with debugging enabled',
-                  '⚡ Try different ports (9223, 9224) if 9222 is busy'
+                  '⚡ Verify the correct ports are being used',
+                  '🔍 Check service logs for connectivity issues'
                 ],
                 recommendations: [
-                  'Run: google-chrome --remote-debugging-port=9222',
-                  'Or headless: google-chrome --headless --remote-debugging-port=9222'
+                  'For Browserless: ensure service is running on port 3000',
+                  'For standard Chrome: google-chrome --remote-debugging-port=3000',
+                  'For Browserless: ensure service is running on port 3000',
+                  'Test connectivity: curl http://host:port/json'
                 ]
               }
             };
@@ -175,15 +191,37 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
             };
           } catch (error) {
             context.logger.error({ error }, 'Chrome connection failed');
+            const errorMessage = error instanceof Error ? error.message : 'Failed to connect to Chrome';
+            const errorStack = error instanceof Error ? error.stack : undefined;
+            
             return {
               success: false,
-              error: error instanceof Error ? error.message : 'Failed to connect to Chrome',
+              error: errorMessage,
               data: {
+                errorDetails: {
+                  message: errorMessage,
+                  type: error instanceof Error ? error.constructor.name : typeof error,
+                  stack: errorStack,
+                  timestamp: new Date().toISOString()
+                },
+                connectionAttempt: {
+                  host: args.host,
+                  port: args.port,
+                  secure: args.secure
+                },
                 troubleshooting: [
                   '❌ Connection failed',
-                  '🔧 Verify Chrome is running on the specified host/port',
-                  '🌐 Check network connectivity',
-                  '🔍 Run chrome_discover to find available instances'
+                  `🔍 Attempted connection to: ${args.host}:${args.port}`,
+                  '🔧 Verify Chrome/Browserless is running on the specified host/port',
+                  '🌐 Check network connectivity and firewall rules',
+                  '🔍 Run chrome_discover to find available instances',
+                  '⚡ For Browserless: ensure service is accessible on the specified port',
+                  '🐛 Check server logs for additional error details'
+                ],
+                nextSteps: [
+                  'Verify the service is running and accessible',
+                  'Check if the port is correct (3000 for all Chrome services)',
+                  'Test connectivity with: curl http://host:port/json'
                 ]
               }
             };

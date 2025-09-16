@@ -62,6 +62,7 @@ export class TransportManager {
     this.logger.info('Starting stdio transport')
     const transport = new StdioServerTransport()
     await this.server.connect(transport)
+    return 'stdio://connected'
   }
 
   /**
@@ -131,33 +132,20 @@ export class TransportManager {
       })
     } else if (this.options.type === 'http') {
       // HTTP Transport using StreamableHTTPServerTransport
-      const transports = new Map<string, StreamableHTTPServerTransport>()
+      // Create a single transport instance and connect it once during startup
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => 'default'
+      })
+      
+      // Connect the transport once during server startup
+      await this.server.connect(transport)
+      this.logger.info('MCP server connected to HTTP transport')
       
       this.httpServer.post('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
         this.logger.info({ method: 'POST', path: '/mcp' }, 'HTTP request for MCP')
         
         try {
-          // Get or create session
-          const sessionId = (request.headers['mcp-session-id'] as string) || 'default'
-          let transport = transports.get(sessionId)
-          
-          if (!transport) {
-            transport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => sessionId
-            })
-            transports.set(sessionId, transport)
-            
-            // Connect to MCP server
-            await this.server.connect(transport)
-            
-            // Clean up on close
-            transport.onclose = () => {
-              this.logger.info(`Transport closed for session ${sessionId}`)
-              transports.delete(sessionId)
-            }
-          }
-          
-          // Handle request with transport
+          // Handle request with the already-connected transport
           await transport.handleRequest(request.raw, reply.raw, request.body)
         } catch (error) {
           this.logger.error({ error }, 'Failed to handle HTTP transport')
@@ -201,6 +189,7 @@ export class TransportManager {
     try {
       await this.httpServer.listen({ port, host: '0.0.0.0' })
       this.logger.info({ port }, 'HTTP server started')
+      return `http://0.0.0.0:${port}`
     } catch (error) {
       this.logger.error({ error }, 'Failed to start HTTP server')
       throw error

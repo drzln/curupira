@@ -1,6 +1,6 @@
 {
   "name": "@curupira/auth",
-  "version": "2.3.2",
+  "version": "2.4.3",
   "description": "Curupira authentication and authorization system",
   "type": "module",
   "main": "./dist/index.js",

@@ -47,7 +47,7 @@ export interface LegacyCurupiraConfig {
 const legacyConfigSchema = z.object({
   cdp: z.object({
     host: z.string().default('localhost'),
-    port: z.number().default(9222),
+    port: z.number().default(3000),
     secure: z.boolean().default(false),
     timeout: z.number().default(10000),
     retryAttempts: z.number().default(3),
@@ -84,7 +84,7 @@ function loadCurupiraConfig(): LegacyCurupiraConfig {
   const config = {
     cdp: {
       host: env.CURUPIRA_CDP_HOST || 'localhost',
-      port: parseInt(env.CURUPIRA_CDP_PORT || '9222', 10),
+      port: parseInt(env.CURUPIRA_CDP_PORT || '3000', 10),
       secure: env.CURUPIRA_CDP_SECURE === 'true',
       timeout: parseInt(env.CURUPIRA_CDP_TIMEOUT || '10000', 10),
       retryAttempts: parseInt(env.CURUPIRA_CDP_RETRY_ATTEMPTS || '3', 10),
@@ -154,7 +154,7 @@ export const envConfigs = {
   development: {
     cdp: {
       host: 'localhost',
-      port: 9222,
+      port: 3000,
     },
     logging: {
       level: 'debug',

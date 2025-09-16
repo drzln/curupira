@@ -42,7 +42,7 @@ interface InternalSession extends CDPSession {
 export class ChromeClient implements CDPClient, IChromeClient {
   private config: CDPConnectionOptions = { 
     host: 'localhost',
-    port: 9222,
+    port: 3000,
     timeout: 30000
   };
   private sessions: Map<string, InternalSession> = new Map();

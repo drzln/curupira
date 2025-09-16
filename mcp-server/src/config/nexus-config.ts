@@ -70,7 +70,7 @@ const ConfigSchema = z.object({
   
   chrome: z.object({
     enabled: z.boolean().default(true),
-    serviceUrl: z.string().default('http://localhost:9222'),
+    serviceUrl: z.string().default('http://localhost:3000'),
     connectTimeout: z.number().default(5000),
     pageTimeout: z.number().default(30000),
     defaultViewport: z.object({
@@ -80,7 +80,7 @@ const ConfigSchema = z.object({
     discovery: z.object({
       enabled: z.boolean().default(true),
       hosts: z.array(z.string()).default(['localhost', '127.0.0.1']),
-      ports: z.array(z.number()).default([9222, 9223, 9224, 9225, 9226]),
+      ports: z.array(z.number()).default([3000]),
       timeout: z.number().default(5000),
       autoConnect: z.boolean().default(false),
       preferredPatterns: z.array(z.string()).default(['localhost', 'react', 'vite', 'next']),
