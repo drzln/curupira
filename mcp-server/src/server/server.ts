@@ -123,7 +123,8 @@ export class CurupiraServer {
             enableWS: process.env.CURUPIRA_ENABLE_WS !== 'false',
             healthChecker: this.healthChecker,
             securityManager: this.securityManager
-          }
+          },
+          this.logger
         );
         
         const serverUrl = await this.transportManager.start();

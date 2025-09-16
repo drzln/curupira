@@ -7,8 +7,7 @@ export { CommandParser } from './command-parser.js'
 export { CommandRegistry } from './command-registry.js'
 export { HelpSystem } from './help-system.js'
 
-// Enhanced CLI
-export { CurupiraEnhancedCLI } from '../cli-enhanced.js'
+// Enhanced CLI has been removed - using standard CLI only
 
 // Re-export types for convenience
 export type {

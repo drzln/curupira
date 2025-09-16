@@ -6,7 +6,7 @@
 
 import type { Resource, Tool, Prompt } from '@modelcontextprotocol/sdk/types.js'
 import type { ResourceProviders } from '../resources/index.js'
-import { logger } from '../config/logger.js'
+import type { ILogger } from '../core/interfaces/logger.interface.js'
 import { z } from 'zod'
 
 // Request schemas
@@ -28,8 +28,10 @@ export class MCPHandler {
   private resourceProviders?: ResourceProviders
   private prompts: Map<string, Prompt> = new Map()
   private securityManager?: any // Will be set by server
+  private logger: ILogger
 
-  constructor() {
+  constructor(logger: ILogger) {
+    this.logger = logger
     this.initializePrompts()
   }
 
@@ -45,7 +47,7 @@ export class MCPHandler {
    */
   initialize(resourceProviders: ResourceProviders) {
     this.resourceProviders = resourceProviders
-    logger.info('MCP handler initialized (tools handled by setupMCPHandlers)')
+    this.logger.info('MCP handler initialized (tools handled by setupMCPHandlers)')
   }
 
   /**
@@ -58,11 +60,11 @@ export class MCPHandler {
 
     try {
       const resources = await this.resourceProviders.listResources()
-      logger.debug({ count: resources.length }, 'Listed resources')
+      this.logger.debug({ count: resources.length }, 'Listed resources')
       
       return { resources }
     } catch (error) {
-      logger.error({ error }, 'Failed to list resources')
+      this.logger.error({ error }, 'Failed to list resources')
       throw error
     }
   }
@@ -77,7 +79,7 @@ export class MCPHandler {
 
     try {
       const { uri } = readResourceSchema.parse(params)
-      logger.debug({ uri }, 'Reading resource')
+      this.logger.debug({ uri }, 'Reading resource')
       
       const result = await this.resourceProviders.readResource(uri)
       
@@ -86,7 +88,7 @@ export class MCPHandler {
         mimeType: result.mimeType,
       }
     } catch (error) {
-      logger.error({ error, params }, 'Failed to read resource')
+      this.logger.error({ error, params }, 'Failed to read resource')
       throw error
     }
   }
@@ -95,7 +97,7 @@ export class MCPHandler {
    * List available tools - now handled by setupMCPHandlers
    */
   async listTools(): Promise<{ tools: Tool[] }> {
-    logger.debug('Tool listing now handled by setupMCPHandlers')
+    this.logger.debug('Tool listing now handled by setupMCPHandlers')
     return { tools: [] }
   }
 
@@ -103,7 +105,7 @@ export class MCPHandler {
    * Call a tool - now handled by setupMCPHandlers
    */
   async callTool(params: unknown): Promise<any> {
-    logger.debug('Tool calls now handled by setupMCPHandlers')
+    this.logger.debug('Tool calls now handled by setupMCPHandlers')
     throw new Error('Tool calls are handled by the unified tool handlers')
   }
 
@@ -113,11 +115,11 @@ export class MCPHandler {
   async listPrompts(): Promise<{ prompts: Prompt[] }> {
     try {
       const prompts = Array.from(this.prompts.values())
-      logger.debug({ count: prompts.length }, 'Listed prompts')
+      this.logger.debug({ count: prompts.length }, 'Listed prompts')
       
       return { prompts }
     } catch (error) {
-      logger.error({ error }, 'Failed to list prompts')
+      this.logger.error({ error }, 'Failed to list prompts')
       throw error
     }
   }
@@ -128,7 +130,7 @@ export class MCPHandler {
   async getPrompt(params: unknown): Promise<{ prompt: string }> {
     try {
       const { name, arguments: args } = getPromptSchema.parse(params)
-      logger.debug({ name, args }, 'Getting prompt')
+      this.logger.debug({ name, args }, 'Getting prompt')
       
       const promptTemplate = this.prompts.get(name)
       if (!promptTemplate) {
@@ -145,7 +147,7 @@ export class MCPHandler {
 
       return { prompt }
     } catch (error) {
-      logger.error({ error, params }, 'Failed to get prompt')
+      this.logger.error({ error, params }, 'Failed to get prompt')
       throw error
     }
   }
@@ -279,7 +281,7 @@ Then focus on any specific issues you discover.`,
       arguments: [],
     })
 
-    logger.info({ count: this.prompts.size }, 'Initialized prompts')
+    this.logger.info({ count: this.prompts.size }, 'Initialized prompts')
   }
 
   /**

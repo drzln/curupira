@@ -75,12 +75,4 @@ export class ResourceRegistry {
   }
 }
 
-// Singleton instance
-let registry: ResourceRegistry | null = null
-
-export function getResourceRegistry(): ResourceRegistry {
-  if (!registry) {
-    registry = new ResourceRegistry()
-  }
-  return registry
-}
+// ResourceRegistry is now managed by DI container - no singleton pattern

@@ -4,10 +4,10 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { logger } from '../config/logger.js'
+import type { ILogger } from '../core/interfaces/logger.interface.js'
 import type { ServerConfig } from './config.js'
 
-export async function setupRoutes(app: FastifyInstance, config: ServerConfig): Promise<void> {
+export async function setupRoutes(app: FastifyInstance, config: ServerConfig, logger: ILogger): Promise<void> {
   // Health check endpoint
   if (config.healthCheck !== false) {
     const healthPath = config.healthCheckPath ?? '/health'

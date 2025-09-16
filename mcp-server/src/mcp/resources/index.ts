@@ -6,15 +6,12 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
-import { getResourceRegistry } from './registry.js'
+import type { ResourceRegistry } from './registry.js'
 // Old provider implementations have been archived
 // TODO: Create new DI-based resource providers
 
-export function setupUnifiedResourceHandlers(server: Server) {
+export function setupUnifiedResourceHandlers(server: Server, registry: ResourceRegistry) {
   logger.info('Setting up unified resource handlers with registry pattern')
-  
-  // Initialize the registry
-  const registry = getResourceRegistry()
   
   // TODO: Register DI-based resource providers
   // For now, registering basic providers until DI system is complete

@@ -9,7 +9,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify'
 import fastifyCors from '@fastify/cors'
-import { logger } from '../config/logger.js'
+import type { ILogger } from '../core/interfaces/logger.interface.js'
 import type { HealthChecker } from './health.js'
 import type { SecurityManager } from '../security/index.js'
 
@@ -29,10 +29,12 @@ export class TransportManager {
   private server: Server
   private options: TransportOptions
   private httpServer?: ReturnType<typeof Fastify>
+  private logger: ILogger
 
-  constructor(server: Server, options: TransportOptions) {
+  constructor(server: Server, options: TransportOptions, logger: ILogger) {
     this.server = server
     this.options = options
+    this.logger = logger
   }
 
   /**
@@ -56,7 +58,7 @@ export class TransportManager {
    * Start stdio transport
    */
   private async startStdio() {
-    logger.info('Starting stdio transport')
+    this.logger.info('Starting stdio transport')
     const transport = new StdioServerTransport()
     await this.server.connect(transport)
   }
@@ -66,7 +68,7 @@ export class TransportManager {
    */
   private async startHttp() {
     const port = this.options.port || 3000
-    logger.info({ port, type: this.options.type }, 'Starting HTTP transport')
+    this.logger.info({ port, type: this.options.type }, 'Starting HTTP transport')
 
     this.httpServer = Fastify({
       logger: false, // We use our own logger
@@ -114,7 +116,7 @@ export class TransportManager {
     // MCP endpoint
     if (this.options.type === 'sse') {
       this.httpServer.get('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
-        logger.info({ ip: request.ip }, 'SSE connection established')
+        this.logger.info({ ip: request.ip }, 'SSE connection established')
         
         // Set SSE headers
         reply.raw.writeHead(200, {
@@ -133,7 +135,7 @@ export class TransportManager {
           const result = await this.handleHttpMessage(request.body)
           reply.send(result)
         } catch (error) {
-          logger.error({ error }, 'Failed to handle HTTP message')
+          this.logger.error({ error }, 'Failed to handle HTTP message')
           reply.code(500).send({ error: 'Internal server error' })
         }
       })
@@ -161,9 +163,9 @@ export class TransportManager {
     // Start server
     try {
       await this.httpServer.listen({ port, host: '0.0.0.0' })
-      logger.info({ port }, 'HTTP server started')
+      this.logger.info({ port }, 'HTTP server started')
     } catch (error) {
-      logger.error({ error }, 'Failed to start HTTP server')
+      this.logger.error({ error }, 'Failed to start HTTP server')
       throw error
     }
   }
@@ -188,14 +190,14 @@ export class TransportManager {
    * Stop the transport
    */
   async stop() {
-    logger.info('Stopping transport')
+    this.logger.info('Stopping transport')
     
     if (this.httpServer) {
       try {
         await this.httpServer.close()
-        logger.info('HTTP server stopped')
+        this.logger.info('HTTP server stopped')
       } catch (error) {
-        logger.error({ error }, 'Error stopping HTTP server')
+        this.logger.error({ error }, 'Error stopping HTTP server')
       }
     }
   }

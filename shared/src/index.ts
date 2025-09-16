@@ -8,10 +8,12 @@ export {
   type CurupiraConfig,
   type Environment,
   type LogLevel,
+  type ProjectConfig,
   loadConfig,
   validateConfig,
   mergeConfigs,
-  getDefaultConfig
+  getDefaultConfig,
+  ProjectConfigLoader
 } from './config/index.js'
 
 // Logging and telemetry
