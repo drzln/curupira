@@ -60,6 +60,10 @@ This guide outlines the systematic approach to developing Curupira - the CDP-nat
 
 ## 📊 Strict Hierarchy (Dependencies Flow DOWN Only)
 
+### RULE 9: **no TODOs** 📦
+
+- **Only full implementations with patterns, no work arounds.**
+
 ```
 Level 0: Foundation    → types, errors, constants, pure utils
 Level 1: Chrome Core   → CDP client, connection management
@@ -76,3 +80,4 @@ Level 4: Server        → transport, routing, main server
 2. **Bottom-Up**: Build Level 0 → 4
 3. **Test Each Level**: Before proceeding up
 4. **Enforce Hierarchy**: No upward imports
+5. **Testing **: ensure test coverage passes after every dependency injection development point

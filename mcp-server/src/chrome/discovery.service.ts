@@ -265,42 +265,29 @@ export class ChromeDiscoveryService implements IChromeDiscoveryService {
 
     recommendations.push(`✅ Found ${instances.length} Chrome instance(s) ready for debugging`);
     
-    // Enhanced React app detection
-    const reactInstances = instances.filter(i => {
-      const title = i.title.toLowerCase();
-      const url = i.url.toLowerCase();
-      
-      return title.includes('react') || 
-             title.includes('vite') ||
-             title.includes('next') ||
-             title.includes('webpack') ||
-             url.includes('localhost') ||
-             url.includes('127.0.0.1') ||
-             url.includes(':3000') ||
-             url.includes(':3001') ||
-             url.includes(':5173') ||
-             url.includes(':8080');
-    });
-    
-    const devInstances = instances.filter(i => {
-      const url = i.url.toLowerCase();
-      return url.includes('localhost') || url.includes('127.0.0.1') || url.includes('dev');
-    });
+    // Use enhanced detection metadata
+    const reactInstances = instances.filter(i => i.isReactApp);
+    const devInstances = instances.filter(i => i.isDevelopmentApp && !i.isReactApp);
     
     if (reactInstances.length > 0) {
+      const best = reactInstances[0];
       recommendations.push(`🎯 Detected ${reactInstances.length} potential React/development app(s)`);
-      recommendations.push(`🚀 Recommended: Connect to instance '${reactInstances[0].id}'`);
-      recommendations.push(`📱 App: ${reactInstances[0].title} (${reactInstances[0].url})`);
+      recommendations.push(`🚀 Recommended: Connect to instance '${best.id}' (confidence: ${best.confidence}/10)`);
+      recommendations.push(`📱 App: ${best.title} (${best.url})`);
       
       if (reactInstances.length > 1) {
-        recommendations.push(`💡 Other options: ${reactInstances.slice(1).map(r => r.id).join(', ')}`);
+        recommendations.push(`💡 Other options: ${reactInstances.slice(1).map(r => `${r.id} (${r.confidence}/10)`).join(', ')}`);
       }
     } else if (devInstances.length > 0) {
+      const best = devInstances[0];
       recommendations.push(`🔧 Found ${devInstances.length} development instance(s)`);
-      recommendations.push(`🚀 Try: Connect to instance '${devInstances[0].id}'`);
+      recommendations.push(`🚀 Try: Connect to instance '${best.id}' (confidence: ${best.confidence}/10)`);
+      recommendations.push(`📱 App: ${best.title} (${best.url})`);
     } else {
+      const best = instances[0];
       recommendations.push(`🌐 Found ${instances.length} browser instance(s)`);
-      recommendations.push(`🚀 Connect to: Instance '${instances[0].id}'`);
+      recommendations.push(`🚀 Connect to: Instance '${best.id}' (confidence: ${best.confidence}/10)`);
+      recommendations.push(`📱 Page: ${best.title} (${best.url})`);
     }
     
     recommendations.push('');
@@ -309,6 +296,75 @@ export class ChromeDiscoveryService implements IChromeDiscoveryService {
 
     return recommendations;
   }
+
+  private getTroubleshootingSteps(instances: ChromeInstance[]): string[] {
+    const troubleshooting: string[] = [];
+
+    if (instances.length === 0) {
+      troubleshooting.push('🔧 Chrome not found troubleshooting:');
+      troubleshooting.push('1. Verify Chrome is installed and running');
+      troubleshooting.push('2. Check configured ports are accessible');
+      troubleshooting.push('3. Ensure Chrome was started with debugging flags');
+      troubleshooting.push('4. Check firewall settings');
+      troubleshooting.push('5. Try running: ps aux | grep chrome');
+    } else if (instances.filter(i => i.isReactApp).length === 0) {
+      troubleshooting.push('🎯 React app optimization suggestions:');
+      troubleshooting.push('1. Ensure React DevTools extension is installed');
+      troubleshooting.push('2. Check if React is running in development mode');
+      troubleshooting.push('3. Verify the app is using a supported React version');
+      troubleshooting.push('4. Refresh the page to reinitialize React DevTools');
+    }
+
+    return troubleshooting;
+  }
+
+  async assessConnectionHealth(instance: ChromeInstance): Promise<{ score: number; status: string; issues: string[] }> {
+    const issues: string[] = [];
+    let score = 100;
+
+    try {
+      // Test WebSocket URL availability
+      if (!instance.webSocketDebuggerUrl) {
+        score -= 30;
+        issues.push('No WebSocket debugger URL available');
+      }
+
+      // Test if the instance is still accessible
+      const response = await fetch(`http://${instance.host}:${instance.port}/json/${instance.id}`, {
+        signal: AbortSignal.timeout(this.config.timeout)
+      });
+
+      if (!response.ok) {
+        score -= 50;
+        issues.push('Instance no longer accessible');
+      }
+
+      // Check for development indicators
+      if (!instance.isDevelopmentApp) {
+        score -= 10;
+        issues.push('Not detected as development environment');
+      }
+
+      // Check for React indicators
+      if (!instance.isReactApp && this.config.preferredPatterns.includes('react')) {
+        score -= 20;
+        issues.push('React not detected (may impact debugging capabilities)');
+      }
+
+    } catch (error) {
+      score -= 40;
+      issues.push(`Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    let status: string;
+    if (score >= 80) status = 'excellent';
+    else if (score >= 60) status = 'good';
+    else if (score >= 40) status = 'fair';
+    else if (score >= 20) status = 'poor';
+    else status = 'critical';
+
+    return { score, status, issues };
+  }
 }
 
 /**
@@ -316,8 +372,8 @@ export class ChromeDiscoveryService implements IChromeDiscoveryService {
  */
 export const chromeDiscoveryServiceProvider = {
   provide: 'ChromeDiscoveryService',
-  useFactory: (logger: ILogger) => {
-    return new ChromeDiscoveryService(logger);
+  useFactory: (config: ChromeDiscoveryConfig, logger: ILogger) => {
+    return new ChromeDiscoveryService(config, logger);
   },
-  inject: ['Logger'] as const
+  inject: ['ChromeDiscoveryConfig', 'Logger'] as const
 };

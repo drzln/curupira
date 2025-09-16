@@ -7,12 +7,14 @@ import { DIContainer } from '../../core/di/container.js';
 import type { Container } from '../../core/di/container.js';
 import {
   ChromeServiceToken,
+  ChromeDiscoveryServiceToken,
   ToolRegistryToken,
   ResourceRegistryToken,
   LoggerToken,
   ValidatorToken,
   ErrorHandlerToken,
   ChromeConfigToken,
+  ChromeDiscoveryConfigToken,
   ServerConfigToken
 } from '../../core/di/tokens.js';
 

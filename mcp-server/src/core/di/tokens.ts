@@ -12,11 +12,13 @@ import type { IValidator } from '../interfaces/validator.interface.js';
 import type { ITypedCDPClient } from '../../chrome/interfaces.js';
 import type { IChromeClient } from '../../chrome/interfaces.js';
 import type { ErrorHandler } from '../error-handler.js';
+import type { IChromeDiscoveryService } from '../../chrome/discovery.service.js';
 
 // Chrome-related tokens
 export const ChromeServiceToken = createToken<IChromeService>('ChromeService');
 export const ChromeClientToken = createToken<IChromeClient>('ChromeClient');
 export const TypedCDPClientToken = createToken<ITypedCDPClient>('TypedCDPClient');
+export const ChromeDiscoveryServiceToken = createToken<IChromeDiscoveryService>('ChromeDiscoveryService');
 
 // MCP-related tokens
 export const ToolRegistryToken = createToken<IToolRegistry>('ToolRegistry');
@@ -29,6 +31,7 @@ export const ErrorHandlerToken = createToken<ErrorHandler>('ErrorHandler');
 
 // Configuration tokens
 export const ChromeConfigToken = createToken<ChromeConfig>('ChromeConfig');
+export const ChromeDiscoveryConfigToken = createToken<ChromeDiscoveryConfig>('ChromeDiscoveryConfig');
 export const ServerConfigToken = createToken<ServerConfig>('ServerConfig');
 
 // Interfaces for configuration
@@ -37,6 +40,15 @@ export interface ChromeConfig {
   port: number;
   secure: boolean;
   defaultTimeout: number;
+}
+
+export interface ChromeDiscoveryConfig {
+  enabled: boolean;
+  hosts: string[];
+  ports: number[];
+  timeout: number;
+  autoConnect: boolean;
+  preferredPatterns: string[];
 }
 
 export interface ServerConfig {
