@@ -7,9 +7,9 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import type { Tool } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
 
-export interface ToolResult {
+export interface ToolResult<T = unknown> {
   success: boolean
-  data?: unknown
+  data?: T
   error?: string
   warnings?: string[]
 }

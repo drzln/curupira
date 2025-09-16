@@ -48,6 +48,10 @@
     "./types": {
       "import": "./dist/types/index.js",
       "types": "./dist/types/index.d.ts"
+    },
+    "./cdp-types": {
+      "import": "./dist/cdp-types/index.js",
+      "types": "./dist/cdp-types/index.d.ts"
     }
   },
   "scripts": {

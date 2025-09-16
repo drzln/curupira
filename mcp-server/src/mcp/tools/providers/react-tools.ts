@@ -120,6 +120,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       react_find_component: {
         name: 'react_find_component',
@@ -127,14 +128,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { componentName, sessionId: argSessionId } = args as { componentName: string; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   if (!window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
                     return { error: 'React DevTools not available' };
@@ -169,7 +169,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                   
                   return { components, found: components.length };
                 })()
-              `,
+              `, {
               returnByValue: true,
               awaitPromise: true
             }, sessionId)
@@ -208,14 +208,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { componentId, sessionId: argSessionId } = args as { componentId: string; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   if (!window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
                     return { error: 'React DevTools not available' };
@@ -228,7 +227,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                     message: 'Full implementation pending'
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -251,14 +250,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { componentId, sessionId: argSessionId } = args as { componentId: string; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   if (!window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
                     return { error: 'React DevTools not available' };
@@ -271,7 +269,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                     message: 'Full implementation pending'
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -294,14 +292,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { componentId, sessionId: argSessionId } = args as { componentId: string; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   if (!window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
                     return { error: 'React DevTools not available' };
@@ -314,7 +311,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                     message: 'Full implementation pending'
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -337,14 +334,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { componentId, sessionId: argSessionId } = args as { componentId: string; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   if (!window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
                     return { error: 'React DevTools not available' };
@@ -358,7 +354,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                     message: 'Full implementation pending'
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -381,16 +377,15 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { duration = 5000, sessionId: argSessionId } = args as { duration?: number; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             
             // Start profiling
-            await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.evaluate(`
                 window.__REACT_PROFILE_DATA__ = {
                   renders: [],
                   startTime: Date.now()
@@ -412,7 +407,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                     }
                   };
                 }
-              `,
+              `, {
               returnByValue: false
             }, sessionId)
             
@@ -420,8 +415,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
             await new Promise(resolve => setTimeout(resolve, duration))
             
             // Stop profiling and get results
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            const result = await typed.evaluate(`
                 (() => {
                   const data = window.__REACT_PROFILE_DATA__ || { renders: [] };
                   const endTime = Date.now();
@@ -441,7 +435,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                       : 0
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -467,14 +461,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
               rootSelector?: string; 
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   const rootElement = document.querySelector('${rootSelector}');
                   if (!rootElement) {
@@ -511,7 +504,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                     tree: buildTree(fiber)
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -541,14 +534,13 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   const info = {
                     hasReact: false,
@@ -594,7 +586,7 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
                   
                   return info;
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -613,13 +605,8 @@ export class ReactToolProvider extends BaseToolProvider implements ToolProvider 
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler // ✅ FIXED: Proper binding
   }
 }

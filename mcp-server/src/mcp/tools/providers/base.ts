@@ -5,6 +5,7 @@
 
 import type { SessionId } from '@curupira/shared/types'
 import { ChromeManager } from '../../../chrome/manager.js'
+import type { ToolResult } from '../registry.js'
 
 export abstract class BaseToolProvider {
   /**
@@ -36,15 +37,14 @@ export abstract class BaseToolProvider {
       awaitPromise?: boolean
       returnByValue?: boolean
     } = {}
-  ): Promise<{ success: boolean; data?: T; error?: string }> {
+  ): Promise<ToolResult<T>> {
     const manager = ChromeManager.getInstance()
-    const client = manager.getClient()
+    const typedClient = manager.getTypedClient()
     
     try {
-      await client.send('Runtime.enable', {}, sessionId)
+      await typedClient.enableRuntime(sessionId)
       
-      const result = await client.send('Runtime.evaluate', {
-        expression: script,
+      const result = await typedClient.evaluate(script, {
         returnByValue: options.returnByValue ?? true,
         awaitPromise: options.awaitPromise ?? true
       }, sessionId)

@@ -1,5 +1,6 @@
 /**
- * DOM Tool Provider - DOM manipulation and inspection tools
+ * DOM Tool Provider - Typed Implementation
+ * Uses TypedCDPClient for full type safety
  * Level 2: MCP Core (depends on Level 0-1)
  */
 
@@ -15,6 +16,8 @@ import type {
   DOMHtmlArgs
 } from '../types.js'
 import { BaseToolProvider } from './base.js'
+import { validateAndCast, ArgSchemas } from '../validation.js'
+import type * as CDP from '@curupira/shared/cdp-types'
 
 export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'dom'
@@ -149,37 +152,39 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       dom_query_selector: {
         name: 'dom_query_selector',
         description: 'Find DOM element by CSS selector',
         async execute(args): Promise<ToolResult> {
           try {
-            const { selector, sessionId: argSessionId } = args as DOMSelectorArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMSelectorArgs>(args, ArgSchemas.domSelector, 'dom_query_selector')
+            const { selector, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            const { root } = await client.send('DOM.getDocument', {}, sessionId)
-            const { nodeId } = await client.send('DOM.querySelector', {
-              nodeId: root.nodeId,
-              selector
-            }, sessionId)
+            await typed.enableDOM(sessionId)
+            const document = await typed.getDocument({}, sessionId)
+            const result = await typed.querySelector(document.root.nodeId, selector, sessionId)
             
-            if (!nodeId) {
+            if (!result.nodeId) {
               return {
                 success: false,
                 error: `No element found for selector: ${selector}`
               }
             }
             
-            const { node } = await client.send('DOM.describeNode', { nodeId }, sessionId)
+            const nodeInfo = await typed.describeNode({ nodeId: result.nodeId }, sessionId)
             
             return {
               success: true,
-              data: { nodeId, node }
+              data: { 
+                nodeId: result.nodeId, 
+                node: nodeInfo.node 
+              }
             }
           } catch (error) {
             return {
@@ -195,23 +200,21 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Find all DOM elements by CSS selector',
         async execute(args): Promise<ToolResult> {
           try {
-            const { selector, sessionId: argSessionId } = args as DOMSelectorArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMSelectorArgs>(args, ArgSchemas.domSelector, 'dom_query_selector_all')
+            const { selector, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            const { root } = await client.send('DOM.getDocument', {}, sessionId)
-            const { nodeIds } = await client.send('DOM.querySelectorAll', {
-              nodeId: root.nodeId,
-              selector
-            }, sessionId)
+            await typed.enableDOM(sessionId)
+            const document = await typed.getDocument({}, sessionId)
+            const result = await typed.querySelectorAll(document.root.nodeId, selector, sessionId)
             
             const nodes = await Promise.all(
-              nodeIds.map(async (nodeId) => {
-                const { node } = await client.send('DOM.describeNode', { nodeId }, sessionId)
-                return { nodeId, node }
+              result.nodeIds.map(async (nodeId) => {
+                const nodeInfo = await typed.describeNode({ nodeId }, sessionId)
+                return { nodeId, node: nodeInfo.node }
               })
             )
             
@@ -233,19 +236,20 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Get attributes of a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, sessionId: argSessionId } = args as DOMNodeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMNodeArgs>(args, ArgSchemas.domNodeArgs, 'dom_get_attributes')
+            const { nodeId, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            const { attributes } = await client.send('DOM.getAttributes', { nodeId }, sessionId)
+            await typed.enableDOM(sessionId)
+            const result = await typed.getAttributes(nodeId, sessionId)
             
             // Convert flat array to object
             const attrObj: Record<string, string> = {}
-            for (let i = 0; i < attributes.length; i += 2) {
-              attrObj[attributes[i]] = attributes[i + 1]
+            for (let i = 0; i < result.attributes.length; i += 2) {
+              attrObj[result.attributes[i]] = result.attributes[i + 1]
             }
             
             return {
@@ -266,14 +270,15 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Set attribute on a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, name, value, sessionId: argSessionId } = args as DOMAttributeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMAttributeArgs>(args, ArgSchemas.domAttributeArgs, 'dom_set_attribute')
+            const { nodeId, name, value, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            await client.send('DOM.setAttributeValue', { nodeId, name, value }, sessionId)
+            await typed.enableDOM(sessionId)
+            await typed.setAttributeValue(nodeId, name, value, sessionId)
             
             return {
               success: true,
@@ -293,14 +298,15 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Remove attribute from a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, name, sessionId: argSessionId } = args as DOMAttributeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMAttributeArgs>(args, ArgSchemas.domAttributeArgs, 'dom_remove_attribute')
+            const { nodeId, name, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            await client.send('DOM.removeAttribute', { nodeId, name }, sessionId)
+            await typed.enableDOM(sessionId)
+            await typed.removeAttribute(nodeId, name, sessionId)
             
             return {
               success: true,
@@ -320,18 +326,22 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Get outer HTML of a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, sessionId: argSessionId } = args as DOMNodeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMNodeArgs>(args, ArgSchemas.domNodeArgs, 'dom_get_outer_html')
+            const { nodeId, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            const { outerHTML } = await client.send('DOM.getOuterHTML', { nodeId }, sessionId)
+            await typed.enableDOM(sessionId)
+            const result = await typed.getOuterHTML({ nodeId }, sessionId)
             
             return {
               success: true,
-              data: { nodeId, outerHTML }
+              data: { 
+                nodeId, 
+                outerHTML: result.outerHTML 
+              }
             }
           } catch (error) {
             return {
@@ -347,14 +357,15 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Set outer HTML of a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, outerHTML, sessionId: argSessionId } = args as DOMHtmlArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMHtmlArgs>(args, ArgSchemas.domHtmlArgs, 'dom_set_outer_html')
+            const { nodeId, outerHTML, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            await client.send('DOM.setOuterHTML', { nodeId, outerHTML }, sessionId)
+            await typed.enableDOM(sessionId)
+            await typed.setOuterHTML(nodeId, outerHTML, sessionId)
             
             return {
               success: true,
@@ -374,21 +385,22 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Click on a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, sessionId: argSessionId } = args as DOMNodeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMNodeArgs>(args, ArgSchemas.domNodeArgs, 'dom_click_element')
+            const { nodeId, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // Get element center coordinates
-            await client.send('DOM.enable', {}, sessionId)
-            const { model } = await client.send('DOM.getBoxModel', { nodeId }, sessionId)
+            await typed.enableDOM(sessionId)
+            const boxModel = await typed.getBoxModel({ nodeId }, sessionId)
             
-            const x = (model.content[0] + model.content[2]) / 2
-            const y = (model.content[1] + model.content[5]) / 2
+            const x = (boxModel.model.content[0] + boxModel.model.content[2]) / 2
+            const y = (boxModel.model.content[1] + boxModel.model.content[5]) / 2
             
             // Dispatch click
-            await client.send('Input.dispatchMouseEvent', {
+            await typed.dispatchMouseEvent({
               type: 'mousePressed',
               x,
               y,
@@ -396,7 +408,7 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
               clickCount: 1
             }, sessionId)
             
-            await client.send('Input.dispatchMouseEvent', {
+            await typed.dispatchMouseEvent({
               type: 'mouseReleased',
               x,
               y,
@@ -422,14 +434,15 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Focus on a DOM element',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, sessionId: argSessionId } = args as DOMNodeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMNodeArgs>(args, ArgSchemas.domNodeArgs, 'dom_focus_element')
+            const { nodeId, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            await client.send('DOM.focus', { nodeId }, sessionId)
+            await typed.enableDOM(sessionId)
+            await typed.focus({ nodeId }, sessionId)
             
             return {
               success: true,
@@ -449,14 +462,15 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
         description: 'Scroll element into view',
         async execute(args): Promise<ToolResult> {
           try {
-            const { nodeId, sessionId: argSessionId } = args as DOMNodeArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<DOMNodeArgs>(args, ArgSchemas.domNodeArgs, 'dom_scroll_into_view')
+            const { nodeId, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('DOM.enable', {}, sessionId)
-            await client.send('DOM.scrollIntoViewIfNeeded', { nodeId }, sessionId)
+            await typed.enableDOM(sessionId)
+            await typed.scrollIntoViewIfNeeded({ nodeId }, sessionId)
             
             return {
               success: true,
@@ -473,13 +487,14 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler
   }
 }
+
+// Benefits of typed implementation:
+// - All CDP responses have proper types
+// - No more property access errors on unknown types
+// - Full IntelliSense support
+// - Compile-time safety for all DOM operations

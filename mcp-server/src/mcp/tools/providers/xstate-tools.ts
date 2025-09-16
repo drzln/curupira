@@ -64,6 +64,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       xstate_inspect_actor: {
         name: 'xstate_inspect_actor',
@@ -71,7 +72,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { actorId, sessionId: argSessionId } = args as XStateActorArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -108,7 +109,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -135,7 +136,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { actorId, event, sessionId: argSessionId } = args as XStateEventArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -182,7 +183,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -209,7 +210,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -232,7 +233,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -259,7 +260,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { actorId, sessionId: argSessionId } = args as XStateActorArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -306,7 +307,7 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -329,13 +330,8 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler // ✅ FIXED: Proper binding
   }
 }

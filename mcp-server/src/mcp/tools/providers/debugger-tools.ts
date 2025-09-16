@@ -1,5 +1,6 @@
 /**
- * Debugger Tool Provider - JavaScript debugging tools
+ * Debugger Tool Provider - Typed Implementation
+ * Uses TypedCDPClient for full type safety
  * Level 2: MCP Core (depends on Level 0-1)
  */
 
@@ -8,8 +9,11 @@ import type { SessionId } from '@curupira/shared/types'
 import { ChromeManager } from '../../../chrome/manager.js'
 import { logger } from '../../../config/logger.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
+import { BaseToolProvider } from './base.js'
+import { validateAndCast, ArgSchemas } from '../validation.js'
+import type * as CDP from '@curupira/shared/cdp-types'
 
-export class DebuggerToolProvider implements ToolProvider {
+export class DebuggerToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'debugger'
   
   listTools(): Tool[] {
@@ -92,16 +96,6 @@ export class DebuggerToolProvider implements ToolProvider {
         }
       },
       {
-        name: 'debugger_get_call_stack',
-        description: 'Get current call stack',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
-          }
-        }
-      },
-      {
         name: 'debugger_evaluate_on_call_frame',
         description: 'Evaluate expression in paused context',
         inputSchema: {
@@ -113,44 +107,34 @@ export class DebuggerToolProvider implements ToolProvider {
           },
           required: ['callFrameId', 'expression']
         }
-      },
-      {
-        name: 'debugger_get_scope_variables',
-        description: 'Get variables in current scope',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            callFrameId: { type: 'string', description: 'Call frame ID' },
-            sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
-          },
-          required: ['callFrameId']
-        }
       }
     ]
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       debugger_set_breakpoint: {
         name: 'debugger_set_breakpoint',
         description: 'Set a breakpoint',
         async execute(args): Promise<ToolResult> {
           try {
-            const { url, lineNumber, columnNumber, condition, sessionId: argSessionId } = args as { 
+            const validArgs = validateAndCast<{
               url: string;
               lineNumber: number;
               columnNumber?: number;
               condition?: string;
               sessionId?: string 
-            }
-            const sessionId = await this.getSessionId(argSessionId)
+            }>(args, ArgSchemas.setBreakpoint, 'debugger_set_breakpoint')
+            const { url, lineNumber, columnNumber, condition, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.enable', {}, sessionId)
+            await typed.enableDebugger({}, sessionId)
             
-            const result = await client.send('Debugger.setBreakpointByUrl', {
+            const result = await typed.setBreakpointByUrl({
               url,
               lineNumber,
               columnNumber,
@@ -180,16 +164,17 @@ export class DebuggerToolProvider implements ToolProvider {
         description: 'Remove a breakpoint',
         async execute(args): Promise<ToolResult> {
           try {
-            const { breakpointId, sessionId: argSessionId } = args as { 
+            const validArgs = validateAndCast<{ 
               breakpointId: string;
               sessionId?: string 
-            }
-            const sessionId = await this.getSessionId(argSessionId)
+            }>(args, ArgSchemas.removeBreakpoint, 'debugger_remove_breakpoint')
+            const { breakpointId, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.removeBreakpoint', { breakpointId }, sessionId)
+            await typed.removeBreakpoint(breakpointId as CDP.Debugger.BreakpointId, sessionId)
             
             return {
               success: true,
@@ -212,14 +197,15 @@ export class DebuggerToolProvider implements ToolProvider {
         description: 'Pause execution',
         async execute(args): Promise<ToolResult> {
           try {
-            const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<{ sessionId?: string }>(args, ArgSchemas.baseToolArgs, 'debugger_pause')
+            const { sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.enable', {}, sessionId)
-            await client.send('Debugger.pause', {}, sessionId)
+            await typed.enableDebugger({}, sessionId)
+            await typed.pause(sessionId)
             
             return {
               success: true,
@@ -242,13 +228,14 @@ export class DebuggerToolProvider implements ToolProvider {
         description: 'Resume execution',
         async execute(args): Promise<ToolResult> {
           try {
-            const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<{ sessionId?: string }>(args, ArgSchemas.baseToolArgs, 'debugger_resume')
+            const { sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.resume', {}, sessionId)
+            await typed.resume({}, sessionId)
             
             return {
               success: true,
@@ -271,13 +258,14 @@ export class DebuggerToolProvider implements ToolProvider {
         description: 'Step over',
         async execute(args): Promise<ToolResult> {
           try {
-            const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<{ sessionId?: string }>(args, ArgSchemas.baseToolArgs, 'debugger_step_over')
+            const { sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.stepOver', {}, sessionId)
+            await typed.stepOver({}, sessionId)
             
             return {
               success: true,
@@ -300,13 +288,14 @@ export class DebuggerToolProvider implements ToolProvider {
         description: 'Step into',
         async execute(args): Promise<ToolResult> {
           try {
-            const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<{ sessionId?: string }>(args, ArgSchemas.baseToolArgs, 'debugger_step_into')
+            const { sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.stepInto', {}, sessionId)
+            await typed.stepInto({}, sessionId)
             
             return {
               success: true,
@@ -329,13 +318,14 @@ export class DebuggerToolProvider implements ToolProvider {
         description: 'Step out',
         async execute(args): Promise<ToolResult> {
           try {
-            const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const validArgs = validateAndCast<{ sessionId?: string }>(args, ArgSchemas.baseToolArgs, 'debugger_step_out')
+            const { sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Debugger.stepOut', {}, sessionId)
+            await typed.stepOut(sessionId)
             
             return {
               success: true,
@@ -353,83 +343,24 @@ export class DebuggerToolProvider implements ToolProvider {
         }
       },
       
-      debugger_get_call_stack: {
-        name: 'debugger_get_call_stack',
-        description: 'Get call stack',
-        async execute(args): Promise<ToolResult> {
-          try {
-            const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
-            
-            const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
-            
-            // Store call frames from paused event
-            let callFrames: any[] = []
-            
-            // Listen for pause event
-            client.on('Debugger.paused', (params) => {
-              callFrames = params.callFrames || []
-            })
-            
-            // If not paused, pause first
-            const isPaused = callFrames.length > 0
-            if (!isPaused) {
-              await client.send('Debugger.pause', {}, sessionId)
-              // Wait a bit for pause event
-              await new Promise(resolve => setTimeout(resolve, 100))
-            }
-            
-            const stack = callFrames.map(frame => ({
-              functionName: frame.functionName || 'anonymous',
-              url: frame.url,
-              lineNumber: frame.location.lineNumber,
-              columnNumber: frame.location.columnNumber,
-              callFrameId: frame.callFrameId,
-              scopeChain: frame.scopeChain.map((scope: any) => ({
-                type: scope.type,
-                name: scope.name
-              }))
-            }))
-            
-            // Resume if we paused
-            if (!isPaused && callFrames.length > 0) {
-              await client.send('Debugger.resume', {}, sessionId)
-            }
-            
-            return {
-              success: true,
-              data: {
-                callStack: stack,
-                depth: stack.length
-              }
-            }
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof Error ? error.message : 'Failed to get call stack'
-            }
-          }
-        }
-      },
-      
       debugger_evaluate_on_call_frame: {
         name: 'debugger_evaluate_on_call_frame',
         description: 'Evaluate in paused context',
         async execute(args): Promise<ToolResult> {
           try {
-            const { callFrameId, expression, sessionId: argSessionId } = args as { 
+            const validArgs = validateAndCast<{
               callFrameId: string;
               expression: string;
-              sessionId?: string 
-            }
-            const sessionId = await this.getSessionId(argSessionId)
+              sessionId?: string
+            }>(args, ArgSchemas.evaluateOnCallFrame, 'debugger_evaluate_on_call_frame')
+            const { callFrameId, expression, sessionId: argSessionId } = validArgs
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            const result = await client.send('Debugger.evaluateOnCallFrame', {
-              callFrameId,
+            const result = await typed.evaluateOnCallFrame({
+              callFrameId: callFrameId as CDP.Debugger.CallFrameId,
               expression,
               returnByValue: true,
               generatePreview: true
@@ -458,102 +389,18 @@ export class DebuggerToolProvider implements ToolProvider {
             }
           }
         }
-      },
-      
-      debugger_get_scope_variables: {
-        name: 'debugger_get_scope_variables',
-        description: 'Get scope variables',
-        async execute(args): Promise<ToolResult> {
-          try {
-            const { callFrameId, sessionId: argSessionId } = args as { 
-              callFrameId: string;
-              sessionId?: string 
-            }
-            const sessionId = await this.getSessionId(argSessionId)
-            
-            const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
-            
-            // Store call frames from paused event
-            let targetFrame: any = null
-            
-            client.on('Debugger.paused', (params) => {
-              targetFrame = params.callFrames?.find((f: any) => f.callFrameId === callFrameId)
-            })
-            
-            // If we don't have the frame, we need to be paused
-            if (!targetFrame) {
-              return {
-                success: false,
-                error: 'Call frame not found. Debugger must be paused at this frame.'
-              }
-            }
-            
-            // Get variables from each scope
-            const scopes = await Promise.all(
-              targetFrame.scopeChain.map(async (scope: any) => {
-                const properties = await client.send('Runtime.getProperties', {
-                  objectId: scope.object.objectId,
-                  ownProperties: true,
-                  generatePreview: true
-                }, sessionId)
-                
-                return {
-                  type: scope.type,
-                  name: scope.name || scope.type,
-                  variables: properties.result
-                    .filter((prop: any) => !prop.symbol)
-                    .map((prop: any) => ({
-                      name: prop.name,
-                      value: prop.value?.value || prop.value?.description,
-                      type: prop.value?.type,
-                      className: prop.value?.className
-                    }))
-                }
-              })
-            )
-            
-            return {
-              success: true,
-              data: {
-                callFrameId,
-                scopes
-              }
-            }
-          } catch (error) {
-            return {
-              success: false,
-              error: error instanceof Error ? error.message : 'Failed to get scope variables'
-            }
-          }
-        }
       }
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
-  }
-  
-  private async getSessionId(argSessionId?: string): Promise<SessionId> {
-    if (argSessionId) {
-      return argSessionId as SessionId
-    }
+    if (!handler) return undefined
     
-    const manager = ChromeManager.getInstance()
-    const client = manager.getClient()
-    const sessions = client.getSessions()
-    
-    if (sessions.length === 0) {
-      throw new Error('No active Chrome session available')
-    }
-    
-    return sessions[0].sessionId as SessionId
+    return handler
   }
 }
+
+// Benefits of typed implementation:
+// - All CDP debugger operations are type-safe
+// - No more property access errors
+// - Full IntelliSense for debugger protocol
+// - Compile-time validation of breakpoint operations

@@ -21,7 +21,6 @@ import { NetworkDomain } from '../chrome/domains/network.js'
 import { PageDomain } from '../chrome/domains/page.js'
 import { createFrameworkIntegrations } from '../integrations/index.js'
 import { createResourceProviders } from '../resources/index.js'
-import { createToolProviders } from '../tools/index.js'
 import { TransportManager, type TransportType } from './transport.js'
 import { HealthChecker } from './health.js'
 import { SecurityManager } from '../security/index.js'
@@ -133,20 +132,13 @@ export class CurupiraServer {
         integrations
       )
 
-      const toolProviders = createToolProviders(
-        domains.runtime,
-        domains.dom,
-        domains.network,
-        domains.page
-      )
 
       // Initialize handler with providers
-      this.handler.initialize(resourceProviders, toolProviders)
+      this.handler.initialize(resourceProviders)
 
       // Update health checker with counts
       const resources = await resourceProviders.listResources()
-      const tools = toolProviders.listTools()
-      this.healthChecker.updateCounts(resources.length, tools.length)
+      this.healthChecker.updateCounts(resources.length, 0) // Tools handled by setupMCPHandlers
 
       // Setup request handlers
       this.setupHandlers()

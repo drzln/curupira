@@ -1,5 +1,6 @@
 /**
- * Performance Tool Provider - Performance monitoring and analysis tools
+ * Performance Tool Provider - Typed Implementation
+ * Uses TypedCDPClient for full type safety
  * Level 2: MCP Core (depends on Level 0-1)
  */
 
@@ -8,8 +9,10 @@ import type { SessionId } from '@curupira/shared/types'
 import { ChromeManager } from '../../../chrome/manager.js'
 import { logger } from '../../../config/logger.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
+import { BaseToolProvider } from './base.js'
+import type * as CDP from '@curupira/shared/cdp-types'
 
-export class PerformanceToolProvider implements ToolProvider {
+export class PerformanceToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'performance'
   
   listTools(): Tool[] {
@@ -105,6 +108,7 @@ export class PerformanceToolProvider implements ToolProvider {
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       performance_start_profiling: {
         name: 'performance_start_profiling',
@@ -112,13 +116,13 @@ export class PerformanceToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Profiler.enable', {}, sessionId)
-            await client.send('Profiler.start', {}, sessionId)
+            await typed.send('Profiler.enable', {}, sessionId)
+            await typed.send('Profiler.start', {}, sessionId)
             
             return {
               success: true,
@@ -143,12 +147,12 @@ export class PerformanceToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            const profile = await client.send('Profiler.stop', {}, sessionId)
+            const profile = await typed.send<{ profile: CDP.Profiler.Profile }>('Profiler.stop', {}, sessionId)
             
             // Analyze profile data
             const nodes = profile.profile.nodes || []
@@ -214,16 +218,15 @@ export class PerformanceToolProvider implements ToolProvider {
               duration?: number;
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             
             // Install render tracking
-            await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.evaluate(`
                 window.__REACT_RENDER_DATA__ = {
                   renders: [],
                   startTime: Date.now()
@@ -260,16 +263,13 @@ export class PerformanceToolProvider implements ToolProvider {
                 } else {
                   'React DevTools not found';
                 }
-              `,
-              returnByValue: true
-            }, sessionId)
+              `, { returnByValue: true }, sessionId)
             
             // Wait for measurement duration
             await new Promise(resolve => setTimeout(resolve, duration))
             
             // Collect results
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            const result = await typed.evaluate(`
                 (() => {
                   const data = window.__REACT_RENDER_DATA__;
                   if (!data) return { error: 'No render data collected' };
@@ -315,9 +315,7 @@ export class PerformanceToolProvider implements ToolProvider {
                     sampleRenders: filteredRenders.slice(-10)
                   };
                 })()
-              `,
-              returnByValue: true
-            }, sessionId)
+              `, { returnByValue: true }, sessionId)
             
             if (result.exceptionDetails) {
               return {
@@ -353,16 +351,15 @@ export class PerformanceToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             
             // Get all script sources
-            const scripts = await client.send('Runtime.evaluate', {
-              expression: `
+            const scripts = await typed.evaluate(`
                 (() => {
                   const scripts = Array.from(document.scripts);
                   return scripts.map(script => ({
@@ -373,13 +370,10 @@ export class PerformanceToolProvider implements ToolProvider {
                     type: script.type || 'text/javascript'
                   }));
                 })()
-              `,
-              returnByValue: true
-            }, sessionId)
+              `, { returnByValue: true }, sessionId)
             
             // Get resource timing data
-            const resources = await client.send('Runtime.evaluate', {
-              expression: `
+            const resources = await typed.evaluate(`
                 (() => {
                   const resources = performance.getEntriesByType('resource')
                     .filter(r => r.initiatorType === 'script');
@@ -392,9 +386,7 @@ export class PerformanceToolProvider implements ToolProvider {
                     compressed: r.encodedBodySize !== r.decodedBodySize
                   }));
                 })()
-              `,
-              returnByValue: true
-            }, sessionId)
+              `, { returnByValue: true }, sessionId)
             
             const scriptData = scripts.result.value as any[]
             const resourceData = resources.result.value as any[]
@@ -444,34 +436,28 @@ export class PerformanceToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // Get memory usage before snapshot
-            await client.send('Runtime.enable', {}, sessionId)
-            const memoryBefore = await client.send('Runtime.evaluate', {
-              expression: 'performance.memory',
-              returnByValue: true
-            }, sessionId)
+            await typed.enableRuntime(sessionId)
+            const memoryBefore = await typed.evaluate(`performance.memory`, { returnByValue: true }, sessionId)
             
             // Take heap snapshot
-            await client.send('HeapProfiler.enable', {}, sessionId)
+            await typed.send('HeapProfiler.enable', {}, sessionId)
             
             // We'll collect snapshot metadata rather than full snapshot
-            const sampling = await client.send('HeapProfiler.startSampling', {}, sessionId)
+            const sampling = await typed.send('HeapProfiler.startSampling', {}, sessionId)
             
             // Wait a bit to collect samples
             await new Promise(resolve => setTimeout(resolve, 1000))
             
-            const profile = await client.send('HeapProfiler.stopSampling', {}, sessionId)
+            const profile = await typed.send('HeapProfiler.stopSampling', {}, sessionId)
             
             // Get memory usage after
-            const memoryAfter = await client.send('Runtime.evaluate', {
-              expression: 'performance.memory',
-              returnByValue: true
-            }, sessionId)
+            const memoryAfter = await typed.evaluate(`performance.memory`, { returnByValue: true }, sessionId)
             
             return {
               success: true,
@@ -502,19 +488,18 @@ export class PerformanceToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // Get CDP metrics
-            await client.send('Performance.enable', {}, sessionId)
-            const metrics = await client.send('Performance.getMetrics', {}, sessionId)
+            await typed.enablePerformance({}, sessionId)
+            const metrics = await typed.getMetrics(sessionId)
             
             // Get Web Vitals
-            await client.send('Runtime.enable', {}, sessionId)
-            const webVitals = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const webVitals = await typed.evaluate(`
                 (() => {
                   const entries = performance.getEntries();
                   const navigation = performance.getEntriesByType('navigation')[0];
@@ -561,9 +546,7 @@ export class PerformanceToolProvider implements ToolProvider {
                     } : null
                   };
                 })()
-              `,
-              returnByValue: true
-            }, sessionId)
+              `, { returnByValue: true }, sessionId)
             
             // Format CDP metrics
             const cdpMetrics: Record<string, number> = {}
@@ -597,7 +580,7 @@ export class PerformanceToolProvider implements ToolProvider {
               categories?: string[];
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
@@ -639,7 +622,7 @@ export class PerformanceToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
@@ -702,29 +685,8 @@ export class PerformanceToolProvider implements ToolProvider {
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
-  }
-  
-  private async getSessionId(argSessionId?: string): Promise<SessionId> {
-    if (argSessionId) {
-      return argSessionId as SessionId
-    }
+    if (!handler) return undefined
     
-    const manager = ChromeManager.getInstance()
-    const client = manager.getClient()
-    const sessions = client.getSessions()
-    
-    if (sessions.length === 0) {
-      throw new Error('No active Chrome session available')
-    }
-    
-    return sessions[0].sessionId as SessionId
+    return handler // ✅ FIXED: Proper binding
   }
 }

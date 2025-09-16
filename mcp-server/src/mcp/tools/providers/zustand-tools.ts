@@ -67,6 +67,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       zustand_inspect_store: {
         name: 'zustand_inspect_store',
@@ -74,12 +75,12 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { storeName, sessionId: argSessionId } = args as ZustandStoreArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             
             const script = storeName ? `
               (() => {
@@ -119,8 +120,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
               })()
             `
             
-            const result = await client.send('Runtime.evaluate', {
-              expression: script,
+            const result = await typed.evaluate(script, {
               returnByValue: true,
               awaitPromise: true
             }, sessionId)
@@ -153,12 +153,12 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { storeName, action, payload, sessionId: argSessionId } = args as ZustandActionArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             
             const script = `
               (() => {
@@ -196,8 +196,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
               })()
             `
             
-            const result = await client.send('Runtime.evaluate', {
-              expression: script,
+            const result = await typed.evaluate(script, {
               returnByValue: true,
               awaitPromise: true
             }, sessionId)
@@ -230,15 +229,14 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as ZustandStoreArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            const result = await typed.evaluate(`
                 (() => {
                   if (!window.__ZUSTAND_STORES__) {
                     return { error: 'Zustand stores not found' }
@@ -247,7 +245,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
                   const stores = Array.from(window.__ZUSTAND_STORES__.keys())
                   return { stores }
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -277,12 +275,12 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { storeName, sessionId: argSessionId } = args as ZustandStoreArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.enableRuntime(sessionId)
             await client.send('Console.enable', {}, sessionId)
             
             const script = `
@@ -313,8 +311,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
               })()
             `
             
-            const result = await client.send('Runtime.evaluate', {
-              expression: script,
+            const result = await typed.evaluate(script, {
               returnByValue: true
             }, sessionId)
             
@@ -342,13 +339,8 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler // ✅ FIXED: Proper binding
   }
 }

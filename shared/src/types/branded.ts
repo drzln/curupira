@@ -13,6 +13,7 @@ export type Branded<T, Brand extends string> = T & { __brand: Brand }
 
 // Core domain branded types
 export type SessionId = Branded<string, 'SessionId'>
+export type TargetId = Branded<string, 'TargetId'>
 export type UserId = Branded<string, 'UserId'> 
 export type TabId = Branded<number, 'TabId'>
 export type RequestId = Branded<string, 'RequestId'>
@@ -35,6 +36,7 @@ export type JsonRpcMethod = Branded<string, 'JsonRpcMethod'>
  * Type-safe creators for branded types
  */
 export const createSessionId = (id: string): SessionId => id as SessionId
+export const createTargetId = (id: string): TargetId => id as TargetId
 export const createUserId = (id: string): UserId => id as UserId
 export const createTabId = (id: number): TabId => id as TabId
 export const createRequestId = (id: string): RequestId => id as RequestId

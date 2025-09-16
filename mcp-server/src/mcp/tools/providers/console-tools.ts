@@ -1,5 +1,6 @@
 /**
- * Console Tool Provider - Browser console manipulation tools
+ * Console Tool Provider - Typed Implementation
+ * Uses TypedCDPClient for full type safety
  * Level 2: MCP Core (depends on Level 0-1)
  */
 
@@ -14,6 +15,7 @@ import type {
   ConsoleMessagesArgs
 } from '../types.js'
 import { BaseToolProvider } from './base.js'
+import type * as CDP from '@curupira/shared/cdp-types'
 
 export class ConsoleToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'console'
@@ -85,6 +87,7 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       console_clear: {
         name: 'console_clear',
@@ -92,16 +95,16 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as BaseToolArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Console.enable', {}, sessionId)
-            await client.send('Console.clearMessages', {}, sessionId)
+            await typed.send('Console.enable', {}, sessionId)
+            await typed.send('Console.clearMessages', {}, sessionId)
             
             // Also clear via Runtime
-            await client.send('Runtime.evaluate', {
+            await typed.send('Runtime.evaluate', {
               expression: 'console.clear()',
               userGesture: true
             }, sessionId)
@@ -128,14 +131,13 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { expression, sessionId: argSessionId } = args as ConsoleExecuteArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression,
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(expression, {
               includeCommandLineAPI: true,
               userGesture: true,
               awaitPromise: true,
@@ -178,10 +180,10 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { level = 'all', limit = 100, sessionId: argSessionId } = args as ConsoleMessagesArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // Store messages
             const messages: Array<{
@@ -196,7 +198,7 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
             }> = []
             
             // Enable console monitoring
-            await client.send('Console.enable', {}, sessionId)
+            await typed.send('Console.enable', {}, sessionId)
             
             // Set up message listener
             const messageHandler = (params: { message: {
@@ -227,11 +229,11 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
               }
             }
             
-            client.on('Console.messageAdded', messageHandler)
+            manager.getClient().on('Console.messageAdded', messageHandler)
             
             // Also get recent logs from the page
-            await client.send('Runtime.enable', {}, sessionId)
-            const logs = await client.send('Runtime.evaluate', {
+            await typed.send('Runtime.enable', {}, sessionId)
+            const logs = await typed.send('Runtime.evaluate', {
               expression: `
                 (() => {
                   const logs = [];
@@ -313,7 +315,7 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
               .slice(-limit)
             
             // Clean up listener
-            client.off('Console.messageAdded', messageHandler)
+            manager.getClient().off('Console.messageAdded', messageHandler)
             
             return {
               success: true,
@@ -338,16 +340,16 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as BaseToolArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
-            await client.send('Console.enable', {}, sessionId)
-            await client.send('Runtime.enable', {}, sessionId)
+            await typed.send('Console.enable', {}, sessionId)
+            await typed.send('Runtime.enable', {}, sessionId)
             
             // Install console interceptors
-            await client.send('Runtime.evaluate', {
+            await typed.send('Runtime.evaluate', {
               expression: `
                 (() => {
                   if (window.__CURUPIRA_CONSOLE_MONITORING__) {
@@ -416,13 +418,13 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as BaseToolArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // Restore original console methods
-            await client.send('Runtime.evaluate', {
+            await typed.send('Runtime.evaluate', {
               expression: `
                 (() => {
                   if (!window.__CURUPIRA_CONSOLE_MONITORING__) {
@@ -464,13 +466,8 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler // ✅ FIXED: Proper binding
   }
 }

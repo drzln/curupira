@@ -9,6 +9,7 @@
 export type {
   Branded,
   SessionId,
+  TargetId,
   UserId,
   TabId,
   RequestId,
@@ -26,6 +27,7 @@ export type {
 
 export {
   createSessionId,
+  createTargetId,
   createUserId,
   createTabId,
   createRequestId,

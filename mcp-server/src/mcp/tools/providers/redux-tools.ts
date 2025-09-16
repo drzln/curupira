@@ -64,6 +64,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       redux_inspect_state: {
         name: 'redux_inspect_state',
@@ -71,7 +72,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { path, sessionId: argSessionId } = args as ReduxPathArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -138,7 +139,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -172,7 +173,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { type, payload, sessionId: argSessionId } = args as ReduxActionArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -221,7 +222,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -255,7 +256,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { limit = 10, sessionId: argSessionId } = args as { limit?: number; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -280,7 +281,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -305,7 +306,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
         async execute(args): Promise<ToolResult> {
           try {
             const { actionIndex, sessionId: argSessionId } = args as { actionIndex: number; sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -334,7 +335,7 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -363,13 +364,8 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler // ✅ FIXED: Proper binding
   }
 }

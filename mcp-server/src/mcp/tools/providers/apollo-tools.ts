@@ -65,6 +65,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       apollo_inspect_cache: {
         name: 'apollo_inspect_cache',
@@ -72,10 +73,10 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { query, sessionId: argSessionId } = args as ApolloQueryArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             // First check if Apollo Client is available
-            const check = await this.checkLibraryAvailable(
+            const check = await provider.checkLibraryAvailable(
               'window.__APOLLO_CLIENT__',
               sessionId,
               'Apollo Client'
@@ -128,7 +129,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -162,7 +163,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { query, variables, sessionId: argSessionId } = args as ApolloQueryArgs
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (async () => {
@@ -194,7 +195,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -228,7 +229,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (async () => {
@@ -248,7 +249,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -281,7 +282,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         async execute(args): Promise<ToolResult> {
           try {
             const { query, data, variables, sessionId: argSessionId } = args as ApolloQueryArgs & { data: unknown }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
               (() => {
@@ -310,7 +311,7 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
               })()
             `
             
-            const result = await this.executeScript(script, sessionId)
+            const result = await provider.executeScript(script, sessionId)
             
             if (!result.success) {
               return result
@@ -339,13 +340,8 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
+    if (!handler) return undefined
+    
+    return handler // ✅ FIXED: Proper binding
   }
 }

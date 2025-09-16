@@ -6,7 +6,6 @@
 
 import type { Resource, Tool, Prompt } from '@modelcontextprotocol/sdk/types.js'
 import type { ResourceProviders } from '../resources/index.js'
-import type { ToolProviders } from '../tools/index.js'
 import { logger } from '../config/logger.js'
 import { z } from 'zod'
 
@@ -27,7 +26,6 @@ const getPromptSchema = z.object({
 
 export class MCPHandler {
   private resourceProviders?: ResourceProviders
-  private toolProviders?: ToolProviders
   private prompts: Map<string, Prompt> = new Map()
   private securityManager?: any // Will be set by server
 
@@ -45,13 +43,9 @@ export class MCPHandler {
   /**
    * Initialize with providers
    */
-  initialize(
-    resourceProviders: ResourceProviders,
-    toolProviders: ToolProviders
-  ) {
+  initialize(resourceProviders: ResourceProviders) {
     this.resourceProviders = resourceProviders
-    this.toolProviders = toolProviders
-    logger.info('MCP handler initialized')
+    logger.info('MCP handler initialized (tools handled by setupMCPHandlers)')
   }
 
   /**
@@ -98,45 +92,19 @@ export class MCPHandler {
   }
 
   /**
-   * List available tools
+   * List available tools - now handled by setupMCPHandlers
    */
   async listTools(): Promise<{ tools: Tool[] }> {
-    if (!this.toolProviders) {
-      throw new Error('Tool providers not initialized')
-    }
-
-    try {
-      const tools = this.toolProviders.listTools()
-      logger.debug({ count: tools.length }, 'Listed tools')
-      
-      return { tools }
-    } catch (error) {
-      logger.error({ error }, 'Failed to list tools')
-      throw error
-    }
+    logger.debug('Tool listing now handled by setupMCPHandlers')
+    return { tools: [] }
   }
 
   /**
-   * Call a tool
+   * Call a tool - now handled by setupMCPHandlers
    */
   async callTool(params: unknown): Promise<any> {
-    if (!this.toolProviders) {
-      throw new Error('Tool providers not initialized')
-    }
-
-    try {
-      const { name, arguments: args } = callToolSchema.parse(params)
-      logger.debug({ name, args }, 'Calling tool')
-      
-      const result = await this.toolProviders.callTool(name, args)
-      
-      return {
-        toolResult: result,
-      }
-    } catch (error) {
-      logger.error({ error, params }, 'Failed to call tool')
-      throw error
-    }
+    logger.debug('Tool calls now handled by setupMCPHandlers')
+    throw new Error('Tool calls are handled by the unified tool handlers')
   }
 
   /**
@@ -340,16 +308,9 @@ Then focus on any specific issues you discover.`,
       }
     }
 
-    if (this.toolProviders) {
-      const tools = this.toolProviders.listTools()
-      stats.tools.total = tools.length
-      
-      // Group tools by category (prefix before /)
-      for (const tool of tools) {
-        const category = tool.name.split('/')[0]
-        stats.tools.byCategory[category] = (stats.tools.byCategory[category] || 0) + 1
-      }
-    }
+    // Tools are now handled by setupMCPHandlers
+    stats.tools.total = 0
+    stats.tools.byCategory = { unified: 0 }
 
     return stats
   }

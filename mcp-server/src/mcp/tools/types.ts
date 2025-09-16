@@ -1,9 +1,68 @@
 /**
- * Common Types for Tool Providers
- * Level 2: MCP Core types
+ * Enhanced Tool Handler Types - Phase 1: Type System Foundation
+ * Level 2: MCP Core types with proper binding interfaces and validation
  */
 
 import type { SessionId } from '@curupira/shared/types'
+import type { ToolHandler, ToolResult } from './registry.js'
+import type { BaseToolProvider } from './providers/base.js'
+
+/**
+ * Enhanced tool handler with properly bound methods from BaseToolProvider
+ */
+export interface BoundToolHandler extends ToolHandler {
+  // Methods bound from BaseToolProvider context
+  getSessionId(argSessionId?: string): Promise<SessionId>
+  executeScript<T = unknown>(script: string, sessionId: SessionId, options?: ScriptOptions): Promise<ToolResult<T>>
+  checkLibraryAvailable(check: string, sessionId: SessionId, name: string): Promise<{ available: boolean; error?: string }>
+}
+
+/**
+ * Tool provider context for creating bound handlers
+ */
+export interface ToolProviderContext {
+  provider: BaseToolProvider
+  bind<T extends ToolHandler>(handler: T): BoundToolHandler
+}
+
+/**
+ * Script execution options
+ */
+export interface ScriptOptions {
+  timeout?: number
+  awaitPromise?: boolean
+  returnByValue?: boolean
+}
+
+/**
+ * JSON Schema interface for runtime validation
+ */
+export interface JSONSchema {
+  type: string
+  properties?: Record<string, JSONSchemaProperty>
+  required?: string[]
+  additionalProperties?: boolean
+}
+
+export interface JSONSchemaProperty {
+  type: string
+  description?: string
+  enum?: string[]
+  items?: JSONSchemaProperty
+  format?: string
+  minimum?: number
+  maximum?: number
+}
+
+/**
+ * Tool validation error for invalid arguments
+ */
+export class ToolValidationError extends Error {
+  constructor(message: string, public readonly details?: unknown) {
+    super(message)
+    this.name = 'ToolValidationError'
+  }
+}
 
 // Base types for tool arguments
 export interface BaseToolArgs {
@@ -249,4 +308,80 @@ export interface ReactProfileResult {
     }>;
   };
   error?: string;
+}
+
+// Type-Safe Argument Validation (Step 1.2)
+
+/**
+ * Validates arguments against a JSON schema with type predicates
+ */
+export function validateArgs<T>(args: Record<string, unknown>, schema: JSONSchema): args is T {
+  if (typeof args !== 'object' || args === null) {
+    return false
+  }
+
+  // Check required properties
+  if (schema.required) {
+    for (const prop of schema.required) {
+      if (!(prop in args)) {
+        return false
+      }
+    }
+  }
+
+  // Basic type validation for properties
+  if (schema.properties) {
+    for (const [prop, propSchema] of Object.entries(schema.properties)) {
+      if (prop in args) {
+        const value = args[prop]
+        if (!validateProperty(value, propSchema)) {
+          return false
+        }
+      }
+    }
+  }
+
+  return true
+}
+
+/**
+ * Asserts arguments are valid, throws ToolValidationError if not
+ */
+export function assertArgs<T>(args: Record<string, unknown>, schema: JSONSchema): T {
+  if (!validateArgs<T>(args, schema)) {
+    throw new ToolValidationError(`Invalid arguments: ${JSON.stringify(args)}`, { args, schema })
+  }
+  return args
+}
+
+/**
+ * Validates a single property against its schema
+ */
+function validateProperty(value: unknown, schema: JSONSchemaProperty): boolean {
+  switch (schema.type) {
+    case 'string':
+      return typeof value === 'string'
+    case 'number':
+      return typeof value === 'number'
+    case 'boolean':
+      return typeof value === 'boolean'
+    case 'object':
+      return typeof value === 'object' && value !== null
+    case 'array':
+      return Array.isArray(value)
+    default:
+      return true // Allow unknown types for now
+  }
+}
+
+/**
+ * Type predicate functions for common argument types
+ */
+export type ValidationFunction<T> = (args: Record<string, unknown>) => args is T
+
+/**
+ * Creates a validation function for a specific argument type
+ */
+export function createValidator<T>(schema: JSONSchema): ValidationFunction<T> {
+  return (args: Record<string, unknown>): args is T => validateArgs<T>(args, schema)
 }

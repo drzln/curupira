@@ -1,5 +1,6 @@
 /**
- * Network Tool Provider - Network debugging and manipulation tools
+ * Network Tool Provider - Typed Implementation
+ * Uses TypedCDPClient for full type safety
  * Level 2: MCP Core (depends on Level 0-1)
  */
 
@@ -8,8 +9,10 @@ import type { SessionId } from '@curupira/shared/types'
 import { ChromeManager } from '../../../chrome/manager.js'
 import { logger } from '../../../config/logger.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
+import { BaseToolProvider } from './base.js'
+import type * as CDP from '@curupira/shared/cdp-types'
 
-export class NetworkToolProvider implements ToolProvider {
+export class NetworkToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'network'
   
   listTools(): Tool[] {
@@ -147,6 +150,7 @@ export class NetworkToolProvider implements ToolProvider {
   }
   
   getHandler(toolName: string): ToolHandler | undefined {
+    const provider = this
     const handlers: Record<string, ToolHandler> = {
       network_mock_request: {
         name: 'network_mock_request',
@@ -163,10 +167,11 @@ export class NetworkToolProvider implements ToolProvider {
               };
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             await client.send('Fetch.enable', {
               patterns: [{
@@ -176,15 +181,14 @@ export class NetworkToolProvider implements ToolProvider {
             }, sessionId)
             
             // Store mock configuration
-            await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.evaluate(`
                 window.__CURUPIRA_MOCKS__ = window.__CURUPIRA_MOCKS__ || new Map();
                 window.__CURUPIRA_MOCKS__.set('${urlPattern}', {
                   method: '${method}',
                   response: ${JSON.stringify(response)}
                 });
                 'Mock configured for ' + '${urlPattern}';
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -243,7 +247,7 @@ export class NetworkToolProvider implements ToolProvider {
               urlPatterns: string[];
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
@@ -306,7 +310,7 @@ export class NetworkToolProvider implements ToolProvider {
               };
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
@@ -349,7 +353,7 @@ export class NetworkToolProvider implements ToolProvider {
         async execute(args): Promise<ToolResult> {
           try {
             const { sessionId: argSessionId } = args as { sessionId?: string }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
@@ -384,15 +388,14 @@ export class NetworkToolProvider implements ToolProvider {
               limit?: number;
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // Get requests from performance entries
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   const entries = performance.getEntriesByType('resource');
                   const navigation = performance.getEntriesByType('navigation')[0];
@@ -437,7 +440,7 @@ export class NetworkToolProvider implements ToolProvider {
                     total: requests.length
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -470,7 +473,7 @@ export class NetworkToolProvider implements ToolProvider {
               responseHeaders?: Record<string, string>;
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
             const client = manager.getClient()
@@ -565,16 +568,15 @@ export class NetworkToolProvider implements ToolProvider {
               modifyHeaders?: Record<string, string>;
               sessionId?: string 
             }
-            const sessionId = await this.getSessionId(argSessionId)
+            const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
-            const client = manager.getClient()
+            const typed = manager.getTypedClient()
             
             // This is a simplified version - in practice, you'd need to store
             // request details from Network.requestWillBeSent events
-            await client.send('Runtime.enable', {}, sessionId)
-            const result = await client.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const result = await typed.evaluate(`
                 (() => {
                   // Note: This is a placeholder - real implementation would
                   // require storing actual request details
@@ -584,7 +586,7 @@ export class NetworkToolProvider implements ToolProvider {
                     note: 'Enable Network domain events to capture requests for replay'
                   };
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             
@@ -604,29 +606,8 @@ export class NetworkToolProvider implements ToolProvider {
     }
     
     const handler = handlers[toolName]
-    if (handler) {
-      // Bind the execute method to this instance to preserve context
-      return {
-        ...handler,
-        execute: handler.execute.bind(this)
-      }
-    }
-    return undefined
-  }
-  
-  private async getSessionId(argSessionId?: string): Promise<SessionId> {
-    if (argSessionId) {
-      return argSessionId as SessionId
-    }
+    if (!handler) return undefined
     
-    const manager = ChromeManager.getInstance()
-    const client = manager.getClient()
-    const sessions = client.getSessions()
-    
-    if (sessions.length === 0) {
-      throw new Error('No active Chrome session available')
-    }
-    
-    return sessions[0].sessionId as SessionId
+    return handler // ✅ FIXED: Proper binding
   }
 }
