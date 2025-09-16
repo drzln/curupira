@@ -110,7 +110,21 @@ export class ChromeClient implements CDPClient, IChromeClient {
     } catch (error) {
       this.state = 'error';
       this.eventEmitter.emit('stateChange', this.state);
-      this.logger.error({ error }, 'Failed to connect to Chrome');
+      
+      // Enhanced error logging for debugging
+      const errorDetails = {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        type: error instanceof Error ? error.constructor.name : typeof error,
+        stringified: String(error)
+      };
+      
+      this.logger.error({ 
+        error: errorDetails,
+        config: this.config,
+        state: this.state 
+      }, 'Failed to connect to Chrome');
+      
       throw error;
     }
   }
@@ -268,8 +282,23 @@ export class ChromeClient implements CDPClient, IChromeClient {
       // Update targets map
       this.targets.clear();
       for (const target of targets) {
-        // Handle Browserless format which uses targetId instead of id
-        const targetId = target.targetId || target.id || `target_${Date.now()}`;
+        // Handle different target ID formats
+        // Browserless: targetId = "/devtools/page/BROWSERLESSUIGHA3G57FGLHJOOS0JR1"
+        // Standard Chrome: id = "page_1234"
+        let targetId: string;
+        
+        if (target.targetId) {
+          // Extract the actual ID from Browserless path format
+          if (target.targetId.startsWith('/devtools/')) {
+            targetId = target.targetId.split('/').pop() || target.targetId;
+          } else {
+            targetId = target.targetId;
+          }
+        } else if (target.id) {
+          targetId = target.id;
+        } else {
+          targetId = `target_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        }
         
         this.targets.set(targetId, {
           targetId: targetId,
@@ -285,7 +314,16 @@ export class ChromeClient implements CDPClient, IChromeClient {
 
       this.eventEmitter.emit('targetsUpdated', Array.from(this.targets.values()));
     } catch (error) {
-      this.logger.error({ error }, 'Failed to update targets');
+      const errorDetails = {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        type: error instanceof Error ? error.constructor.name : typeof error,
+        stringified: String(error),
+        config: this.config,
+        targetsUrl: `${this.config.secure ? 'https' : 'http'}://${this.config.host}:${this.config.port}/json`
+      };
+      
+      this.logger.error({ error: errorDetails }, 'Failed to update targets');
       throw error;
     }
   }

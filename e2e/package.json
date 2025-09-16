@@ -1,6 +1,6 @@
 {
   "name": "@curupira/e2e-tests",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "description": "End-to-end tests for Curupira MCP debugging tool",
   "type": "module",
   "private": true,
