@@ -16,6 +16,7 @@ import type {
 import type { IChromeClient, SessionInfo } from './interfaces.js';
 import { LRUCache, ExpiringCache } from '@curupira/shared/utils';
 import { waitForCondition, retryWithBackoff } from '@curupira/shared/utils';
+import { BrowserlessDetector, type BrowserInfo } from './browserless-detector.js';
 
 // Local event map type
 type CDPEventMap = {
@@ -50,10 +51,14 @@ export class ChromeClient implements CDPClient, IChromeClient {
   private targets: Map<string, CDPTarget> = new Map();
   private responseCache: LRUCache<string, any> = new LRUCache(100);
   private eventCache: ExpiringCache<string, any[]> = new ExpiringCache(60000); // 1 minute
-
+  
+  private browserInfo: BrowserInfo | null = null;
+  private browserlessDetector: BrowserlessDetector;
   private eventEmitter = new EventEmitter();
 
-  constructor(private readonly logger: ILogger) {}
+  constructor(private readonly logger: ILogger) {
+    this.browserlessDetector = new BrowserlessDetector(logger);
+  }
 
   async connect(options?: CDPConnectionOptions): Promise<void> {
     if (this.state === 'connected') {
@@ -69,6 +74,9 @@ export class ChromeClient implements CDPClient, IChromeClient {
     this.eventEmitter.emit('stateChange', this.state);
 
     try {
+      // Detect browser type (Browserless vs standard Chrome)
+      this.browserInfo = await this.browserlessDetector.detect(this.config.host, this.config.port);
+      
       const protocol = this.config.secure ? 'https' : 'http';
       const baseUrl = `${protocol}://${this.config.host}:${this.config.port}`;
       
@@ -85,14 +93,20 @@ export class ChromeClient implements CDPClient, IChromeClient {
       }
       
       const versionInfo = await response.json();
-      this.logger.info({ versionInfo }, 'Chrome version info');
+      this.logger.info({ 
+        versionInfo,
+        browserInfo: this.browserInfo 
+      }, 'Connected to browser');
       
       // Discover available targets
       await this.updateTargets();
       
       this.state = 'connected';
       this.eventEmitter.emit('stateChange', this.state);
-      this.eventEmitter.emit('connected', versionInfo);
+      this.eventEmitter.emit('connected', { 
+        versionInfo,
+        browserInfo: this.browserInfo 
+      });
     } catch (error) {
       this.state = 'error';
       this.eventEmitter.emit('stateChange', this.state);
@@ -242,7 +256,8 @@ export class ChromeClient implements CDPClient, IChromeClient {
       }
       
       const targets = await response.json() as Array<{
-        id: string;
+        id?: string;
+        targetId?: string;
         type: string;
         title: string;
         url: string;
@@ -253,8 +268,11 @@ export class ChromeClient implements CDPClient, IChromeClient {
       // Update targets map
       this.targets.clear();
       for (const target of targets) {
-        this.targets.set(target.id, {
-          targetId: target.id,
+        // Handle Browserless format which uses targetId instead of id
+        const targetId = target.targetId || target.id || `target_${Date.now()}`;
+        
+        this.targets.set(targetId, {
+          targetId: targetId,
           type: target.type,
           title: target.title,
           url: target.url,
