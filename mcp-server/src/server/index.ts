@@ -108,7 +108,7 @@ export class CurupiraServer {
 
       // Create a session for the default page
       const targets = await this.chromeClient.getTargets()
-      const pageTarget = targets.find((t: any) => t.type === 'page')
+      const pageTarget = targets.find((t) => t.type === 'page')
       if (!pageTarget) {
         throw new Error('No page target found')
       }

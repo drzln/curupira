@@ -1,6 +1,6 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { setupUnifiedResourceHandlers } from './resources/index.js'
-import { setupComprehensiveToolHandlers } from './tools/comprehensive.js'
+import { setupUnifiedToolHandlers } from './tools/index.js'
 import { setupDebuggingPrompts } from './prompts/debugging.js'
 import { logger } from '../config/logger.js'
 
@@ -11,8 +11,8 @@ export function setupMCPHandlers(server: Server) {
   // Setup unified resource handlers with enhanced providers
   setupUnifiedResourceHandlers(server)
 
-  // Setup comprehensive tool handlers (includes basic + enhanced tools)
-  setupComprehensiveToolHandlers(server)
+  // Setup unified tool handlers with registry pattern
+  setupUnifiedToolHandlers(server)
 
   // Setup prompt templates
   setupDebuggingPrompts(server)

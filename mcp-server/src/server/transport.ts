@@ -121,7 +121,7 @@ export class TransportManager {
           'Connection': 'keep-alive',
         })
 
-        const transport = new SSEServerTransport('/mcp', reply.raw as any)
+        const transport = new SSEServerTransport('/mcp', reply.raw as import('stream').Writable)
         await this.server.connect(transport)
       })
 
@@ -169,7 +169,7 @@ export class TransportManager {
   /**
    * Handle HTTP message
    */
-  private async handleHttpMessage(message: any) {
+  private async handleHttpMessage(message: unknown) {
     // This would integrate with the MCP server to handle HTTP POST messages
     // For now, return a placeholder
     return {

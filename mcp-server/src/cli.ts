@@ -56,7 +56,7 @@ program
       // Create server options
       const serverOptions: ServerOptions = {
         configPath: options.config,
-        envConfig: {
+        config: {
           name: options.name,
           host: options.host,
           port: options.port,
@@ -147,7 +147,7 @@ program
       process.env.CURUPIRA_TRANSPORT_SSE = 'true'
       
       const server = new CurupiraServer({
-        envConfig: {
+        config: {
           name: 'curupira-dev',
           port: options.port,
           environment: 'development',

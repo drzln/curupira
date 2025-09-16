@@ -107,10 +107,10 @@ export function loadYamlConfig(configPath: string): Partial<ServerConfig> {
     
     // Configure transports based on YAML
     if (validatedConfig.transports) {
-      serverConfig.transports = {}
+      serverConfig.mcp = serverConfig.mcp || {}
       
       if (validatedConfig.transports.websocket?.enabled) {
-        serverConfig.transports.websocket = {
+        serverConfig.mcp.websocket = {
           enabled: validatedConfig.transports.websocket.enabled,
           path: validatedConfig.transports.websocket.path,
           enablePing: validatedConfig.transports.websocket.pingInterval !== undefined,
@@ -120,7 +120,7 @@ export function loadYamlConfig(configPath: string): Partial<ServerConfig> {
       }
       
       if (validatedConfig.transports.http?.enabled || validatedConfig.transports.sse?.enabled) {
-        serverConfig.transports.http = {
+        serverConfig.mcp.http = {
           enabled: true,
           httpPath: validatedConfig.transports.http?.path || '/mcp',
           ssePath: validatedConfig.transports.sse?.path || '/mcp/sse',
@@ -131,15 +131,16 @@ export function loadYamlConfig(configPath: string): Partial<ServerConfig> {
       }
     }
     
-    // Configure Chrome if specified
+    // Configure Chrome if specified (handled separately now)
     if (validatedConfig.chrome) {
-      serverConfig.chrome = {
+      // Chrome config is handled by ChromeManager
+      /* serverConfig.chrome = {
         enabled: validatedConfig.chrome.enabled,
         serviceUrl: validatedConfig.chrome.serviceUrl,
         connectTimeout: validatedConfig.chrome.connectTimeout,
         pageTimeout: validatedConfig.chrome.pageTimeout,
         defaultViewport: validatedConfig.chrome.defaultViewport,
-      }
+      } */
     }
     
     return serverConfig
@@ -169,9 +170,9 @@ export function mergeWithYamlConfig(
   return {
     ...baseConfig,
     ...yamlConfig,
-    transports: {
-      ...baseConfig.transports,
-      ...yamlConfig.transports,
+    mcp: {
+      ...baseConfig.mcp,
+      ...yamlConfig.mcp,
     },
   }
 }

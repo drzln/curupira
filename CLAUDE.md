@@ -344,16 +344,33 @@ npm run chrome:dev
 
 ## Deployment
 
+### Docker Hub Deployment (CANONICAL)
+
+**CRITICAL**: There is ONE canonical Dockerfile at the root of the curupira directory. All deployments MUST use Docker Hub via the npm run commands.
+
+```bash
+# Build and push to Docker Hub (multi-arch)
+npm run docker:build:push   # Builds and pushes with version tag
+
+# Or use the full release flow
+npm run release            # Quality checks + npm publish + Docker Hub push
+```
+
+**DO NOT**:
+- Create alternative Dockerfiles
+- Create custom deployment scripts
+- Deploy directly to Kubernetes
+- Use local Docker registries
+
+**ALWAYS**:
+- Use the root Dockerfile
+- Deploy via `npm run docker:build:push` or `npm run release`
+- Images go to Docker Hub: `drzzln/curupira:latest`
+
 ### Local Development
 ```bash
 npm run dev              # Start all services
-npm run dev:docker       # Use Docker instead
-```
-
-### Staging Deployment
-```bash
-npm run deploy:staging   # Build and deploy to k8s
-npm run deploy:check     # Verify deployment
+npm run dev:docker       # Use Docker Compose with Docker Hub image
 ```
 
 ## Common NPM Scripts

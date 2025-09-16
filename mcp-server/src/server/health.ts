@@ -115,8 +115,25 @@ export class HealthChecker {
       }
 
       // Try to get version info
-      const version = await this.chromeClient.send<any>('Browser.getVersion')
-      const targets = await this.chromeClient.send<any>('Target.getTargets')
+      interface BrowserVersion {
+        product?: string;
+        userAgent?: string;
+        jsVersion?: string;
+      }
+      
+      interface TargetInfo {
+        targetId: string;
+        type: string;
+        title: string;
+        url: string;
+      }
+      
+      interface GetTargetsResult {
+        targetInfos?: TargetInfo[];
+      }
+      
+      const version = await this.chromeClient.send<BrowserVersion>('Browser.getVersion')
+      const targets = await this.chromeClient.send<GetTargetsResult>('Target.getTargets')
 
       return {
         connected: true,

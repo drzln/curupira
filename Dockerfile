@@ -71,8 +71,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Metadata
 LABEL org.opencontainers.image.source="https://github.com/drzln/curupira"
-LABEL org.opencontainers.image.description="Curupira MCP Server - AI-powered debugging for React applications"
+LABEL org.opencontainers.image.description="Curupira MCP Server - Enhanced CDP-native MCP debugging platform with 85+ resources and 40+ tools"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.version="1.2.0-enhanced"
+LABEL curupira.features="cdp,react,xstate,zustand,apollo,connectivity"
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
