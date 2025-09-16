@@ -1,6 +1,6 @@
 {
   "name": "curupira",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "MCP Frontend Debugging Tool - AI-powered debugging for React applications",
   "private": false,
   "type": "module",
@@ -34,6 +34,7 @@
     "docker:push:latest": "docker buildx build --platform linux/amd64,linux/arm64 -t drzzln/curupira:latest --push .",
     "docker:push:version": "docker buildx build --platform linux/amd64,linux/arm64 -t drzzln/curupira:$(node -p \"require('./package.json').version\") --push .",
     "docker:push:both": "docker buildx build --platform linux/amd64,linux/arm64 -t drzzln/curupira:latest -t drzzln/curupira:$(node -p \"require('./package.json').version\") --push .",
+    "docker:push:both:bump": "npm run version:bump:patch && npm run docker:push:both",
     "version:bump:patch": "npm version patch --no-git-tag-version",
     "version:bump:minor": "npm version minor --no-git-tag-version",
     "version:bump:major": "npm version major --no-git-tag-version",
