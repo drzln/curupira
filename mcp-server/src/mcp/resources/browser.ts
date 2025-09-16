@@ -42,7 +42,7 @@ export function setupBrowserResource(server: Server) {
                 connected: status.connected,
                 serviceUrl: status.serviceUrl,
                 activeSessions: status.activeSessions,
-                sessions: status.sessions.map(s => ({
+                sessions: status.sessions.map((s: any) => ({
                   sessionId: s.sessionId,
                   createdAt: s.createdAt.toISOString(),
                   duration: Date.now() - s.createdAt.getTime()

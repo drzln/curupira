@@ -551,7 +551,7 @@ export class PerformanceToolProvider extends BaseToolProvider implements ToolPro
             
             // Format CDP metrics
             const cdpMetrics: Record<string, number> = {}
-            metrics.metrics.forEach(metric => {
+            metrics.metrics.forEach((metric: { name: string; value: number }) => {
               cdpMetrics[metric.name] = metric.value
             })
             

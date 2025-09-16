@@ -7,7 +7,8 @@
  */
 
 import { Command } from 'commander'
-import { CurupiraServer, ServerOptions } from './server.js'
+import { CurupiraServer, ServerOptions } from './server/server.js'
+import { createApplicationContainer, registerToolProviders, registerResourceProviders } from './infrastructure/container/app.container.js'
 import { createLogger } from '@curupira/shared/logging'
 import type { LogLevel } from '@curupira/shared/types'
 
@@ -69,19 +70,11 @@ program
         autoDetectedPort: !options.port 
       }, 'Starting Curupira MCP server with smart defaults')
 
-      // Create server options with smart defaults
-      const serverOptions: ServerOptions = {
-        configPath: options.config,
-        config: {
-          name: options.name,
-          host: options.host,
-          port: port,
-          environment: options.env,
-          logLevel: parseLogLevel(options.logLevel),
-          healthCheck: options.health,
-        }
-      }
-
+      // Configure environment based on options
+      if (options.host) process.env.HOST = options.host
+      if (port) process.env.PORT = port.toString()
+      if (options.logLevel) process.env.LOG_LEVEL = options.logLevel
+      
       // Configure transports via environment variables if CLI flags are used
       if (!options.websocket) {
         process.env.CURUPIRA_TRANSPORT_WEBSOCKET = 'false'
@@ -90,8 +83,13 @@ program
         process.env.CURUPIRA_TRANSPORT_SSE = 'false'
       }
 
+      // Create container and register providers
+      const container = createApplicationContainer()
+      registerToolProviders(container)
+      registerResourceProviders(container)
+      
       // Create server
-      const server = new CurupiraServer(serverOptions)
+      const server = new CurupiraServer(container)
 
       // Set up graceful shutdown
       process.on('SIGTERM', async () => {
@@ -160,7 +158,7 @@ program
       console.log(`   URL: ${baseUrl}`)
       console.log(`   MCP WebSocket: ws://localhost:${new URL(baseUrl).port}/mcp`)
       console.log(`   MCP SSE: ${baseUrl}/mcp/sse`)
-      console.log(`   Uptime: ${health.uptime || 'Unknown'}`)
+      console.log(`   Uptime: ${(health as any).uptime || 'Unknown'}`)
       console.log('')
       
       if (options.tools) {
@@ -340,14 +338,12 @@ program
       process.env.CURUPIRA_TRANSPORT_HTTP = 'true'
       process.env.CURUPIRA_TRANSPORT_SSE = 'true'
       
-      const server = new CurupiraServer({
-        config: {
-          name: 'curupira-dev',
-          port: options.port,
-          environment: 'development',
-          logLevel: 'debug',
-        }
-      })
+      // Create container and register providers
+      const container = createApplicationContainer()
+      registerToolProviders(container)
+      registerResourceProviders(container)
+      
+      const server = new CurupiraServer(container)
       
       await server.start()
 

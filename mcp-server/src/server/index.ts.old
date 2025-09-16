@@ -62,11 +62,7 @@ export class CurupiraServer {
       }
     )
 
-    this.chromeClient = new ChromeClient({
-      host: 'localhost',
-      port: 9222,
-      secure: false
-    })
+    this.chromeClient = new ChromeClient(logger)
     this.handler = new MCPHandler()
     this.healthChecker = new HealthChecker(this.chromeClient)
     

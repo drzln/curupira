@@ -18,7 +18,15 @@
     "esModuleInterop": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"],
+  "exclude": [
+    "node_modules", 
+    "dist", 
+    "**/*.test.ts", 
+    "**/*.spec.ts",
+    "src/archive/**",
+    "src/mcp/discovery/**",
+    "src/**/*.old"
+  ],
   "references": [
     { "path": "../shared" }
   ]

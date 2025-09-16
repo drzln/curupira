@@ -4,8 +4,8 @@
  * Provides comprehensive health status for the MCP server
  */
 
-import type { ChromeClient } from '../chrome/client.js'
-import { logger } from '../config/logger.js'
+import type { IChromeService } from '../core/interfaces/chrome-service.interface.js'
+import type { ILogger } from '../core/interfaces/logger.interface.js'
 
 export interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy'
@@ -37,12 +37,14 @@ export interface HealthStatus {
 
 export class HealthChecker {
   private startTime: number = Date.now()
-  private chromeClient: ChromeClient
+  private chromeService: IChromeService
   private resourceCount: number = 0
   private toolCount: number = 0
+  private logger: ILogger
 
-  constructor(chromeClient: ChromeClient) {
-    this.chromeClient = chromeClient
+  constructor(chromeService: IChromeService, logger?: ILogger) {
+    this.chromeService = chromeService
+    this.logger = logger || console as any
   }
 
   /**
@@ -108,9 +110,15 @@ export class HealthChecker {
    */
   private async checkChrome(): Promise<HealthStatus['checks']['chrome']> {
     try {
-      const isConnected = this.chromeClient.getState() === 'connected'
+      const isConnected = this.chromeService.isConnected()
       
       if (!isConnected) {
+        return { connected: false }
+      }
+
+      // Get Chrome client to check version and targets
+      const client = this.chromeService.getCurrentClient()
+      if (!client) {
         return { connected: false }
       }
 
@@ -132,8 +140,8 @@ export class HealthChecker {
         targetInfos?: TargetInfo[];
       }
       
-      const version = await this.chromeClient.send<BrowserVersion>('Browser.getVersion')
-      const targets = await this.chromeClient.send<GetTargetsResult>('Target.getTargets')
+      const version = await client.send<BrowserVersion>('Browser.getVersion')
+      const targets = await client.send<GetTargetsResult>('Target.getTargets')
 
       return {
         connected: true,
@@ -141,7 +149,7 @@ export class HealthChecker {
         targets: targets?.targetInfos?.length || 0,
       }
     } catch (error) {
-      logger.error({ error }, 'Chrome health check failed')
+      this.logger.error({ error }, 'Chrome health check failed')
       return { connected: false }
     }
   }
@@ -198,7 +206,7 @@ export class HealthChecker {
       memory_heap_total_bytes: memoryUsage.heapTotal,
       memory_external_bytes: memoryUsage.external,
       memory_rss_bytes: memoryUsage.rss,
-      chrome_connected: this.chromeClient.getState() === 'connected' ? 1 : 0,
+      chrome_connected: this.chromeService.isConnected() ? 1 : 0,
       resources_count: this.resourceCount,
       tools_count: this.toolCount,
     }

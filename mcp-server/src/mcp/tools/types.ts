@@ -5,7 +5,7 @@
 
 import type { SessionId } from '@curupira/shared/types'
 import type { ToolHandler, ToolResult } from './registry.js'
-import type { BaseToolProvider } from './providers/base.js'
+import type { BaseToolProvider } from './base-tool-provider.js'
 
 /**
  * Enhanced tool handler with properly bound methods from BaseToolProvider

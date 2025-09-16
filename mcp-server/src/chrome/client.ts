@@ -5,7 +5,7 @@
 
 import { WebSocket } from 'ws';
 import { EventEmitter } from 'events';
-import { logger } from '../config/logger.js';
+import type { ILogger } from '../core/interfaces/logger.interface.js';
 import type {
   CDPClient,
   CDPConnectionOptions,
@@ -39,7 +39,11 @@ interface InternalSession extends CDPSession {
 }
 
 export class ChromeClient implements CDPClient, IChromeClient {
-  private config: CDPConnectionOptions;
+  private config: CDPConnectionOptions = { 
+    host: 'localhost',
+    port: 9222,
+    timeout: 30000
+  };
   private sessions: Map<string, InternalSession> = new Map();
   private state: CDPConnectionState = 'disconnected';
   private messageId: number = 1;
@@ -49,16 +53,11 @@ export class ChromeClient implements CDPClient, IChromeClient {
 
   private eventEmitter = new EventEmitter();
 
-  constructor(config: CDPConnectionOptions) {
-    this.config = {
-      timeout: 30000,
-      ...config
-    };
-  }
+  constructor(private readonly logger: ILogger) {}
 
   async connect(options?: CDPConnectionOptions): Promise<void> {
     if (this.state === 'connected') {
-      logger.warn('Already connected to Chrome');
+      this.logger.warn('Already connected to Chrome');
       return;
     }
 
@@ -86,7 +85,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
       }
       
       const versionInfo = await response.json();
-      logger.info('Chrome version info', versionInfo);
+      this.logger.info({ versionInfo }, 'Chrome version info');
       
       // Discover available targets
       await this.updateTargets();
@@ -97,7 +96,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
     } catch (error) {
       this.state = 'error';
       this.eventEmitter.emit('stateChange', this.state);
-      logger.error('Failed to connect to Chrome', error);
+      this.logger.error({ error }, 'Failed to connect to Chrome');
       throw error;
     }
   }
@@ -166,7 +165,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
           });
 
           ws.on('error', (error) => {
-            logger.error('WebSocket error', { sessionId, error });
+            this.logger.error({ sessionId, error }, 'WebSocket error');
             this.eventEmitter.emit('sessionError', { sessionId, error });
           });
 
@@ -191,7 +190,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
         });
       });
     } catch (error) {
-      logger.error('Failed to create session', error);
+      this.logger.error({ error }, 'Failed to create session');
       throw error;
     }
   }
@@ -206,7 +205,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
       session.ws.close();
       this.cleanupSession(sessionId);
     } catch (error) {
-      logger.error('Failed to close session', { sessionId, error });
+      this.logger.error({ sessionId, error }, 'Failed to close session');
     }
   }
 
@@ -268,7 +267,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
 
       this.eventEmitter.emit('targetsUpdated', Array.from(this.targets.values()));
     } catch (error) {
-      logger.error('Failed to update targets', error);
+      this.logger.error({ error }, 'Failed to update targets');
       throw error;
     }
   }
@@ -525,7 +524,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
             try {
               handler(params);
             } catch (error) {
-              logger.error('Event handler error', { sessionId, event, error });
+              this.logger.error({ sessionId, event, error }, 'Event handler error');
             }
           }
         }
@@ -534,7 +533,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
         this.eventEmitter.emit(event, { sessionId, ...params });
       }
     } catch (error) {
-      logger.error('Failed to parse CDP message', { sessionId, error });
+      this.logger.error({ sessionId, error }, 'Failed to parse CDP message');
     }
   }
 

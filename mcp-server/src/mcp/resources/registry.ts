@@ -6,6 +6,9 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import type { Resource } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
+import type { ResourceHandler, ResourceContent } from './types.js'
+
+export type { ResourceHandler, ResourceContent } from './types.js'
 
 export interface ResourceProvider {
   name: string
@@ -39,7 +42,7 @@ export class ResourceRegistry {
     return resources
   }
   
-  async readResource(uri: string): Promise<unknown> {
+  async readResource(uri: string): Promise<ResourceContent> {
     // Extract provider name from URI (e.g., "cdp/runtime/console" -> "cdp")
     const [providerName] = uri.split('/')
     const provider = this.providers.get(providerName)
@@ -48,11 +51,27 @@ export class ResourceRegistry {
       throw new Error(`No provider registered for URI: ${uri}`)
     }
     
-    return provider.readResource(uri)
+    const data = await provider.readResource(uri)
+    
+    // Wrap the data in ResourceContent format if not already
+    if (data && typeof data === 'object' && 'uri' in data && ('text' in data || 'data' in data)) {
+      return data as ResourceContent
+    }
+    
+    return {
+      uri,
+      mimeType: 'application/json',
+      data
+    }
   }
   
   getProviders(): ResourceProvider[] {
     return Array.from(this.providers.values())
+  }
+
+  getHandler(uri: string): ResourceHandler | undefined {
+    // For now, we don't track individual handlers, only providers
+    return undefined
   }
 }
 

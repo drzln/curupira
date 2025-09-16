@@ -1,0 +1,189 @@
+/**
+ * Base Tool Provider - Level 2 (MCP Core)
+ * Abstract base class for all tool providers with common patterns
+ */
+
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolResult, ToolHandler, ToolProvider } from './registry.js';
+import type { IChromeService } from '../../core/interfaces/chrome-service.interface.js';
+import type { ILogger } from '../../core/interfaces/logger.interface.js';
+import type { IValidator } from '../../core/interfaces/validator.interface.js';
+import type { Schema } from '../../core/interfaces/validator.interface.js';
+import type { SessionId } from '@curupira/shared/types';
+import { Result } from '../../core/result.js';
+import { ValidationError } from '../../core/errors/validation.error.js';
+import { ChromeConnectionError } from '../../core/errors/chrome.errors.js';
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  argsSchema: Schema<any>;
+  handler: (args: any, context: ExecutionContext) => Promise<ToolResult>;
+}
+
+export interface ExecutionContext {
+  sessionId: SessionId;
+  chromeClient: any; // Will be typed properly when we have the typed client
+  logger: ILogger;
+}
+
+export interface BaseToolProviderConfig {
+  name: string;
+  description: string;
+}
+
+export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = BaseToolProviderConfig> 
+  implements ToolProvider {
+  
+  protected readonly tools = new Map<string, ToolDefinition>();
+  
+  constructor(
+    protected readonly chromeService: IChromeService,
+    protected readonly logger: ILogger,
+    protected readonly validator: IValidator,
+    protected readonly config: TConfig
+  ) {
+    this.initializeTools();
+  }
+
+  get name(): string {
+    return this.config.name;
+  }
+
+  /**
+   * Initialize tools - must be implemented by subclasses
+   */
+  protected abstract initializeTools(): void;
+
+  /**
+   * Register a tool definition
+   */
+  protected registerTool(definition: ToolDefinition): void {
+    this.tools.set(definition.name, definition);
+    this.logger.debug(
+      { provider: this.name, tool: definition.name },
+      'Tool registered'
+    );
+  }
+
+  /**
+   * List all tools provided by this provider
+   */
+  listTools(): Tool[] {
+    return Array.from(this.tools.values()).map(def => ({
+      name: def.name,
+      description: def.description,
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }));
+  }
+
+  /**
+   * Get a handler for a specific tool
+   */
+  getHandler(toolName: string): ToolHandler | undefined {
+    const definition = this.tools.get(toolName);
+    if (!definition) {
+      return undefined;
+    }
+
+    return {
+      name: definition.name,
+      description: definition.description,
+      execute: async (args: Record<string, unknown>) => {
+        // Validate arguments
+        const validationResult = this.validator.validateAndTransform(
+          args,
+          definition.argsSchema,
+          `${this.name}.${toolName}`
+        );
+
+        if (validationResult.isErr()) {
+          return {
+            success: false,
+            error: validationResult.unwrapErr().message
+          };
+        }
+
+        // Get or create session
+        const sessionResult = await this.getOrCreateSession(
+          (args.sessionId as string) || undefined
+        );
+
+        if (sessionResult.isErr()) {
+          return {
+            success: false,
+            error: sessionResult.unwrapErr().message
+          };
+        }
+
+        // Create execution context
+        const context: ExecutionContext = {
+          sessionId: sessionResult.unwrap().sessionId,
+          chromeClient: sessionResult.unwrap().client,
+          logger: this.logger.child({ 
+            tool: toolName,
+            provider: this.name 
+          })
+        };
+
+        // Execute the tool
+        try {
+          return await definition.handler(validationResult.unwrap(), context);
+        } catch (error) {
+          this.logger.error(
+            { error, tool: toolName, provider: this.name },
+            'Tool execution failed'
+          );
+
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Tool execution failed'
+          };
+        }
+      }
+    };
+  }
+
+  /**
+   * Get or create a Chrome session
+   */
+  protected async getOrCreateSession(
+    sessionId?: string
+  ): Promise<Result<{ sessionId: SessionId; client: any }, ChromeConnectionError>> {
+    const client = this.chromeService.getCurrentClient();
+    
+    if (!client) {
+      return Result.err(ChromeConnectionError.notConnected());
+    }
+
+    // For now, use a default session ID
+    // In the future, this will properly manage sessions
+    const defaultSessionId = 'default' as SessionId;
+
+    return Result.ok({
+      sessionId: sessionId as SessionId || defaultSessionId,
+      client
+    });
+  }
+
+  /**
+   * Helper method to create a tool definition with automatic validation
+   */
+  protected createTool<TArgs>(
+    name: string,
+    description: string,
+    argsSchema: Schema<TArgs>,
+    handler: (args: TArgs, context: ExecutionContext) => Promise<ToolResult>
+  ): ToolDefinition {
+    return {
+      name,
+      description,
+      argsSchema,
+      handler: handler as any
+    };
+  }
+}

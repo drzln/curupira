@@ -94,6 +94,10 @@ export class ToolRegistry {
   getProviders(): ToolProvider[] {
     return Array.from(this.providers.values())
   }
+
+  getHandler(name: string): ToolHandler | undefined {
+    return this.handlers.get(name)
+  }
 }
 
 // Singleton instance

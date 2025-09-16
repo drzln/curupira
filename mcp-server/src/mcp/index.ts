@@ -1,22 +1,11 @@
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { setupUnifiedResourceHandlers } from './resources/index.js'
-import { setupUnifiedToolHandlers } from './tools/index.js'
-import { setupDebuggingPrompts } from './prompts/debugging.js'
-import { logger } from '../config/logger.js'
+/**
+ * MCP Index Shim - Temporary compatibility layer
+ * @deprecated This file is no longer used. MCP setup is handled through DI in server/server.ts
+ */
 
-export function setupMCPHandlers(server: Server) {
-  logger.info('Setting up enhanced MCP handlers')
-  console.log('[MCP] Server instance:', server)
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { logger } from '../config/logger.js';
 
-  // Setup unified resource handlers with enhanced providers
-  setupUnifiedResourceHandlers(server)
-
-  // Setup unified tool handlers with registry pattern
-  setupUnifiedToolHandlers(server)
-
-  // Setup prompt templates
-  setupDebuggingPrompts(server)
-
-  logger.info('Enhanced MCP handlers setup complete')
-  console.log('[MCP] Enhanced handlers registered successfully')
+export function setupMCPHandlers(server: Server): void {
+  logger.warn('setupMCPHandlers is deprecated. MCP setup is now handled through dependency injection.');
 }

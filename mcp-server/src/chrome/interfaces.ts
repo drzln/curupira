@@ -5,6 +5,8 @@
 
 import type { SessionId, TargetId, CDPConnectionOptions } from '@curupira/shared/types'
 
+export type ConnectionOptions = CDPConnectionOptions
+
 export interface ConnectionStatus {
   connected: boolean
   serviceUrl: string | null
@@ -23,6 +25,16 @@ export interface EvaluateOptions {
   awaitPromise?: boolean
   userGesture?: boolean
   silent?: boolean
+  includeCommandLineAPI?: boolean
+  generatePreview?: boolean
+  objectGroup?: string
+  contextId?: number
+  throwOnSideEffect?: boolean
+  timeout?: number
+  disableBreaks?: boolean
+  replMode?: boolean
+  allowUnsafeEvalBlockedByCSP?: boolean
+  uniqueContextId?: string
 }
 
 export interface EvaluateResult {
@@ -30,12 +42,19 @@ export interface EvaluateResult {
     type: string
     value?: any
     objectId?: string
+    className?: string
+    preview?: any
+    description?: string
+    unserializableValue?: string
   }
   exceptionDetails?: {
     text: string
     lineNumber?: number
     columnNumber?: number
     scriptId?: string
+    stackTrace?: any
+    exception?: any
+    executionContextId?: number
   }
 }
 

@@ -19,6 +19,8 @@ export interface TransportOptions {
   type: TransportType
   port?: number
   corsOrigins?: string[]
+  enableSSE?: boolean
+  enableWS?: boolean
   healthChecker?: HealthChecker
   securityManager?: SecurityManager
 }

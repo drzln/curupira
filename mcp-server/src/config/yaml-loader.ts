@@ -5,7 +5,7 @@
 import { readFileSync, existsSync } from 'fs'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-import type { ServerConfig } from '../server.js'
+import type { ServerConfig } from '../server/server.js'
 
 /**
  * YAML configuration schema

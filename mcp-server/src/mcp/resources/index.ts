@@ -7,10 +7,8 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
 import { getResourceRegistry } from './registry.js'
-import { CDPResourceProviderImpl } from './providers/cdp-resources.js'
-import { ReactResourceProviderImpl } from './providers/react-resources.js'
-import { StateResourceProviderImpl } from './providers/state-resources.js'
-import { ConnectivityTroubleshootingProvider } from './providers/connectivity.js'
+// Old provider implementations have been archived
+// TODO: Create new DI-based resource providers
 
 export function setupUnifiedResourceHandlers(server: Server) {
   logger.info('Setting up unified resource handlers with registry pattern')
@@ -18,13 +16,8 @@ export function setupUnifiedResourceHandlers(server: Server) {
   // Initialize the registry
   const registry = getResourceRegistry()
   
-  // Register all resource providers
-  registry.register(new CDPResourceProviderImpl())
-  registry.register(new ReactResourceProviderImpl())
-  registry.register(new StateResourceProviderImpl())
-  
-  // Register connectivity provider directly (it already implements ResourceProvider interface)
-  const connectivityProvider = new ConnectivityTroubleshootingProvider()
+  // TODO: Register DI-based resource providers
+  // For now, registering basic providers until DI system is complete
   registry.register({
     name: 'connectivity',
     async listResources() {

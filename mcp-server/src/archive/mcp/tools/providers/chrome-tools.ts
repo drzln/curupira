@@ -11,6 +11,7 @@ import { logger } from '../../../config/logger.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
 import { BaseToolProvider } from './base.js'
 import * as ChromeRemoteInterface from 'chrome-remote-interface'
+import type { ExtendedTarget } from '../../../core/types/chrome-extensions.js'
 
 export interface ChromeInstance {
   id: string
@@ -36,6 +37,15 @@ export interface ChromeConnectionResult {
   sessionId?: string
   message: string
   capabilities?: string[]
+}
+
+export interface ExtendedToolResult extends ToolResult {
+  data?: any & {
+    troubleshooting?: string[]
+    nextSteps?: string[]
+    connectionInfo?: any
+    errorType?: string
+  }
 }
 
 // Utility functions
@@ -208,7 +218,7 @@ export class ChromeToolProvider extends BaseToolProvider implements ToolProvider
                   // Use chrome-remote-interface to discover instances
                   const targets = await ChromeRemoteInterface.List({ host, port })
                   
-                  for (const target of targets) {
+                  for (const target of targets as ExtendedTarget[]) {
                     if (target.type === 'page') {
                       instances.push({
                         id: target.id,
@@ -312,11 +322,12 @@ export class ChromeToolProvider extends BaseToolProvider implements ToolProvider
         return {
           name: toolName,
           description: 'Connect to a Chrome instance',
-          async execute(args: Record<string, unknown>): Promise<ToolResult<ChromeConnectionResult>> {
+          async execute(args: Record<string, unknown>): Promise<ExtendedToolResult> {
+            const instanceId = args.instanceId as string
+            const host = (args.host as string) || 'localhost'
+            const port = (args.port as number) || 9222
+            
             try {
-              const instanceId = args.instanceId as string
-              const host = (args.host as string) || 'localhost'
-              const port = (args.port as number) || 9222
 
               logger.info({ instanceId, host, port }, 'Connecting to Chrome instance')
 

@@ -1,243 +1,206 @@
 /**
- * Common Handler Patterns - Phase 5: DRY Implementation
- * Level 2: MCP Core (reusable patterns)
+ * Common Tool Handler Patterns - Level 2 (MCP Core)
+ * Reusable patterns to eliminate code duplication across providers
  */
 
-import type { SessionId } from '@curupira/shared/types'
-import type { ToolHandler, ToolResult } from '../registry.js'
-import type { BaseToolProvider } from '../providers/base.js'
-import { validateAndCast, type JSONSchema } from '../validation.js'
-import { ChromeManager } from '../../../chrome/manager.js'
+import type { ToolResult } from '../registry.js';
+import type { ExecutionContext } from '../base-tool-provider.js';
+import type { ILogger } from '../../../core/interfaces/logger.interface.js';
+import type { IValidator, Schema } from '../../../core/interfaces/validator.interface.js';
+import { Result } from '../../../core/result.js';
+import { ChromeConnectionError } from '../../../core/errors/chrome.errors.js';
+
+export interface WithSessionOptions<TArgs> {
+  name: string;
+  validator: IValidator;
+  argsSchema: Schema<TArgs>;
+  handler: (args: TArgs, context: ExecutionContext) => Promise<ToolResult>;
+}
 
 /**
- * Common handler patterns to eliminate code duplication across providers
+ * Common pattern for tools that need session and validation
  */
-export const HandlerPatterns = {
-  /**
-   * Standard session-aware handler with validation
-   */
-  withSessionAndValidation<TArgs extends { sessionId?: string }, TResult = unknown>(
-    argSchema: JSONSchema,
-    toolName: string,
-    handler: (this: BaseToolProvider, args: TArgs, sessionId: SessionId) => Promise<ToolResult<TResult>>
-  ): ToolHandler['execute'] {
-    return async function(this: BaseToolProvider, args: Record<string, unknown>): Promise<ToolResult<TResult>> {
-      try {
-        const validArgs = validateAndCast<TArgs>(args, argSchema, toolName)
-        const sessionId = await this.getSessionId(validArgs.sessionId)
-        return await handler.call(this, validArgs, sessionId)
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Handler execution failed'
-        }
-      }
+export async function withSessionAndValidation<TArgs>(
+  args: Record<string, unknown>,
+  options: WithSessionOptions<TArgs>
+): Promise<ToolResult> {
+  // Validate arguments
+  const validationResult = options.validator.validateAndTransform(
+    args,
+    options.argsSchema,
+    options.name
+  );
+
+  if (validationResult.isErr()) {
+    return {
+      success: false,
+      error: validationResult.unwrapErr().message
+    };
+  }
+
+  // This would be called within a provider context that has session management
+  // For now, we'll make this a building block that providers can use
+  return {
+    success: false,
+    error: 'Session management must be implemented by provider'
+  };
+}
+
+/**
+ * Common pattern for library presence checks
+ */
+export async function withLibraryCheck(
+  libraryName: string,
+  checkExpression: string,
+  context: ExecutionContext
+): Promise<Result<boolean, string>> {
+  try {
+    const client = context.chromeClient;
+    const result = await client.send('Runtime.evaluate', {
+      expression: checkExpression,
+      returnByValue: true
+    }, context.sessionId);
+
+    if (result.exceptionDetails) {
+      return Result.err(`Library check failed: ${result.exceptionDetails.text}`);
     }
-  },
 
-  /**
-   * Library-dependent handler with availability check
-   */
-  withLibraryCheck<TArgs extends { sessionId?: string }, TResult = unknown>(
-    argSchema: JSONSchema,
-    toolName: string,
-    libraryCheck: string,
-    libraryName: string,
-    handler: (this: BaseToolProvider, args: TArgs, sessionId: SessionId) => Promise<ToolResult<TResult>>
-  ): ToolHandler['execute'] {
-    return HandlerPatterns.withSessionAndValidation<TArgs, TResult>(
-      argSchema, 
-      toolName, 
-      async function(args, sessionId) {
-        const check = await this.checkLibraryAvailable(libraryCheck, sessionId, libraryName)
-        if (!check.available) {
-          return { 
-            success: false, 
-            error: check.error || `${libraryName} not available` 
-          }
-        }
-        return await handler.call(this, args, sessionId)
-      }
-    )
-  },
-
-  /**
-   * CDP command execution with type safety
-   */
-  withCDPCommand<TArgs extends { sessionId?: string }, TCommand = any, TResult = unknown>(
-    argSchema: JSONSchema,
-    toolName: string,
-    command: string,
-    commandBuilder: (args: TArgs) => TCommand,
-    resultTransformer?: (result: any) => TResult
-  ): ToolHandler['execute'] {
-    return HandlerPatterns.withSessionAndValidation<TArgs, TResult>(
-      argSchema, 
-      toolName, 
-      async function(args, sessionId) {
-        const manager = ChromeManager.getInstance()
-        const client = manager.getClient()
-        
-        const commandParams = commandBuilder(args)
-        const result = await client.send(command, commandParams as unknown as Record<string, unknown>, sessionId)
-        
-        const transformedData = resultTransformer ? resultTransformer(result) : result as TResult
-        return { success: true, data: transformedData }
-      }
-    )
-  },
-
-  /**
-   * Script execution handler with result parsing
-   */
-  withScriptExecution<TArgs extends { sessionId?: string }, TResult = unknown>(
-    argSchema: JSONSchema,
-    toolName: string,
-    scriptBuilder: (args: TArgs) => string,
-    resultParser?: (result: any) => TResult
-  ): ToolHandler['execute'] {
-    return HandlerPatterns.withSessionAndValidation<TArgs, TResult>(
-      argSchema,
-      toolName,
-      async function(args, sessionId) {
-        const script = scriptBuilder(args)
-        const result = await this.executeScript(script, sessionId)
-        
-        if (!result.success) {
-          return result as ToolResult<TResult>
-        }
-        
-        const parsedData = resultParser && result.data 
-          ? resultParser(result.data) 
-          : result.data as TResult
-          
-        return { 
-          success: true, 
-          data: parsedData,
-          warnings: result.warnings 
-        }
-      }
-    )
-  },
-
-  /**
-   * DOM operation handler with automatic DOM enablement
-   */
-  withDOMOperation<TArgs extends { sessionId?: string }, TResult = unknown>(
-    argSchema: JSONSchema,
-    toolName: string,
-    operation: (client: any, args: TArgs, sessionId: SessionId) => Promise<TResult>
-  ): ToolHandler['execute'] {
-    return HandlerPatterns.withSessionAndValidation<TArgs, TResult>(
-      argSchema,
-      toolName,
-      async function(args, sessionId) {
-        const manager = ChromeManager.getInstance()
-        const client = manager.getClient()
-        
-        // Enable DOM domain
-        await client.send('DOM.enable', {}, sessionId)
-        
-        const result = await operation(client, args, sessionId)
-        return { success: true, data: result }
-      }
-    )
-  },
-
-  /**
-   * Console operation handler with result formatting
-   */
-  withConsoleOperation<TArgs extends { sessionId?: string }, TResult = unknown>(
-    argSchema: JSONSchema,
-    toolName: string,
-    operation: (client: any, args: TArgs, sessionId: SessionId) => Promise<any>,
-    formatResult: (raw: any) => TResult
-  ): ToolHandler['execute'] {
-    return HandlerPatterns.withSessionAndValidation<TArgs, TResult>(
-      argSchema,
-      toolName,
-      async function(args, sessionId) {
-        const manager = ChromeManager.getInstance()
-        const client = manager.getClient()
-        
-        // Enable necessary domains
-        await client.send('Runtime.enable', {}, sessionId)
-        await client.send('Console.enable', {}, sessionId)
-        
-        const raw = await operation(client, args, sessionId)
-        const formatted = formatResult(raw)
-        
-        return { success: true, data: formatted }
-      }
-    )
+    return Result.ok(result.result.value === true);
+  } catch (error) {
+    return Result.err(`Failed to check ${libraryName}: ${error}`);
   }
 }
 
 /**
- * Type-safe handler builder for creating tool handlers
+ * Common pattern for CDP command execution with error handling
  */
-export class HandlerBuilder<TProvider extends BaseToolProvider> {
-  constructor(private provider: TProvider) {}
+export async function withCDPCommand<TParams, TResult>(
+  method: string,
+  params: TParams,
+  context: ExecutionContext
+): Promise<Result<TResult, string>> {
+  try {
+    const client = context.chromeClient;
+    const result = await client.send(method, params, context.sessionId);
+    return Result.ok(result);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    context.logger.error(
+      { method, params, error: errorMessage },
+      'CDP command failed'
+    );
+    return Result.err(`CDP command ${method} failed: ${errorMessage}`);
+  }
+}
 
-  /**
-   * Build a handler with validation
-   */
-  validated<TArgs extends { sessionId?: string }, TResult = unknown>(
-    name: string,
-    description: string,
-    argSchema: JSONSchema,
-    handler: (this: TProvider, args: TArgs, sessionId: SessionId) => Promise<ToolResult<TResult>>
-  ): ToolHandler {
-    return {
-      name,
-      description,
-      execute: HandlerPatterns.withSessionAndValidation(argSchema, name, handler as (this: BaseToolProvider, args: TArgs, sessionId: SessionId) => Promise<ToolResult<TResult>>).bind(this.provider)
+/**
+ * Common pattern for script execution with result formatting
+ */
+export async function withScriptExecution<TResult = any>(
+  script: string,
+  context: ExecutionContext,
+  options: {
+    awaitPromise?: boolean;
+    returnByValue?: boolean;
+    includeCommandLineAPI?: boolean;
+  } = {}
+): Promise<Result<TResult, string>> {
+  const evaluateOptions = {
+    expression: script,
+    awaitPromise: options.awaitPromise ?? true,
+    returnByValue: options.returnByValue ?? true,
+    includeCommandLineAPI: options.includeCommandLineAPI ?? false
+  };
+
+  const result = await withCDPCommand<any, any>(
+    'Runtime.evaluate',
+    evaluateOptions,
+    context
+  );
+
+  if (result.isErr()) {
+    return Result.err(result.unwrapErr());
+  }
+
+  const evaluateResult = result.unwrap();
+
+  if (evaluateResult.exceptionDetails) {
+    return Result.err(
+      `Script execution error: ${evaluateResult.exceptionDetails.text}`
+    );
+  }
+
+  return Result.ok(evaluateResult.result.value);
+}
+
+/**
+ * Common pattern for DOM operations
+ */
+export async function withDOMOperation<TResult>(
+  operation: () => Promise<TResult>,
+  context: ExecutionContext,
+  domReadyCheck: boolean = true
+): Promise<Result<TResult, string>> {
+  // Enable DOM domain if needed
+  if (domReadyCheck) {
+    const enableResult = await withCDPCommand(
+      'DOM.enable',
+      {},
+      context
+    );
+
+    if (enableResult.isErr()) {
+      return Result.err(enableResult.unwrapErr());
     }
   }
 
-  /**
-   * Build a CDP command handler
-   */
-  cdpCommand<TArgs extends { sessionId?: string }, TResult = unknown>(
-    name: string,
-    description: string,
-    argSchema: JSONSchema,
-    command: string,
-    commandBuilder: (args: TArgs) => any,
-    resultTransformer?: (result: any) => TResult
-  ): ToolHandler {
-    return {
-      name,
-      description,
-      execute: HandlerPatterns.withCDPCommand(
-        argSchema,
-        name,
-        command,
-        commandBuilder,
-        resultTransformer
-      ).bind(this.provider)
+  try {
+    const result = await operation();
+    return Result.ok(result);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return Result.err(`DOM operation failed: ${errorMessage}`);
+  }
+}
+
+/**
+ * Common pattern for retrying operations
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  options: {
+    maxAttempts?: number;
+    delay?: number;
+    shouldRetry?: (error: any) => boolean;
+  } = {}
+): Promise<Result<T, string>> {
+  const maxAttempts = options.maxAttempts ?? 3;
+  const delay = options.delay ?? 1000;
+  const shouldRetry = options.shouldRetry ?? (() => true);
+
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await operation();
+      return Result.ok(result);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < maxAttempts && shouldRetry(error)) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      break;
     }
   }
 
-  /**
-   * Build a script execution handler
-   */
-  scriptExecution<TArgs extends { sessionId?: string }, TResult = unknown>(
-    name: string,
-    description: string,
-    argSchema: JSONSchema,
-    scriptBuilder: (args: TArgs) => string,
-    resultParser?: (result: any) => TResult
-  ): ToolHandler {
-    return {
-      name,
-      description,
-      execute: HandlerPatterns.withScriptExecution(
-        argSchema,
-        name,
-        scriptBuilder,
-        resultParser
-      ).bind(this.provider)
-    }
-  }
+  const errorMessage = lastError instanceof Error 
+    ? lastError.message 
+    : String(lastError);
+
+  return Result.err(
+    `Operation failed after ${maxAttempts} attempts: ${errorMessage}`
+  );
 }
