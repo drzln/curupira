@@ -31,6 +31,7 @@ import type { IResourceRegistry } from '../../core/interfaces/resource-registry.
 // Provider factories
 import { CDPToolProviderFactory } from '../../mcp/tools/providers/cdp-tools.factory.js';
 import { ChromeToolProviderFactory } from '../../mcp/tools/providers/chrome-tools.factory.js';
+import { ChromeConnectionToolProviderFactory } from '../../mcp/tools/providers/chrome-connection-tools.factory.js';
 import { ReactToolProviderFactory } from '../../mcp/tools/providers/react-tools.factory.js';
 import { ConsoleToolProviderFactory } from '../../mcp/tools/providers/console-tools.factory.js';
 import { DebuggerToolProviderFactory } from '../../mcp/tools/providers/debugger-tools.factory.js';
@@ -189,8 +190,9 @@ export function createApplicationContainer(): Container {
  */
 export function registerToolProviders(container: Container): void {
   const toolRegistry = container.resolve(ToolRegistryToken);
+  const chromeService = container.resolve(ChromeServiceToken);
   const providerDeps = {
-    chromeService: container.resolve(ChromeServiceToken),
+    chromeService,
     logger: container.resolve(LoggerToken),
     validator: container.resolve(ValidatorToken)
   };
@@ -201,32 +203,42 @@ export function registerToolProviders(container: Container): void {
     chromeDiscoveryService: container.resolve(ChromeDiscoveryServiceToken)
   };
 
-  // Register tool provider factories
-  const factories = [
-    new CDPToolProviderFactory(),
-    new ReactToolProviderFactory(),
-    new ConsoleToolProviderFactory(),
-    new DebuggerToolProviderFactory(),
-    new DOMToolProviderFactory(),
-    new NetworkToolProviderFactory(),
-    new PerformanceToolProviderFactory(),
-    new FrameworkToolProviderFactory(),
-    new NavigationToolProviderFactory(),
-    new ScreenshotToolProviderFactory(),
-    new SecurityToolProviderFactory(),
-    new StorageToolProviderFactory()
-  ];
+  // Register Chrome connection tools (always available)
+  const chromeConnectionFactory = new ChromeConnectionToolProviderFactory();
+  const chromeConnectionProvider = chromeConnectionFactory.create(chromeProviderDeps);
+  toolRegistry.register(chromeConnectionProvider); // Not dynamic
 
-  // Create and register standard providers
-  for (const factory of factories) {
-    const provider = factory.create(providerDeps);
-    toolRegistry.register(provider);
+  // Setup Chrome event listeners for dynamic tool registration
+  if ('on' in chromeService) {
+    const eventEmitter = chromeService as any;
+    
+    eventEmitter.on('connected', async () => {
+      // Register Chrome-dependent tool providers dynamically
+      const dynamicFactories = [
+        new CDPToolProviderFactory(),
+        new ReactToolProviderFactory(),
+        new ConsoleToolProviderFactory(),
+        new DebuggerToolProviderFactory(),
+        new DOMToolProviderFactory(),
+        new NetworkToolProviderFactory(),
+        new PerformanceToolProviderFactory(),
+        new FrameworkToolProviderFactory(),
+        new NavigationToolProviderFactory(),
+        new ScreenshotToolProviderFactory(),
+        new SecurityToolProviderFactory(),
+        new StorageToolProviderFactory(),
+        new ChromeToolProviderFactory() // Chrome operation tools
+      ];
+
+      // Create and register dynamic providers
+      for (const factory of dynamicFactories) {
+        const provider = factory instanceof ChromeToolProviderFactory 
+          ? factory.create(chromeProviderDeps)
+          : factory.create(providerDeps);
+        (toolRegistry as any).register(provider, true); // Dynamic registration
+      }
+    });
   }
-
-  // Register Chrome tool provider with discovery service
-  const chromeToolFactory = new ChromeToolProviderFactory();
-  const chromeProvider = chromeToolFactory.create(chromeProviderDeps);
-  toolRegistry.register(chromeProvider);
 }
 
 /**

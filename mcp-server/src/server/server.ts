@@ -69,6 +69,7 @@ export class CurupiraServer {
           tools: {
             list: true,
             call: true,
+            listChanged: true, // Enable dynamic tool updates
           },
           prompts: {
             list: true,
@@ -150,6 +151,28 @@ export class CurupiraServer {
    * Setup all request handlers
    */
   private setupRequestHandlers(): void {
+    // Pass server instance to tool registry for notifications
+    if ('setServer' in this.toolRegistry) {
+      (this.toolRegistry as any).setServer(this.server);
+    }
+
+    // Setup Chrome event listeners for dynamic tool registration
+    if (this.chromeService && 'on' in this.chromeService) {
+      (this.chromeService as any).on('connected', async () => {
+        this.logger.info('Chrome connected - triggering dynamic tool registration');
+        if ('onChromeConnected' in this.toolRegistry) {
+          await (this.toolRegistry as any).onChromeConnected();
+        }
+      });
+
+      (this.chromeService as any).on('disconnected', async () => {
+        this.logger.info('Chrome disconnected - triggering dynamic tool unregistration');
+        if ('onChromeDisconnected' in this.toolRegistry) {
+          await (this.toolRegistry as any).onChromeDisconnected();
+        }
+      });
+    }
+
     // Resources handlers
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
       try {

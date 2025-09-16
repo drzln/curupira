@@ -8,14 +8,17 @@ import type { IChromeClient, ConnectionOptions } from './interfaces.js';
 import type { ILogger } from '../core/interfaces/logger.interface.js';
 import type { ChromeConfig } from '../core/di/tokens.js';
 import { ChromeClient } from './client.js';
+import { EventEmitter } from 'events';
 
-export class ChromeService implements IChromeService {
+export class ChromeService extends EventEmitter implements IChromeService {
   private client: IChromeClient | null = null;
 
   constructor(
     private readonly config: ChromeConfig,
     private readonly logger: ILogger
-  ) {}
+  ) {
+    super();
+  }
 
   async connect(options: ConnectionOptions): Promise<IChromeClient> {
     // Disconnect existing client if any
@@ -41,6 +44,9 @@ export class ChromeService implements IChromeService {
       'Connected to Chrome'
     );
 
+    // Emit connection event for dynamic tool registration
+    this.emit('connected', { client, options: connectionOptions });
+
     return client;
   }
 
@@ -57,6 +63,9 @@ export class ChromeService implements IChromeService {
       await this.client.disconnect();
       this.client = null;
       this.logger.info('Disconnected from Chrome');
+      
+      // Emit disconnection event for dynamic tool unregistration
+      this.emit('disconnected');
     }
   }
 }

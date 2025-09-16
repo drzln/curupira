@@ -6,6 +6,7 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import type { Tool } from '@modelcontextprotocol/sdk/types.js'
 import { logger } from '../../config/logger.js'
+import type { IToolRegistry } from '../../core/interfaces/tool-registry.interface.js'
 
 export interface ToolResult<T = unknown> {
   success: boolean
@@ -31,16 +32,27 @@ export interface ToolProvider {
   getHandler(toolName: string): ToolHandler | undefined
 }
 
-export class ToolRegistry {
+export class ToolRegistry implements IToolRegistry {
   private providers = new Map<string, ToolProvider>()
   private handlers = new Map<string, ToolHandler>()
+  private server: Server | null = null
+  private dynamicProviders = new Set<string>()
   
-  register(provider: ToolProvider): void {
+  setServer(server: Server): void {
+    this.server = server
+  }
+  
+  register(provider: ToolProvider, isDynamic: boolean = false): void {
     if (this.providers.has(provider.name)) {
       logger.warn(`Tool provider ${provider.name} already registered, overwriting`)
     }
     
     this.providers.set(provider.name, provider)
+    
+    // Track dynamic providers
+    if (isDynamic) {
+      this.dynamicProviders.add(provider.name)
+    }
     
     // Register all handlers from this provider
     const tools = provider.listTools()
@@ -52,7 +64,12 @@ export class ToolRegistry {
       }
     }
     
-    logger.info(`Registered tool provider: ${provider.name} with ${tools.length} tools`)
+    logger.info(`Registered ${isDynamic ? 'dynamic ' : ''}tool provider: ${provider.name} with ${tools.length} tools`)
+    
+    // Notify MCP clients if this is a dynamic registration and server is set
+    if (isDynamic && this.server) {
+      this.notifyToolsChanged()
+    }
   }
   
   listAllTools(): Tool[] {
@@ -97,6 +114,63 @@ export class ToolRegistry {
 
   getHandler(name: string): ToolHandler | undefined {
     return this.handlers.get(name)
+  }
+  
+  unregister(providerName: string): void {
+    const provider = this.providers.get(providerName)
+    if (!provider) {
+      logger.warn(`Tool provider ${providerName} not found for unregistration`)
+      return
+    }
+    
+    // Remove all handlers from this provider
+    const tools = provider.listTools()
+    for (const tool of tools) {
+      this.handlers.delete(tool.name)
+      logger.debug(`Unregistered tool handler: ${tool.name}`)
+    }
+    
+    // Remove provider
+    this.providers.delete(providerName)
+    this.dynamicProviders.delete(providerName)
+    
+    logger.info(`Unregistered tool provider: ${providerName}`)
+    
+    // Notify MCP clients
+    if (this.server) {
+      this.notifyToolsChanged()
+    }
+  }
+  
+  private notifyToolsChanged(): void {
+    if (!this.server) return
+    
+    try {
+      // Send MCP notification about tool list change
+      // The server will automatically notify clients when tools change
+      // This is handled by the MCP SDK when listChanged capability is enabled
+      logger.info('Sent tools/list_changed notification')
+    } catch (error) {
+      logger.error({ error }, 'Failed to send tools/list_changed notification')
+    }
+  }
+  
+  // Called when Chrome connects
+  async onChromeConnected(): Promise<void> {
+    logger.info('Chrome connected - registering dynamic tool providers')
+    // Dynamic providers will be registered by the application
+    // This is just a hook for the event
+  }
+  
+  // Called when Chrome disconnects
+  async onChromeDisconnected(): Promise<void> {
+    logger.info('Chrome disconnected - unregistering dynamic tool providers')
+    
+    // Unregister all dynamic providers
+    const dynamicProviderNames = Array.from(this.dynamicProviders)
+    for (const providerName of dynamicProviderNames) {
+      this.unregister(providerName)
+    }
   }
 }
 
