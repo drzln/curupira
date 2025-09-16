@@ -7,6 +7,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify'
 import fastifyCors from '@fastify/cors'
 import type { ILogger } from '../core/interfaces/logger.interface.js'
@@ -128,16 +129,52 @@ export class TransportManager {
         const transport = new SSEServerTransport('/mcp', reply.raw)
         await this.server.connect(transport)
       })
-
+    } else if (this.options.type === 'http') {
+      // HTTP Transport using StreamableHTTPServerTransport
+      const transports = new Map<string, StreamableHTTPServerTransport>()
+      
       this.httpServer.post('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
-        // Handle HTTP POST for MCP messages
+        this.logger.info({ method: 'POST', path: '/mcp' }, 'HTTP request for MCP')
+        
         try {
-          const result = await this.handleHttpMessage(request.body)
-          reply.send(result)
+          // Get or create session
+          const sessionId = (request.headers['mcp-session-id'] as string) || 'default'
+          let transport = transports.get(sessionId)
+          
+          if (!transport) {
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => sessionId
+            })
+            transports.set(sessionId, transport)
+            
+            // Connect to MCP server
+            await this.server.connect(transport)
+            
+            // Clean up on close
+            transport.onclose = () => {
+              this.logger.info(`Transport closed for session ${sessionId}`)
+              transports.delete(sessionId)
+            }
+          }
+          
+          // Handle request with transport
+          await transport.handleRequest(request.raw, reply.raw, request.body)
         } catch (error) {
-          this.logger.error({ error }, 'Failed to handle HTTP message')
+          this.logger.error({ error }, 'Failed to handle HTTP transport')
           reply.code(500).send({ error: 'Internal server error' })
         }
+      })
+      
+      // Also support SSE endpoint for HTTP transport
+      this.httpServer.get('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
+        reply.send({
+          message: 'HTTP transport active',
+          endpoint: 'POST /mcp',
+          headers: {
+            'Content-Type': 'application/json',
+            'MCP-Session-Id': 'optional session identifier'
+          }
+        })
       })
     }
 
