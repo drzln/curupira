@@ -236,7 +236,7 @@ export class CurupiraCLI {
 
     return {
       config: this.cliConfig,
-      projectConfig,
+      projectConfig: projectConfig || undefined,
       cwd,
       packageJson: this.packageJson
     }

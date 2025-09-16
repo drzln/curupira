@@ -4,6 +4,12 @@
 
 import { createLogger, ProjectConfigLoader } from '@curupira/shared'
 import type { BaseCommand, CliContext, CommandResult } from '../types.js'
+import { 
+  CurupiraServer, 
+  createApplicationContainer, 
+  registerToolProviders, 
+  registerResourceProviders
+} from 'curupira-mcp-server'
 
 const logger = createLogger({ level: 'info', name: 'start-command' })
 
@@ -13,6 +19,11 @@ const logger = createLogger({ level: 'info', name: 'start-command' })
 export interface StartCommandOptions {
   port?: number
   host?: string
+  transport?: 'stdio' | 'http' | 'sse'
+  chrome?: {
+    host?: string
+    port?: number
+  }
 }
 
 /**
@@ -35,10 +46,10 @@ export class StartCommand implements BaseCommand {
         }
       }
 
-      // Use config values or command options or defaults
-      const host = options.host || projectConfig.server?.host || 'localhost'
-      const port = options.port || projectConfig.server?.port || 8080
-      const environment = projectConfig.server?.environment || 'development'
+      // Use command options or defaults (projectConfig.server has different structure)
+      const host = options.host || 'localhost'
+      const port = options.port || 8080
+      const environment = process.env.NODE_ENV || 'development'
 
       if (!context.config.silent) {
         console.log(`Starting Curupira MCP server...`)
@@ -47,21 +58,79 @@ export class StartCommand implements BaseCommand {
         console.log(`Project: ${projectConfig.project?.name || 'Unknown'}`)
       }
 
-      // TODO: Start the actual MCP server
-      // This will be implemented when we integrate with the MCP server package
-      logger.info({ host, port, environment }, 'Starting MCP server')
-
-      // For now, just simulate starting
-      if (!context.config.silent) {
-        console.log(`Server started successfully`)
-        console.log(`Connect your AI assistant to: ws://${host}:${port}/mcp`)
+      // Set up environment variables for the server
+      const transport = options.transport || 'stdio'
+      process.env.CURUPIRA_TRANSPORT = transport
+      process.env.CURUPIRA_PORT = port.toString()
+      process.env.CURUPIRA_HOST = host
+      process.env.NODE_ENV = environment
+      
+      // Set Chrome connection details
+      if (options.chrome?.host) {
+        process.env.CHROME_HOST = options.chrome.host
+      }
+      if (options.chrome?.port) {
+        process.env.CHROME_PORT = options.chrome.port.toString()
       }
 
-      return {
-        success: true,
-        message: 'Server started',
-        data: { host, port, environment, config: projectConfig },
-        exitCode: 0
+      // Create application container with all dependencies
+      const container = createApplicationContainer()
+      
+      // Register all tool and resource providers
+      registerToolProviders(container)
+      registerResourceProviders(container)
+
+      // Create and start the actual MCP server
+      const server = new CurupiraServer(container)
+      
+      logger.info({ host, port, environment, transport }, 'Starting MCP server')
+
+      try {
+        await server.start()
+        
+        if (!context.config.silent) {
+          console.log(`Server started successfully`)
+          if (transport === 'stdio') {
+            console.log(`MCP server running with stdio transport`)
+            console.log(`Connect your AI assistant via stdio`)
+          } else {
+            console.log(`Connect your AI assistant to: ${transport}://${host}:${port}/mcp`)
+          }
+        }
+
+        // Keep the process running
+        return new Promise<CommandResult>((resolve) => {
+          const shutdown = () => {
+            logger.info('Shutting down...')
+            server.stop().then(() => {
+              resolve({
+                success: true,
+                message: 'Server stopped',
+                exitCode: 0
+              })
+            }).catch((error) => {
+              logger.error({ error }, 'Error during shutdown')
+              resolve({
+                success: false,
+                message: 'Error during shutdown',
+                error,
+                exitCode: 1
+              })
+            })
+          }
+
+          process.on('SIGINT', shutdown)
+          process.on('SIGTERM', shutdown)
+        })
+
+      } catch (error) {
+        logger.error({ error }, 'Failed to start server')
+        return {
+          success: false,
+          message: error instanceof Error ? error.message : 'Failed to start server',
+          error: error instanceof Error ? error : new Error(String(error)),
+          exitCode: 1
+        }
       }
 
     } catch (error) {
