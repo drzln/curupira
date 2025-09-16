@@ -1,0 +1,111 @@
+# Curupira MCP Server Configuration
+# Example configuration showing all available Chrome discovery options
+
+version: "1.0"
+
+server:
+  name: "curupira-mcp-server"
+  version: "1.0.0" 
+  host: "localhost"
+  port: 8080
+  environment: "development"
+  logLevel: "debug"
+
+transports:
+  websocket:
+    enabled: true
+    path: "/mcp"
+    pingInterval: 30000
+    pongTimeout: 5000
+  
+  http:
+    enabled: true
+    path: "/mcp"
+    timeout: 30000
+  
+  sse:
+    enabled: true
+    path: "/mcp/sse"
+    keepAliveInterval: 30000
+
+healthCheck:
+  enabled: true
+  path: "/health"
+  interval: 30000
+
+cors:
+  origins: 
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+    - "http://127.0.0.1:3000"
+  credentials: true
+
+rateLimit:
+  max: 100
+  window: 60000
+
+auth:
+  enabled: false
+  jwtSecret: "your-jwt-secret-here"
+  tokenExpiry: "24h"
+
+# Chrome Configuration - Comprehensive Discovery Settings
+chrome:
+  enabled: true
+  serviceUrl: "http://localhost:9222"
+  connectTimeout: 5000
+  pageTimeout: 30000
+  defaultViewport:
+    width: 1920
+    height: 1080
+  
+  # Chrome Discovery Configuration - Extracted from archived chrome-tools.ts
+  discovery:
+    # Enable automatic Chrome browser discovery
+    enabled: true
+    
+    # Hosts to scan for Chrome instances
+    hosts:
+      - "localhost"
+      - "127.0.0.1"
+      # Add remote hosts if needed:
+      # - "192.168.1.100"
+      # - "chrome-dev-server.local"
+    
+    # Ports to check for Chrome DevTools Protocol
+    ports:
+      - 9222  # Default Chrome debugging port
+      - 9223  # Common alternative
+      - 9224  # Another common alternative  
+      - 9225  # Additional port
+      - 9226  # Additional port
+      # Add custom ports if needed:
+      # - 9229  # Node.js debugging port
+      # - 9230  # Custom debugging port
+    
+    # Discovery timeout per port (milliseconds)
+    timeout: 5000
+    
+    # Automatically connect to best discovered instance
+    autoConnect: false
+    
+    # Patterns for smart React app detection
+    preferredPatterns:
+      - "localhost"    # Local development
+      - "react"        # React in title
+      - "vite"         # Vite dev server
+      - "next"         # Next.js applications
+      - "webpack"      # Webpack dev server
+      - "development"  # Development mode indicators
+      - "dev"          # General dev indicators
+      # Add custom patterns:
+      # - "myapp"      # Your specific app name
+      # - "staging"    # Staging environment
+
+# Environment Variable Examples (alternative to YAML):
+# CHROME_DISCOVERY_ENABLED=true
+# CHROME_DISCOVERY_HOSTS=localhost,127.0.0.1
+# CHROME_DISCOVERY_PORTS=9222,9223,9224,9225,9226
+# CHROME_DISCOVERY_TIMEOUT=5000
+# CHROME_DISCOVERY_AUTO_CONNECT=false
+# CHROME_DISCOVERY_PATTERNS=localhost,react,vite,next

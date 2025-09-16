@@ -64,6 +64,11 @@ This guide outlines the systematic approach to developing Curupira - the CDP-nat
 
 - **Only full implementations with patterns, no work arounds.**
 
+### RULE 10: **Design Patterns** 📦
+
+- **Develop in design patterns.**
+- **Archive non-compliant code, analyze it, re-implement in known design patterns.**
+
 ```
 Level 0: Foundation    → types, errors, constants, pure utils
 Level 1: Chrome Core   → CDP client, connection management
