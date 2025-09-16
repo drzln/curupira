@@ -34,12 +34,11 @@ import { DebuggerToolProviderFactory } from '../../mcp/tools/providers/debugger-
 import { DOMToolProviderFactory } from '../../mcp/tools/providers/dom-tools.factory.js';
 import { NetworkToolProviderFactory } from '../../mcp/tools/providers/network-tools.factory.js';
 import { PerformanceToolProviderFactory } from '../../mcp/tools/providers/performance-tools.factory.js';
-// TODO: Create factory files for these providers
-// import { FrameworkToolProviderFactory } from '../../mcp/tools/providers/framework-tools.factory.js';
-// import { NavigationToolProviderFactory } from '../../mcp/tools/providers/navigation-tools.factory.js';
-// import { ScreenshotToolProviderFactory } from '../../mcp/tools/providers/screenshot-tools.factory.js';
-// import { SecurityToolProviderFactory } from '../../mcp/tools/providers/security-tools.factory.js';
-// import { StorageToolProviderFactory } from '../../mcp/tools/providers/storage-tools.factory.js';
+import { FrameworkToolProviderFactory } from '../../mcp/tools/providers/framework-tools.factory.js';
+import { NavigationToolProviderFactory } from '../../mcp/tools/providers/navigation-tools.factory.js';
+import { ScreenshotToolProviderFactory } from '../../mcp/tools/providers/screenshot-tools.factory.js';
+import { SecurityToolProviderFactory } from '../../mcp/tools/providers/security-tools.factory.js';
+import { StorageToolProviderFactory } from '../../mcp/tools/providers/storage-tools.factory.js';
 
 export function createApplicationContainer(): Container {
   const container = new DIContainer();
@@ -109,12 +108,11 @@ export function registerToolProviders(container: Container): void {
     new DOMToolProviderFactory(),
     new NetworkToolProviderFactory(),
     new PerformanceToolProviderFactory(),
-    // TODO: Create factories for these providers
-    // new FrameworkToolProviderFactory(),
-    // new NavigationToolProviderFactory(),
-    // new ScreenshotToolProviderFactory(),
-    // new SecurityToolProviderFactory(),
-    // new StorageToolProviderFactory()
+    new FrameworkToolProviderFactory(),
+    new NavigationToolProviderFactory(),
+    new ScreenshotToolProviderFactory(),
+    new SecurityToolProviderFactory(),
+    new StorageToolProviderFactory()
   ];
 
   // Create and register each provider
