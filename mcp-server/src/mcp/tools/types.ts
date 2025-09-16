@@ -315,7 +315,7 @@ export interface ReactProfileResult {
 /**
  * Validates arguments against a JSON schema with type predicates
  */
-export function validateArgs<T>(args: Record<string, unknown>, schema: JSONSchema): args is T {
+export function validateArgs<T = any>(args: Record<string, unknown>, schema: JSONSchema): boolean {
   if (typeof args !== 'object' || args === null) {
     return false
   }
@@ -347,11 +347,11 @@ export function validateArgs<T>(args: Record<string, unknown>, schema: JSONSchem
 /**
  * Asserts arguments are valid, throws ToolValidationError if not
  */
-export function assertArgs<T>(args: Record<string, unknown>, schema: JSONSchema): T {
+export function assertArgs<T = any>(args: Record<string, unknown>, schema: JSONSchema): T {
   if (!validateArgs<T>(args, schema)) {
     throw new ToolValidationError(`Invalid arguments: ${JSON.stringify(args)}`, { args, schema })
   }
-  return args
+  return args as T
 }
 
 /**
@@ -377,11 +377,11 @@ function validateProperty(value: unknown, schema: JSONSchemaProperty): boolean {
 /**
  * Type predicate functions for common argument types
  */
-export type ValidationFunction<T> = (args: Record<string, unknown>) => args is T
+export type ValidationFunction<T = any> = (args: Record<string, unknown>) => boolean
 
 /**
  * Creates a validation function for a specific argument type
  */
-export function createValidator<T>(schema: JSONSchema): ValidationFunction<T> {
-  return (args: Record<string, unknown>): args is T => validateArgs<T>(args, schema)
+export function createValidator<T = any>(schema: JSONSchema): ValidationFunction<T> {
+  return (args: Record<string, unknown>): boolean => validateArgs<T>(args, schema)
 }

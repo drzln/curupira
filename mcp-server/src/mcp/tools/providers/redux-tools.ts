@@ -7,6 +7,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
 import type { ReduxPathArgs, ReduxActionArgs } from '../types.js'
 import { BaseToolProvider } from './base.js'
+import { validateAndCast, ArgSchemas } from '../validation.js'
 
 export class ReduxToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'redux'
@@ -172,7 +173,9 @@ export class ReduxToolProvider extends BaseToolProvider implements ToolProvider 
         description: 'Dispatch Redux action',
         async execute(args): Promise<ToolResult> {
           try {
-            const { type, payload, sessionId: argSessionId } = args as ReduxActionArgs
+            const { type, payload, sessionId: argSessionId } = validateAndCast<ReduxActionArgs>(
+              args, ArgSchemas.reduxAction, 'redux_dispatch_action'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `

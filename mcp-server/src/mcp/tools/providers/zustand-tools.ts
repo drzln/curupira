@@ -10,6 +10,7 @@ import { logger } from '../../../config/logger.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
 import type { ZustandStoreArgs, ZustandActionArgs } from '../types.js'
 import { BaseToolProvider } from './base.js'
+import { validateAndCast, ArgSchemas } from '../validation.js'
 
 export class ZustandToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'zustand'
@@ -152,7 +153,9 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
         description: 'Dispatch action to Zustand store',
         async execute(args): Promise<ToolResult> {
           try {
-            const { storeName, action, payload, sessionId: argSessionId } = args as ZustandActionArgs
+            const { storeName, action, payload, sessionId: argSessionId } = validateAndCast<ZustandActionArgs>(
+              args, ArgSchemas.zustandAction, 'zustand_dispatch_action'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
@@ -279,6 +282,7 @@ export class ZustandToolProvider extends BaseToolProvider implements ToolProvide
             
             const manager = ChromeManager.getInstance()
             const typed = manager.getTypedClient()
+            const client = manager.getClient()
             
             await typed.enableRuntime(sessionId)
             await client.send('Console.enable', {}, sessionId)

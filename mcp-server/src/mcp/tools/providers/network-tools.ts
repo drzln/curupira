@@ -500,7 +500,7 @@ export class NetworkToolProvider extends BaseToolProvider implements ToolProvide
                 
                 // Add/modify headers
                 Object.entries(responseHeaders).forEach(([name, value]) => {
-                  const existing = headers.findIndex(h => 
+                  const existing = headers.findIndex((h: { name: string; value: string }) => 
                     h.name.toLowerCase() === name.toLowerCase()
                   )
                   

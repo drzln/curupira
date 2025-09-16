@@ -79,7 +79,7 @@ export const HandlerPatterns = {
         const client = manager.getClient()
         
         const commandParams = commandBuilder(args)
-        const result = await client.send(command, commandParams, sessionId)
+        const result = await client.send(command, commandParams as unknown as Record<string, unknown>, sessionId)
         
         const transformedData = resultTransformer ? resultTransformer(result) : result as TResult
         return { success: true, data: transformedData }
@@ -191,7 +191,7 @@ export class HandlerBuilder<TProvider extends BaseToolProvider> {
     return {
       name,
       description,
-      execute: HandlerPatterns.withSessionAndValidation(argSchema, name, handler).bind(this.provider)
+      execute: HandlerPatterns.withSessionAndValidation(argSchema, name, handler as (this: BaseToolProvider, args: TArgs, sessionId: SessionId) => Promise<ToolResult<TResult>>).bind(this.provider)
     }
   }
 

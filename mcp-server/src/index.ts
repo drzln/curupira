@@ -24,12 +24,9 @@ export { ReactResourceProvider } from './resources/react-resource.js'
 export { StateResourceProvider } from './resources/state-resource.js'
 export { NetworkResourceProvider } from './resources/network-resource.js'
 
-// Tool providers
-export { createToolProviders, type ToolProviders } from './tools/index.js'
-export { DOMTool } from './tools/dom-tool.js'
-export { RuntimeTool } from './tools/runtime-tool.js'
-export { NetworkTool } from './tools/network-tool.js'
-export { PerformanceTool } from './tools/performance-tool.js'
+// Tool providers (now unified via MCP handlers)
+export { getToolRegistry } from './mcp/tools/registry.js'
+export { setupUnifiedToolHandlers } from './mcp/tools/index.js'
 
 // Framework integrations
 export { createFrameworkIntegrations, type FrameworkIntegrations } from './integrations/index.js'

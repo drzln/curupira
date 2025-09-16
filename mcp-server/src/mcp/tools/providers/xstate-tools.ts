@@ -7,6 +7,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
 import type { XStateActorArgs, XStateEventArgs } from '../types.js'
 import { BaseToolProvider } from './base.js'
+import { validateAndCast, ArgSchemas } from '../validation.js'
 
 export class XStateToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'xstate'
@@ -71,7 +72,9 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         description: 'Inspect XState actor state',
         async execute(args): Promise<ToolResult> {
           try {
-            const { actorId, sessionId: argSessionId } = args as XStateActorArgs
+            const { actorId, sessionId: argSessionId } = validateAndCast<XStateActorArgs>(
+              args, ArgSchemas.xstateActor, 'xstate_inspect_actor'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
@@ -135,7 +138,9 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         description: 'Send event to XState actor',
         async execute(args): Promise<ToolResult> {
           try {
-            const { actorId, event, sessionId: argSessionId } = args as XStateEventArgs
+            const { actorId, event, sessionId: argSessionId } = validateAndCast<XStateEventArgs>(
+              args, ArgSchemas.xstateEvent, 'xstate_send_event'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
@@ -259,7 +264,9 @@ export class XStateToolProvider extends BaseToolProvider implements ToolProvider
         description: 'Inspect XState machine definition',
         async execute(args): Promise<ToolResult> {
           try {
-            const { actorId, sessionId: argSessionId } = args as XStateActorArgs
+            const { actorId, sessionId: argSessionId } = validateAndCast<XStateActorArgs>(
+              args, ArgSchemas.xstateActor, 'xstate_inspect_machine'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `

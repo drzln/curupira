@@ -121,7 +121,7 @@ export class TransportManager {
           'Connection': 'keep-alive',
         })
 
-        const transport = new SSEServerTransport('/mcp', reply.raw as import('stream').Writable)
+        const transport = new SSEServerTransport('/mcp', reply.raw)
         await this.server.connect(transport)
       })
 
@@ -172,9 +172,10 @@ export class TransportManager {
   private async handleHttpMessage(message: unknown) {
     // This would integrate with the MCP server to handle HTTP POST messages
     // For now, return a placeholder
+    const messageWithId = message as { id?: unknown }
     return {
       jsonrpc: '2.0',
-      id: message.id,
+      id: messageWithId.id,
       result: {
         error: 'HTTP POST not fully implemented',
       },

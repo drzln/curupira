@@ -7,6 +7,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js'
 import type { ToolProvider, ToolHandler, ToolResult } from '../registry.js'
 import type { ApolloQueryArgs } from '../types.js'
 import { BaseToolProvider } from './base.js'
+import { validateAndCast, ArgSchemas } from '../validation.js'
 
 export class ApolloToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'apollo'
@@ -72,7 +73,9 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         description: 'Inspect Apollo Client cache',
         async execute(args): Promise<ToolResult> {
           try {
-            const { query, sessionId: argSessionId } = args as ApolloQueryArgs
+            const { query, sessionId: argSessionId } = validateAndCast<ApolloQueryArgs>(
+              args, ArgSchemas.apolloQuery, 'apollo_inspect_cache'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             // First check if Apollo Client is available
@@ -162,7 +165,9 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         description: 'Refetch Apollo Client query',
         async execute(args): Promise<ToolResult> {
           try {
-            const { query, variables, sessionId: argSessionId } = args as ApolloQueryArgs
+            const { query, variables, sessionId: argSessionId } = validateAndCast<ApolloQueryArgs>(
+              args, ArgSchemas.apolloQuery, 'apollo_refetch_query'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `
@@ -281,7 +286,19 @@ export class ApolloToolProvider extends BaseToolProvider implements ToolProvider
         description: 'Write data to Apollo cache',
         async execute(args): Promise<ToolResult> {
           try {
-            const { query, data, variables, sessionId: argSessionId } = args as ApolloQueryArgs & { data: unknown }
+            const args_validated = validateAndCast<ApolloQueryArgs & { data: unknown }>(
+              args, 
+              {
+                ...ArgSchemas.apolloQuery,
+                properties: {
+                  ...ArgSchemas.apolloQuery.properties,
+                  data: { type: 'object', description: 'Data to write to cache' }
+                },
+                required: ['query', 'data']
+              }, 
+              'apollo_write_cache'
+            )
+            const { query, data, variables, sessionId: argSessionId } = args_validated
             const sessionId = await provider.getSessionId(argSessionId)
             
             const script = `

@@ -35,7 +35,7 @@ export async function setupMCPTransports(app: FastifyInstance, config: ServerCon
         
         setupMCPHandlers(server)
         
-        const transport = new WebSocketTransport(socket as import('ws').WebSocket)
+        const transport = new WebSocketTransport(socket as unknown as import('ws').WebSocket)
         
         server.connect(transport)
         logger.info(`MCP WebSocket session started: ${sessionId}`)

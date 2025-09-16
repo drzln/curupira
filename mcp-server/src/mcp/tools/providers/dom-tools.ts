@@ -278,7 +278,7 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
             const typed = manager.getTypedClient()
             
             await typed.enableDOM(sessionId)
-            await typed.setAttributeValue(nodeId, name, value, sessionId)
+            await typed.setAttributeValue(nodeId, name, value ?? '', sessionId)
             
             return {
               success: true,
@@ -365,7 +365,7 @@ export class DOMToolProvider extends BaseToolProvider implements ToolProvider {
             const typed = manager.getTypedClient()
             
             await typed.enableDOM(sessionId)
-            await typed.setOuterHTML(nodeId, outerHTML, sessionId)
+            await typed.setOuterHTML(nodeId, outerHTML ?? '', sessionId)
             
             return {
               success: true,

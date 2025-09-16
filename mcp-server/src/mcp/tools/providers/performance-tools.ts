@@ -454,7 +454,8 @@ export class PerformanceToolProvider extends BaseToolProvider implements ToolPro
             // Wait a bit to collect samples
             await new Promise(resolve => setTimeout(resolve, 1000))
             
-            const profile = await typed.send('HeapProfiler.stopSampling', {}, sessionId)
+            const profileResult = await typed.send('HeapProfiler.stopSampling', {}, sessionId)
+            const profile = profileResult as { profile?: { samples?: unknown[]; head?: unknown } }
             
             // Get memory usage after
             const memoryAfter = await typed.evaluate(`performance.memory`, { returnByValue: true }, sessionId)
@@ -467,8 +468,8 @@ export class PerformanceToolProvider extends BaseToolProvider implements ToolPro
                   after: memoryAfter.result.value
                 },
                 heapProfile: {
-                  samples: profile.profile.samples?.length || 0,
-                  head: profile.profile.head ? 'Available' : 'Not available'
+                  samples: profile.profile?.samples?.length || 0,
+                  head: profile.profile?.head ? 'Available' : 'Not available'
                 },
                 timestamp: new Date().toISOString()
               }

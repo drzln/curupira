@@ -16,6 +16,7 @@ import type {
 } from '../types.js'
 import { BaseToolProvider } from './base.js'
 import type * as CDP from '@curupira/shared/cdp-types'
+import { validateAndCast, ArgSchemas } from '../validation.js'
 
 export class ConsoleToolProvider extends BaseToolProvider implements ToolProvider {
   name = 'console'
@@ -130,7 +131,9 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
         description: 'Execute JavaScript in console',
         async execute(args): Promise<ToolResult> {
           try {
-            const { expression, sessionId: argSessionId } = args as ConsoleExecuteArgs
+            const { expression, sessionId: argSessionId } = validateAndCast<ConsoleExecuteArgs>(
+              args, ArgSchemas.consoleExecute, 'console_execute'
+            )
             const sessionId = await provider.getSessionId(argSessionId)
             
             const manager = ChromeManager.getInstance()
@@ -232,9 +235,8 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
             manager.getClient().on('Console.messageAdded', messageHandler)
             
             // Also get recent logs from the page
-            await typed.send('Runtime.enable', {}, sessionId)
-            const logs = await typed.send('Runtime.evaluate', {
-              expression: `
+            await typed.enableRuntime(sessionId)
+            const logs = await typed.evaluate(`
                 (() => {
                   const logs = [];
                   const originalLog = console.log;
@@ -299,7 +301,7 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
                   
                   return [];
                 })()
-              `,
+              `, {
               returnByValue: true
             }, sessionId)
             

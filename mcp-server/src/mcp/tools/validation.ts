@@ -317,5 +317,51 @@ export const ArgSchemas = {
     },
     required: ['nodeId', 'outerHTML'],
     additionalProperties: false
+  } as JSONSchema,
+
+  // Framework Tool Schemas
+  reduxAction: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', description: 'Redux action type' },
+      payload: { type: 'object', description: 'Action payload (optional)' },
+      sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
+    },
+    required: ['type'],
+    additionalProperties: false
+  } as JSONSchema,
+
+  xstateActor: {
+    type: 'object',
+    properties: {
+      actorId: { type: 'string', description: 'XState actor ID' },
+      sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
+    },
+    required: ['actorId'],
+    additionalProperties: false
+  } as JSONSchema,
+
+  xstateEvent: {
+    type: 'object',
+    properties: {
+      actorId: { type: 'string', description: 'XState actor ID' },
+      event: { type: 'object', description: 'Event to send to the actor' },
+      sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
+    },
+    required: ['actorId', 'event'],
+    additionalProperties: false
+  } as JSONSchema,
+
+  // Zustand schemas
+  zustandAction: {
+    type: 'object',
+    properties: {
+      storeName: { type: 'string', description: 'Zustand store name' },
+      action: { type: 'string', description: 'Action name to dispatch' },
+      payload: { type: 'object', description: 'Action payload (optional)' },
+      sessionId: { type: 'string', description: 'Chrome session ID (optional)' }
+    },
+    required: ['storeName', 'action'],
+    additionalProperties: false
   } as JSONSchema
 } as const
