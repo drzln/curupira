@@ -10,6 +10,7 @@ import { logger } from '../../config/logger.js'
 
 // Import all tool providers
 import { CDPToolProvider } from './providers/cdp-tools.js'
+import { ChromeToolProvider } from './providers/chrome-tools.js'
 import { DOMToolProvider } from './providers/dom-tools.js'
 import { ReactToolProvider } from './providers/react-tools.js'
 import { StateToolProvider } from './providers/state-tools.js'
@@ -23,6 +24,7 @@ export function setupUnifiedToolHandlers(server: Server) {
   
   // Register all tool providers
   registry.register(new CDPToolProvider())
+  registry.register(new ChromeToolProvider())
   registry.register(new DOMToolProvider())
   registry.register(new ReactToolProvider())
   registry.register(new StateToolProvider())
