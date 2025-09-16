@@ -38,7 +38,7 @@ describe('ReactToolProvider', () => {
     it('should return all React tools', () => {
       const tools = provider.listTools()
       
-      expect(tools).toHaveLength(7)
+      expect(tools).toHaveLength(8)
       
       const toolNames = tools.map(t => t.name)
       expect(toolNames).toContain('react_find_component')
@@ -52,7 +52,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_find_component', () => {
-    const handler = new ReactToolProvider().getHandler('react_find_component')!
 
     it('should find React component by name', async () => {
       const mockComponents = [
@@ -83,6 +82,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_find_component')!
+
       const result = await handler.execute({
         componentName: 'Button',
       })
@@ -90,7 +91,7 @@ describe('ReactToolProvider', () => {
       expect(mockChromeClient.send).toHaveBeenCalledWith(
         'Runtime.evaluate',
         expect.objectContaining({
-          expression: expect.stringContaining('findReactComponents'),
+          expression: expect.stringContaining('name.includes'),
           awaitPromise: true,
         }),
         testSessionId
@@ -117,6 +118,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_find_component')!
+
       const result = await handler.execute({
         componentName: 'NonExistent',
       })
@@ -132,7 +135,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_inspect_props', () => {
-    const handler = new ReactToolProvider().getHandler('react_inspect_props')!
 
     it('should inspect component props', async () => {
       const mockProps = {
@@ -153,6 +155,8 @@ describe('ReactToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('react_inspect_props')!
 
       const result = await handler.execute({
         componentId: 'comp-1',
@@ -177,6 +181,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_inspect_props')!
+
       const result = await handler.execute({
         componentId: 'invalid-id',
       })
@@ -190,7 +196,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_inspect_state', () => {
-    const handler = new ReactToolProvider().getHandler('react_inspect_state')!
 
     it('should inspect class component state', async () => {
       const mockState = {
@@ -215,6 +220,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_inspect_state')!
+
       const result = await handler.execute({
         componentId: 'comp-1',
       })
@@ -238,6 +245,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_inspect_state')!
+
       const result = await handler.execute({
         componentId: 'comp-1',
       })
@@ -251,7 +260,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_inspect_hooks', () => {
-    const handler = new ReactToolProvider().getHandler('react_inspect_hooks')!
 
     it('should inspect component hooks', async () => {
       const mockHooks = {
@@ -274,6 +282,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_inspect_hooks')!
+
       const result = await handler.execute({
         componentId: 'comp-1',
       })
@@ -286,7 +296,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_trigger_re_render', () => {
-    const handler = new ReactToolProvider().getHandler('react_trigger_re_render')!
 
     it('should trigger component re-render', async () => {
       mockChromeClient.send
@@ -302,6 +311,8 @@ describe('ReactToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('react_trigger_re_render')!
 
       const result = await handler.execute({
         componentId: 'comp-1',
@@ -319,7 +330,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_profile_render', () => {
-    const handler = new ReactToolProvider().getHandler('react_profile_render')!
 
     it('should profile component render performance', async () => {
       const mockProfile = {
@@ -347,6 +357,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_profile_render')!
+
       const result = await handler.execute({
         duration: 100, // 100ms profiling
         componentName: 'ExpensiveList',
@@ -360,7 +372,6 @@ describe('ReactToolProvider', () => {
   })
 
   describe('react_get_fiber_tree', () => {
-    const handler = new ReactToolProvider().getHandler('react_get_fiber_tree')!
 
     it('should get React fiber tree', async () => {
       const mockFiberTree = {
@@ -394,6 +405,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_get_fiber_tree')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -413,6 +426,8 @@ describe('ReactToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('react_get_fiber_tree')!
+
       const result = await handler.execute({
         rootSelector: '#app',
       })
@@ -429,13 +444,13 @@ describe('ReactToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new ReactToolProvider().getHandler('react_find_component')!
 
     it('should handle evaluation errors', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPError('React is not defined'))
 
+      const handler = provider.getHandler('react_find_component')!
       const result = await handler.execute({
         componentName: 'Button',
       })
@@ -449,6 +464,7 @@ describe('ReactToolProvider', () => {
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Connection lost'))
 
+      const handler = provider.getHandler('react_find_component')!
       const result = await handler.execute({
         componentName: 'Button',
       })

@@ -11,8 +11,8 @@ export const mockChromeClient = {
   connect: vi.fn().mockResolvedValue(undefined),
   disconnect: vi.fn().mockResolvedValue(undefined),
   send: vi.fn(),
-  createSession: vi.fn().mockResolvedValue('mock-session-id' as SessionId),
-  getSessions: vi.fn().mockReturnValue([{ sessionId: 'mock-session-id' as SessionId }]),
+  createSession: vi.fn().mockResolvedValue('test-session-id' as SessionId),
+  getSessions: vi.fn().mockReturnValue([{ sessionId: 'test-session-id' as SessionId }]),
   getTargets: vi.fn().mockReturnValue([
     { targetId: 'mock-target-id' as TargetId, type: 'page', title: 'Test Page' }
   ]),
@@ -41,10 +41,7 @@ export function resetAllMocks() {
 
 // Create mock CDP response
 export function createCDPResponse<T>(result: T) {
-  return {
-    result,
-    exceptionDetails: undefined,
-  }
+  return result
 }
 
 // Create mock CDP error response

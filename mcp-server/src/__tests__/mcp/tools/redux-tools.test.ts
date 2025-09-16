@@ -56,7 +56,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('redux_get_state', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_get_state')!
 
     it('should get Redux store state', async () => {
       const mockState = {
@@ -90,6 +89,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_get_state')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -117,6 +118,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_get_state')!
+
       const result = await handler.execute({
         path: 'user',
       })
@@ -139,6 +142,8 @@ describe('ReduxToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
 
+      const handler = provider.getHandler('redux_get_state')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -149,7 +154,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('redux_dispatch_action', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_dispatch_action')!
 
     it('should dispatch action object', async () => {
       const action = {
@@ -174,6 +178,8 @@ describe('ReduxToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('redux_dispatch_action')!
 
       const result = await handler.execute({ action })
 
@@ -212,6 +218,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_dispatch_action')!
+
       const result = await handler.execute({
         action: 'cart/clear',
       })
@@ -222,7 +230,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('redux_get_action_history', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_get_action_history')!
 
     it('should get action history', async () => {
       const mockHistory = [
@@ -254,6 +261,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_get_action_history')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -280,6 +289,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_get_action_history')!
+
       const result = await handler.execute({
         limit: 2,
       })
@@ -296,7 +307,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('redux_time_travel', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_time_travel')!
 
     it('should time travel to specific state index', async () => {
       mockChromeClient.send
@@ -314,6 +324,8 @@ describe('ReduxToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('redux_time_travel')!
 
       const result = await handler.execute({
         index: 5,
@@ -342,6 +354,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_time_travel')!
+
       const result = await handler.execute({
         index: 5,
       })
@@ -355,7 +369,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('redux_subscribe', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_subscribe')!
 
     it('should subscribe to store changes', async () => {
       mockChromeClient.send
@@ -373,6 +386,8 @@ describe('ReduxToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('redux_subscribe')!
 
       const result = await handler.execute({})
 
@@ -403,6 +418,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_subscribe')!
+
       const result = await handler.execute({
         selector: 'state => state.user.isAuthenticated',
       })
@@ -419,7 +436,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('redux_get_devtools_state', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_get_devtools_state')!
 
     it('should get Redux DevTools state', async () => {
       const mockDevtools = {
@@ -454,6 +470,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_get_devtools_state')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -478,6 +496,8 @@ describe('ReduxToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('redux_get_devtools_state')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -491,7 +511,6 @@ describe('ReduxToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new ReduxToolProvider().getHandler('redux_get_state')!
 
     it('should handle evaluation errors', async () => {
       mockChromeClient.send

@@ -55,10 +55,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_enable', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_enable')!
 
     it('should enable debugger', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.enable
+
+      const handler = provider.getHandler('debugger_enable')!
 
       const result = await handler.execute({})
 
@@ -75,10 +76,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_disable', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_disable')!
 
     it('should disable debugger', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.disable
+
+      const handler = provider.getHandler('debugger_disable')!
 
       const result = await handler.execute({})
 
@@ -95,7 +97,6 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_set_breakpoint', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_set_breakpoint')!
 
     it('should set breakpoint at location', async () => {
       const mockBreakpointId = 'breakpoint:1:0:100'
@@ -111,6 +112,8 @@ describe('DebuggerToolProvider', () => {
           actualLocation: mockLocation,
         })
       )
+
+      const handler = provider.getHandler('debugger_set_breakpoint')!
 
       const result = await handler.execute({
         location: mockLocation,
@@ -145,6 +148,8 @@ describe('DebuggerToolProvider', () => {
         })
       )
 
+      const handler = provider.getHandler('debugger_set_breakpoint')!
+
       const result = await handler.execute({
         location,
         condition,
@@ -160,12 +165,13 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_remove_breakpoint', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_remove_breakpoint')!
 
     it('should remove breakpoint', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.removeBreakpoint
 
       const breakpointId = 'breakpoint:1:0:100'
+      const handler = provider.getHandler('debugger_remove_breakpoint')!
+
       const result = await handler.execute({ breakpointId })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
@@ -181,7 +187,6 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_set_breakpoint_by_url', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_set_breakpoint_by_url')!
 
     it('should set breakpoint by URL and line', async () => {
       const mockBreakpointId = 'breakpoint:url:1'
@@ -199,6 +204,8 @@ describe('DebuggerToolProvider', () => {
           locations: mockLocations,
         })
       )
+
+      const handler = provider.getHandler('debugger_set_breakpoint_by_url')!
 
       const result = await handler.execute({
         url: 'https://example.com/app.js',
@@ -231,6 +238,8 @@ describe('DebuggerToolProvider', () => {
         })
       )
 
+      const handler = provider.getHandler('debugger_set_breakpoint_by_url')!
+
       const result = await handler.execute({
         urlRegex: '.*\\.js$',
         lineNumber: 100,
@@ -249,10 +258,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_pause', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_pause')!
 
     it('should pause execution', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.pause
+
+      const handler = provider.getHandler('debugger_pause')!
 
       const result = await handler.execute({})
 
@@ -269,10 +279,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_resume', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_resume')!
 
     it('should resume execution', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.resume
+
+      const handler = provider.getHandler('debugger_resume')!
 
       const result = await handler.execute({})
 
@@ -289,10 +300,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_step_over', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_step_over')!
 
     it('should step over', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.stepOver
+
+      const handler = provider.getHandler('debugger_step_over')!
 
       const result = await handler.execute({})
 
@@ -309,10 +321,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_step_into', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_step_into')!
 
     it('should step into', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.stepInto
+
+      const handler = provider.getHandler('debugger_step_into')!
 
       const result = await handler.execute({})
 
@@ -329,10 +342,11 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('debugger_step_out', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_step_out')!
 
     it('should step out', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Debugger.stepOut
+
+      const handler = provider.getHandler('debugger_step_out')!
 
       const result = await handler.execute({})
 
@@ -349,7 +363,6 @@ describe('DebuggerToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new DebuggerToolProvider().getHandler('debugger_set_breakpoint')!
 
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Debugger not enabled'))

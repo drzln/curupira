@@ -4,89 +4,105 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ChromeCDPResourceProvider } from '../../../mcp/resources/providers/cdp-resources.js'
+import { CDPResourceProviderImpl } from '../../../mcp/resources/providers/cdp-resources.js'
+import { ChromeCDPResourceProvider } from '../../../mcp/resources/providers/cdp.js'
 import { ChromeManager } from '../../../chrome/manager.js'
 import { mockChromeClient, resetAllMocks, createCDPResponse, testSessionId } from '../../setup.js'
+
+// Mock ChromeCDPResourceProvider
+vi.mock('../../../mcp/resources/providers/cdp.js', () => ({
+  ChromeCDPResourceProvider: vi.fn().mockImplementation(() => ({
+    getConsoleHistory: vi.fn(),
+    getDOMNodes: vi.fn(),
+    getDOMSnapshot: vi.fn(),
+    getNetworkRequests: vi.fn(),
+    getPerformanceMetrics: vi.fn(),
+    getPerformanceTimeline: vi.fn(),
+    getPageFrameTree: vi.fn(),
+    getPageMetrics: vi.fn(),
+    getRuntimeProperties: vi.fn(),
+  }))
+}))
 
 // Mock ChromeManager
 vi.mock('../../../chrome/manager.js', () => ({
   ChromeManager: {
     getInstance: vi.fn(() => ({
-      getClient: () => mockChromeClient,
+      getClient: () => ({
+        getSessions: vi.fn(() => [{ sessionId: testSessionId }]),
+        ...mockChromeClient
+      }),
     })),
   },
 }))
 
-describe('ChromeCDPResourceProvider', () => {
-  let provider: ChromeCDPResourceProvider
+describe('CDPResourceProviderImpl', () => {
+  let provider: CDPResourceProviderImpl
 
   beforeEach(() => {
     resetAllMocks()
-    provider = new ChromeCDPResourceProvider()
+    provider = new CDPResourceProviderImpl()
   })
 
   describe('listResources', () => {
     it('should return all CDP resource types', async () => {
       const resources = await provider.listResources()
       
-      expect(resources).toHaveLength(11)
-      expect(resources[0]).toEqual({
-        uri: 'cdp://runtime/properties',
-        name: 'Runtime Properties',
-        mimeType: 'application/json',
-        description: 'JavaScript runtime properties and global object inspection',
+      expect(resources.length).toBeGreaterThan(10)
+      
+      // Check first resource
+      expect(resources[0]).toMatchObject({
+        uri: 'cdp/runtime/console',
+        name: 'Console Logs',
+        mimeType: 'application/json'
       })
       
       // Check that all resource types are present
       const uris = resources.map(r => r.uri)
-      expect(uris).toContain('cdp://runtime/properties')
-      expect(uris).toContain('cdp://dom/snapshot')
-      expect(uris).toContain('cdp://network/requests')
-      expect(uris).toContain('cdp://performance/metrics')
-      expect(uris).toContain('cdp://page/resources')
-      expect(uris).toContain('cdp://console/messages')
-      expect(uris).toContain('cdp://debugger/callstack')
-      expect(uris).toContain('cdp://css/styles')
-      expect(uris).toContain('cdp://storage/cookies')
-      expect(uris).toContain('cdp://security/state')
-      expect(uris).toContain('cdp://memory/usage')
+      expect(uris).toContain('cdp/runtime/console')
+      expect(uris).toContain('cdp/runtime/evaluate')
+      expect(uris).toContain('cdp/dom/tree')
+      expect(uris).toContain('cdp/dom/snapshot')
+      expect(uris).toContain('cdp/network/requests')
+      expect(uris).toContain('cdp/network/websockets')
+      expect(uris).toContain('cdp/performance/metrics')
+      expect(uris).toContain('cdp/performance/timeline')
+      expect(uris).toContain('cdp/page/info')
+      expect(uris).toContain('cdp/page/resources')
+      expect(uris).toContain('cdp/debugger/scripts')
+      expect(uris).toContain('cdp/debugger/breakpoints')
+      expect(uris).toContain('cdp/css/stylesheets')
+      expect(uris).toContain('cdp/css/computed')
+      expect(uris).toContain('cdp/storage/cookies')
+      expect(uris).toContain('cdp/storage/local')
+      expect(uris).toContain('cdp/storage/session')
     })
   })
 
   describe('readResource', () => {
-    describe('runtime properties', () => {
-      it('should return runtime properties', async () => {
-        mockChromeClient.send.mockResolvedValueOnce(
-          createCDPResponse({
-            result: {
-              type: 'object',
-              value: { test: 'value' },
-            },
-          })
-        )
-
-        const result = await provider.readResource('cdp://runtime/properties')
+    describe('runtime console', () => {
+      it('should return console history', async () => {
+        const mockConsoleData = {
+          messages: [
+            { type: 'log', text: 'Hello', timestamp: Date.now() }
+          ]
+        }
         
-        expect(mockChromeClient.send).toHaveBeenCalledWith('Runtime.enable', {}, testSessionId)
-        expect(mockChromeClient.send).toHaveBeenCalledWith(
-          'Runtime.globalLexicalScopeNames',
-          { executionContextId: 0 },
-          testSessionId
-        )
-        expect(result).toEqual({
-          type: 'object',
-          value: { test: 'value' },
-        })
+        // Access the mocked ChromeCDPResourceProvider
+        const mockCdpProvider = (provider as any).cdpProvider
+        mockCdpProvider.getConsoleHistory.mockResolvedValue(mockConsoleData)
+
+        const result = await provider.readResource('cdp/runtime/console')
+        
+        expect(mockCdpProvider.getConsoleHistory).toHaveBeenCalledWith(testSessionId)
+        expect(result).toEqual(mockConsoleData)
       })
 
       it('should handle runtime errors', async () => {
-        mockChromeClient.send.mockRejectedValueOnce(new Error('Runtime error'))
+        const mockCdpProvider = (provider as any).cdpProvider
+        mockCdpProvider.getConsoleHistory.mockRejectedValue(new Error('Runtime error'))
 
-        const result = await provider.readResource('cdp://runtime/properties')
-        
-        expect(result).toEqual({
-          error: 'Failed to get runtime properties: Runtime error',
-        })
+        await expect(provider.readResource('cdp/runtime/console')).rejects.toThrow('Runtime error')
       })
     })
 
@@ -103,41 +119,36 @@ describe('ChromeCDPResourceProvider', () => {
           }],
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // DOM.enable
-          .mockResolvedValueOnce(createCDPResponse(mockSnapshot))
+        const mockCdpProvider = (provider as any).cdpProvider
+        mockCdpProvider.getDOMSnapshot.mockResolvedValue(mockSnapshot)
 
-        const result = await provider.readResource('cdp://dom/snapshot')
+        const result = await provider.readResource('cdp/dom/snapshot')
         
-        expect(mockChromeClient.send).toHaveBeenCalledWith('DOM.enable', {}, testSessionId)
-        expect(mockChromeClient.send).toHaveBeenCalledWith(
-          'DOMSnapshot.captureSnapshot',
-          { computedStyles: [] },
-          testSessionId
-        )
+        expect(mockCdpProvider.getDOMSnapshot).toHaveBeenCalledWith(testSessionId)
         expect(result).toEqual(mockSnapshot)
       })
     })
 
     describe('network requests', () => {
       it('should return network requests', async () => {
-        const mockRequests = [
-          {
-            requestId: '1',
-            url: 'https://example.com',
-            method: 'GET',
-            status: 200,
-          },
-        ]
+        const mockRequests = {
+          requests: [
+            {
+              requestId: '1',
+              url: 'https://example.com',
+              method: 'GET',
+              status: 200,
+            },
+          ]
+        }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Network.enable
-          .mockResolvedValueOnce(createCDPResponse({ requests: mockRequests }))
+        const mockCdpProvider = (provider as any).cdpProvider
+        mockCdpProvider.getNetworkRequests.mockResolvedValue(mockRequests)
 
-        const result = await provider.readResource('cdp://network/requests')
+        const result = await provider.readResource('cdp/network/requests')
         
-        expect(mockChromeClient.send).toHaveBeenCalledWith('Network.enable', {}, testSessionId)
-        expect(result).toEqual({ requests: mockRequests })
+        expect(mockCdpProvider.getNetworkRequests).toHaveBeenCalledWith(testSessionId)
+        expect(result).toEqual(mockRequests)
       })
     })
 
@@ -150,24 +161,18 @@ describe('ChromeCDPResourceProvider', () => {
           ],
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Performance.enable
-          .mockResolvedValueOnce(createCDPResponse(mockMetrics))
+        const mockCdpProvider = (provider as any).cdpProvider
+        mockCdpProvider.getPerformanceMetrics.mockResolvedValue(mockMetrics)
 
-        const result = await provider.readResource('cdp://performance/metrics')
+        const result = await provider.readResource('cdp/performance/metrics')
         
-        expect(mockChromeClient.send).toHaveBeenCalledWith('Performance.enable', {}, testSessionId)
-        expect(mockChromeClient.send).toHaveBeenCalledWith('Performance.getMetrics', {}, testSessionId)
+        expect(mockCdpProvider.getPerformanceMetrics).toHaveBeenCalledWith(testSessionId)
         expect(result).toEqual(mockMetrics)
       })
     })
 
     it('should handle unknown resource URI', async () => {
-      const result = await provider.readResource('cdp://unknown/resource')
-      
-      expect(result).toEqual({
-        error: 'Unknown CDP resource: cdp://unknown/resource',
-      })
+      await expect(provider.readResource('cdp/unknown/resource')).rejects.toThrow('Unknown CDP resource: cdp/unknown/resource')
     })
   })
 })

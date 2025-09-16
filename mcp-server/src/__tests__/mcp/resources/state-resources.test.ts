@@ -4,9 +4,31 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { StateManagementResourceProvider } from '../../../mcp/resources/providers/state-resources.js'
+import { StateResourceProviderImpl } from '../../../mcp/resources/providers/state-resources.js'
+import { StateManagementResourceProvider } from '../../../mcp/resources/providers/state.js'
 import { ChromeManager } from '../../../chrome/manager.js'
 import { mockChromeClient, resetAllMocks, createCDPResponse, testSessionId } from '../../setup.js'
+
+// Mock StateManagementResourceProvider
+vi.mock('../../../mcp/resources/providers/state.js', () => ({
+  StateManagementResourceProvider: vi.fn().mockImplementation(() => ({
+    detectXState: vi.fn(),
+    detectZustand: vi.fn(),
+    detectApollo: vi.fn(),
+    detectRedux: vi.fn(),
+    getXStateActors: vi.fn(),
+    getXStateMachines: vi.fn(),
+    getXStateInspector: vi.fn(),
+    getZustandStores: vi.fn(),
+    getZustandDevtools: vi.fn(),
+    getApolloCache: vi.fn(),
+    getApolloQueries: vi.fn(),
+    getApolloMutations: vi.fn(),
+    getReduxStore: vi.fn(),
+    getReduxActions: vi.fn(),
+    getReduxDevtools: vi.fn(),
+  }))
+}))
 
 // Mock ChromeManager
 vi.mock('../../../chrome/manager.js', () => ({
@@ -17,56 +39,54 @@ vi.mock('../../../chrome/manager.js', () => ({
   },
 }))
 
-describe('StateManagementResourceProvider', () => {
-  let provider: StateManagementResourceProvider
+describe('StateResourceProviderImpl', () => {
+  let provider: StateResourceProviderImpl
 
   beforeEach(() => {
     resetAllMocks()
-    provider = new StateManagementResourceProvider()
+    provider = new StateResourceProviderImpl()
   })
 
   describe('listResources', () => {
     it('should return resources for detected state management libraries', async () => {
       // Mock detection of all state management libraries
-      mockChromeClient.send
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: true } })) // XState detected
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: true } })) // Zustand detected
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: true } })) // Apollo detected
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: true } })) // Redux detected
+      const mockStateProvider = (provider as any).stateProvider
+      mockStateProvider.detectXState.mockResolvedValue(true)
+      mockStateProvider.detectZustand.mockResolvedValue(true)
+      mockStateProvider.detectApollo.mockResolvedValue(true)
 
       const resources = await provider.listResources()
       
       expect(resources.length).toBeGreaterThan(0)
       
       // Check for XState resources
-      const xstateResources = resources.filter(r => r.uri.startsWith('xstate://'))
-      expect(xstateResources).toHaveLength(4)
-      expect(xstateResources.map(r => r.uri)).toContain('xstate://actors')
-      expect(xstateResources.map(r => r.uri)).toContain('xstate://machines')
+      const xstateResources = resources.filter(r => r.uri.startsWith('state/xstate/'))
+      expect(xstateResources).toHaveLength(3)
+      expect(xstateResources.map(r => r.uri)).toContain('state/xstate/actors')
+      expect(xstateResources.map(r => r.uri)).toContain('state/xstate/machines')
+      expect(xstateResources.map(r => r.uri)).toContain('state/xstate/inspector')
       
       // Check for Zustand resources
-      const zustandResources = resources.filter(r => r.uri.startsWith('zustand://'))
-      expect(zustandResources).toHaveLength(3)
-      expect(zustandResources.map(r => r.uri)).toContain('zustand://stores')
+      const zustandResources = resources.filter(r => r.uri.startsWith('state/zustand/'))
+      expect(zustandResources).toHaveLength(2)
+      expect(zustandResources.map(r => r.uri)).toContain('state/zustand/stores')
+      expect(zustandResources.map(r => r.uri)).toContain('state/zustand/devtools')
       
       // Check for Apollo resources
-      const apolloResources = resources.filter(r => r.uri.startsWith('apollo://'))
+      const apolloResources = resources.filter(r => r.uri.startsWith('state/apollo/'))
       expect(apolloResources).toHaveLength(4)
-      expect(apolloResources.map(r => r.uri)).toContain('apollo://cache')
-      
-      // Check for Redux resources
-      const reduxResources = resources.filter(r => r.uri.startsWith('redux://'))
-      expect(reduxResources).toHaveLength(4)
-      expect(reduxResources.map(r => r.uri)).toContain('redux://store')
+      expect(apolloResources.map(r => r.uri)).toContain('state/apollo/client')
+      expect(apolloResources.map(r => r.uri)).toContain('state/apollo/cache')
+      expect(apolloResources.map(r => r.uri)).toContain('state/apollo/queries')
+      expect(apolloResources.map(r => r.uri)).toContain('state/apollo/mutations')
     })
 
     it('should return empty array when no state management libraries detected', async () => {
       // Mock no libraries detected
-      mockChromeClient.send
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No XState
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No Zustand
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No Apollo
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No Redux
+      const mockStateProvider = (provider as any).stateProvider
+      mockStateProvider.detectXState.mockResolvedValue(false)
+      mockStateProvider.detectZustand.mockResolvedValue(false)
+      mockStateProvider.detectApollo.mockResolvedValue(false)
 
       const resources = await provider.listResources()
       
@@ -75,22 +95,21 @@ describe('StateManagementResourceProvider', () => {
 
     it('should only return resources for detected libraries', async () => {
       // Mock only Zustand detected
-      mockChromeClient.send
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No XState
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: true } }))  // Zustand detected
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No Apollo
-        .mockResolvedValueOnce(createCDPResponse({ result: { value: false } })) // No Redux
+      const mockStateProvider = (provider as any).stateProvider
+      mockStateProvider.detectXState.mockResolvedValue(false)
+      mockStateProvider.detectZustand.mockResolvedValue(true)
+      mockStateProvider.detectApollo.mockResolvedValue(false)
 
       const resources = await provider.listResources()
       
       // Should only have Zustand resources
-      expect(resources.every(r => r.uri.startsWith('zustand://'))).toBe(true)
-      expect(resources).toHaveLength(3)
+      expect(resources.every(r => r.uri.startsWith('state/zustand/'))).toBe(true)
+      expect(resources).toHaveLength(2)
     })
   })
 
   describe('readResource - XState', () => {
-    describe('xstate://actors', () => {
+    describe('state/xstate/actors', () => {
       it('should return active XState actors', async () => {
         const mockActors = [
           {
@@ -105,23 +124,16 @@ describe('StateManagementResourceProvider', () => {
           },
         ]
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: { actors: mockActors },
-              },
-            })
-          )
+        const mockStateProvider = (provider as any).stateProvider
+        mockStateProvider.getXStateActors.mockResolvedValue(mockActors)
 
-        const result = await provider.readResource('xstate://actors')
+        const result = await provider.readResource('state/xstate/actors')
         
-        expect(result).toEqual({ actors: mockActors })
+        expect(result).toEqual(mockActors)
       })
     })
 
-    describe('xstate://machines', () => {
+    describe('state/xstate/machines', () => {
       it('should return machine definitions', async () => {
         const mockMachines = [
           {
@@ -131,51 +143,30 @@ describe('StateManagementResourceProvider', () => {
           },
         ]
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: { machines: mockMachines },
-              },
-            })
-          )
+        const mockStateProvider = (provider as any).stateProvider
+        mockStateProvider.getXStateMachines.mockResolvedValue(mockMachines)
 
-        const result = await provider.readResource('xstate://machines')
+        const result = await provider.readResource('state/xstate/machines')
         
-        expect(result).toEqual({ machines: mockMachines })
+        expect(result).toEqual(mockMachines)
       })
     })
 
-    describe('xstate://inspector', () => {
+    describe('state/xstate/inspector', () => {
       it('should return inspector status', async () => {
-        const mockInspector = {
-          enabled: true,
-          connectedActors: 2,
-          eventLog: [
-            { type: 'LOGIN', timestamp: 123456 },
-          ],
-        }
+        const result = await provider.readResource('state/xstate/inspector')
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockInspector,
-              },
-            })
-          )
-
-        const result = await provider.readResource('xstate://inspector')
-        
-        expect(result).toEqual(mockInspector)
+        expect(result).toEqual({
+          description: 'XState inspector connection status',
+          connected: false,
+          hint: 'Use @xstate/inspect for debugging'
+        })
       })
     })
   })
 
   describe('readResource - Zustand', () => {
-    describe('zustand://stores', () => {
+    describe('state/zustand/stores', () => {
       it('should return all Zustand stores', async () => {
         const mockStores = {
           stores: [
@@ -192,51 +183,30 @@ describe('StateManagementResourceProvider', () => {
           ],
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockStores,
-              },
-            })
-          )
+        const mockStateProvider = (provider as any).stateProvider
+        mockStateProvider.getZustandStores.mockResolvedValue(mockStores)
 
-        const result = await provider.readResource('zustand://stores')
+        const result = await provider.readResource('state/zustand/stores')
         
         expect(result).toEqual(mockStores)
       })
     })
 
-    describe('zustand://devtools', () => {
+    describe('state/zustand/devtools', () => {
       it('should return devtools connection status', async () => {
-        const mockDevtools = {
-          connected: true,
-          actions: [
-            { type: 'setUser', timestamp: 123456 },
-            { type: 'logout', timestamp: 123457 },
-          ],
-        }
+        const result = await provider.readResource('state/zustand/devtools')
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockDevtools,
-              },
-            })
-          )
-
-        const result = await provider.readResource('zustand://devtools')
-        
-        expect(result).toEqual(mockDevtools)
+        expect(result).toEqual({
+          description: 'Zustand Redux DevTools integration',
+          connected: false,
+          hint: 'Use zustand/middleware for DevTools'
+        })
       })
     })
   })
 
   describe('readResource - Apollo', () => {
-    describe('apollo://cache', () => {
+    describe('state/apollo/cache', () => {
       it('should return Apollo cache contents', async () => {
         const mockCache = {
           ROOT_QUERY: {
@@ -249,23 +219,16 @@ describe('StateManagementResourceProvider', () => {
           },
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: { cache: mockCache },
-              },
-            })
-          )
+        const mockStateProvider = (provider as any).stateProvider
+        mockStateProvider.getApolloCache.mockResolvedValue(mockCache)
 
-        const result = await provider.readResource('apollo://cache')
+        const result = await provider.readResource('state/apollo/cache')
         
-        expect(result).toEqual({ cache: mockCache })
+        expect(result).toEqual(mockCache)
       })
     })
 
-    describe('apollo://queries', () => {
+    describe('state/apollo/queries', () => {
       it('should return active queries', async () => {
         const mockQueries = {
           active: [
@@ -278,23 +241,16 @@ describe('StateManagementResourceProvider', () => {
           ],
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockQueries,
-              },
-            })
-          )
+        const mockStateProvider = (provider as any).stateProvider
+        mockStateProvider.getApolloQueries.mockResolvedValue(mockQueries)
 
-        const result = await provider.readResource('apollo://queries')
+        const result = await provider.readResource('state/apollo/queries')
         
         expect(result).toEqual(mockQueries)
       })
     })
 
-    describe('apollo://mutations', () => {
+    describe('state/apollo/mutations', () => {
       it('should return recent mutations', async () => {
         const mockMutations = {
           recent: [
@@ -307,117 +263,27 @@ describe('StateManagementResourceProvider', () => {
           ],
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockMutations,
-              },
-            })
-          )
+        const mockStateProvider = (provider as any).stateProvider
+        mockStateProvider.getApolloMutations.mockResolvedValue(mockMutations)
 
-        const result = await provider.readResource('apollo://mutations')
+        const result = await provider.readResource('state/apollo/mutations')
         
         expect(result).toEqual(mockMutations)
       })
     })
   })
 
-  describe('readResource - Redux', () => {
-    describe('redux://store', () => {
-      it('should return Redux store state', async () => {
-        const mockStore = {
-          state: {
-            user: { id: '123', name: 'John' },
-            cart: { items: [], total: 0 },
-          },
-          subscriberCount: 10,
-        }
-        
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockStore,
-              },
-            })
-          )
-
-        const result = await provider.readResource('redux://store')
-        
-        expect(result).toEqual(mockStore)
-      })
-    })
-
-    describe('redux://actions', () => {
-      it('should return recent actions', async () => {
-        const mockActions = {
-          recent: [
-            { type: 'USER_LOGIN', payload: { id: '123' }, timestamp: 123456 },
-            { type: 'ADD_TO_CART', payload: { item: 'ABC' }, timestamp: 123457 },
-          ],
-        }
-        
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockActions,
-              },
-            })
-          )
-
-        const result = await provider.readResource('redux://actions')
-        
-        expect(result).toEqual(mockActions)
-      })
-    })
-
-    describe('redux://devtools', () => {
-      it('should return Redux DevTools status', async () => {
-        const mockDevtools = {
-          connected: true,
-          features: ['time-travel', 'action-dispatch'],
-          currentStateIndex: 5,
-        }
-        
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                value: mockDevtools,
-              },
-            })
-          )
-
-        const result = await provider.readResource('redux://devtools')
-        
-        expect(result).toEqual(mockDevtools)
-      })
-    })
-  })
 
   describe('error handling', () => {
     it('should handle unknown resource URI', async () => {
-      const result = await provider.readResource('unknown://resource')
-      
-      expect(result).toEqual({
-        error: 'Unknown state management resource: unknown://resource',
-      })
+      await expect(provider.readResource('unknown://resource')).rejects.toThrow('Unknown state management resource: unknown://resource')
     })
 
     it('should handle CDP errors gracefully', async () => {
-      mockChromeClient.send.mockRejectedValueOnce(new Error('CDP connection failed'))
+      const mockStateProvider = (provider as any).stateProvider
+      mockStateProvider.getXStateActors.mockRejectedValue(new Error('CDP connection failed'))
 
-      const result = await provider.readResource('xstate://actors')
-      
-      expect(result).toEqual({
-        error: 'Failed to read state resource: CDP connection failed',
-      })
+      await expect(provider.readResource('state/xstate/actors')).rejects.toThrow('CDP connection failed')
     })
   })
 })

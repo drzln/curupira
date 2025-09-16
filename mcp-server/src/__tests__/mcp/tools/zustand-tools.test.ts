@@ -55,7 +55,6 @@ describe('ZustandToolProvider', () => {
   })
 
   describe('zustand_list_stores', () => {
-    const handler = new ZustandToolProvider().getHandler('zustand_list_stores')!
 
     it('should list all Zustand stores', async () => {
       const mockStores = [
@@ -83,6 +82,8 @@ describe('ZustandToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('zustand_list_stores')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -96,6 +97,8 @@ describe('ZustandToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
 
+      const handler = provider.getHandler('zustand_list_stores')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -106,7 +109,6 @@ describe('ZustandToolProvider', () => {
   })
 
   describe('zustand_get_store_state', () => {
-    const handler = new ZustandToolProvider().getHandler('zustand_get_store_state')!
 
     it('should get specific store state', async () => {
       const mockStoreState = {
@@ -133,6 +135,8 @@ describe('ZustandToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('zustand_get_store_state')!
 
       const result = await handler.execute({
         storeName: 'userStore',
@@ -164,6 +168,8 @@ describe('ZustandToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('zustand_get_store_state')!
+
       const result = await handler.execute({
         storeName: 'unknownStore',
       })
@@ -177,7 +183,6 @@ describe('ZustandToolProvider', () => {
   })
 
   describe('zustand_set_store_state', () => {
-    const handler = new ZustandToolProvider().getHandler('zustand_set_store_state')!
 
     it('should set store state', async () => {
       const updates = {
@@ -200,6 +205,8 @@ describe('ZustandToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('zustand_set_store_state')!
 
       const result = await handler.execute({
         storeName: 'userStore',
@@ -240,6 +247,8 @@ describe('ZustandToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('zustand_set_store_state')!
+
       const result = await handler.execute({
         storeName: 'cartStore',
         updates: { count: 10 },
@@ -252,7 +261,6 @@ describe('ZustandToolProvider', () => {
   })
 
   describe('zustand_subscribe_to_store', () => {
-    const handler = new ZustandToolProvider().getHandler('zustand_subscribe_to_store')!
 
     it('should subscribe to store changes', async () => {
       mockChromeClient.send
@@ -270,6 +278,8 @@ describe('ZustandToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('zustand_subscribe_to_store')!
 
       const result = await handler.execute({
         storeName: 'userStore',
@@ -302,6 +312,8 @@ describe('ZustandToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('zustand_subscribe_to_store')!
+
       const result = await handler.execute({
         storeName: 'cartStore',
         selector: 'state => state.items.length',
@@ -319,7 +331,6 @@ describe('ZustandToolProvider', () => {
   })
 
   describe('zustand_get_devtools_state', () => {
-    const handler = new ZustandToolProvider().getHandler('zustand_get_devtools_state')!
 
     it('should get devtools connection state', async () => {
       const mockDevtools = {
@@ -342,6 +353,8 @@ describe('ZustandToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('zustand_get_devtools_state')!
 
       const result = await handler.execute({})
 
@@ -367,6 +380,8 @@ describe('ZustandToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('zustand_get_devtools_state')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -380,7 +395,6 @@ describe('ZustandToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new ZustandToolProvider().getHandler('zustand_list_stores')!
 
     it('should handle evaluation errors', async () => {
       mockChromeClient.send

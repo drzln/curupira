@@ -119,7 +119,7 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
       cdp_evaluate: {
         name: 'cdp_evaluate',
         description: 'Evaluate JavaScript expression in the browser',
-        async execute(args): Promise<ToolResult> {
+        execute: async (args): Promise<ToolResult> => {
           try {
             const { expression, sessionId: argSessionId } = args as EvaluateArgs
             const sessionId = await this.getSessionId(argSessionId)
@@ -342,6 +342,14 @@ export class CDPToolProvider extends BaseToolProvider implements ToolProvider {
       }
     }
     
-    return handlers[toolName]
+    const handler = handlers[toolName]
+    if (handler) {
+      // Bind the execute method to this instance to preserve context
+      return {
+        ...handler,
+        execute: handler.execute.bind(this)
+      }
+    }
+    return undefined
   }
 }

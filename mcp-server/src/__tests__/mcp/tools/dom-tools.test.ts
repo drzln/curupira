@@ -93,6 +93,7 @@ describe('DOMToolProvider', () => {
         .mockResolvedValueOnce(createCDPResponse({ root: { nodeId: 1 } })) // getDocument
         .mockResolvedValueOnce(createCDPResponse({ nodeId: 0 })) // No element found
 
+      const handler = provider.getHandler('dom_query_selector')!
       const result = await handler.execute({
         selector: '.nonexistent',
       })

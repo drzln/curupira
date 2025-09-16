@@ -54,12 +54,13 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_start_profiling', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_start_profiling')!
 
     it('should start CPU profiling', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Profiler.enable
         .mockResolvedValueOnce(undefined) // Profiler.start
+
+      const handler = provider.getHandler('performance_start_profiling')!
 
       const result = await handler.execute({})
 
@@ -85,6 +86,8 @@ describe('PerformanceToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Profiler.setSamplingInterval
         .mockResolvedValueOnce(undefined) // Profiler.start
 
+      const handler = provider.getHandler('performance_start_profiling')!
+
       const result = await handler.execute({
         samplingInterval: 500,
       })
@@ -99,7 +102,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_stop_profiling', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_stop_profiling')!
 
     it('should stop CPU profiling and return profile', async () => {
       const mockProfile = {
@@ -138,6 +140,8 @@ describe('PerformanceToolProvider', () => {
         .mockResolvedValueOnce(createCDPResponse({ profile: mockProfile })) // Profiler.stop
         .mockResolvedValueOnce(undefined) // Profiler.disable
 
+      const handler = provider.getHandler('performance_stop_profiling')!
+
       const result = await handler.execute({})
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
@@ -162,7 +166,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_get_metrics', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_get_metrics')!
 
     it('should get performance metrics', async () => {
       const mockMetrics = {
@@ -180,6 +183,8 @@ describe('PerformanceToolProvider', () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Performance.enable
         .mockResolvedValueOnce(createCDPResponse(mockMetrics)) // Performance.getMetrics
+
+      const handler = provider.getHandler('performance_get_metrics')!
 
       const result = await handler.execute({})
 
@@ -203,12 +208,13 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_enable_render_blocking', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_enable_render_blocking')!
 
     it('should enable render blocking CSS detection', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // CSS.enable
         .mockResolvedValueOnce(undefined) // CSS.startRuleUsageTracking
+
+      const handler = provider.getHandler('performance_enable_render_blocking')!
 
       const result = await handler.execute({})
 
@@ -230,7 +236,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_measure_layout_shift', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_measure_layout_shift')!
 
     it('should measure cumulative layout shift', async () => {
       mockChromeClient.send
@@ -257,6 +262,8 @@ describe('PerformanceToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('performance_measure_layout_shift')!
+
       const result = await handler.execute({
         duration: 1000,
       })
@@ -277,7 +284,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_get_resource_timing', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_get_resource_timing')!
 
     it('should get resource timing data', async () => {
       mockChromeClient.send
@@ -310,6 +316,8 @@ describe('PerformanceToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('performance_get_resource_timing')!
 
       const result = await handler.execute({})
 
@@ -347,6 +355,8 @@ describe('PerformanceToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('performance_get_resource_timing')!
+
       const result = await handler.execute({
         type: 'fetch',
       })
@@ -363,7 +373,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_get_coverage', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_get_coverage')!
 
     it('should get JS and CSS coverage', async () => {
       const mockJSCoverage = [
@@ -400,6 +409,8 @@ describe('PerformanceToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Profiler.stopPreciseCoverage
         .mockResolvedValueOnce(undefined) // CSS.disable
 
+      const handler = provider.getHandler('performance_get_coverage')!
+
       const result = await handler.execute({
         duration: 2000,
       })
@@ -419,7 +430,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_analyze_bundle', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_analyze_bundle')!
 
     it('should analyze JavaScript bundle', async () => {
       mockChromeClient.send
@@ -448,6 +458,8 @@ describe('PerformanceToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('performance_analyze_bundle')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -466,7 +478,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('performance_trace_functions', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_trace_functions')!
 
     it('should trace function calls', async () => {
       mockChromeClient.send
@@ -482,6 +493,8 @@ describe('PerformanceToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('performance_trace_functions')!
 
       const result = await handler.execute({
         functionName: 'handleUserInput',
@@ -519,6 +532,8 @@ describe('PerformanceToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('performance_trace_functions')!
+
       const result = await handler.execute({
         functionName: 'setState',
         includeStack: true,
@@ -529,7 +544,6 @@ describe('PerformanceToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new PerformanceToolProvider().getHandler('performance_start_profiling')!
 
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Profiler already started'))

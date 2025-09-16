@@ -463,6 +463,14 @@ export class ConsoleToolProvider extends BaseToolProvider implements ToolProvide
       }
     }
     
-    return handlers[toolName]
+    const handler = handlers[toolName]
+    if (handler) {
+      // Bind the execute method to this instance to preserve context
+      return {
+        ...handler,
+        execute: handler.execute.bind(this)
+      }
+    }
+    return undefined
   }
 }

@@ -11,10 +11,10 @@ export default defineConfig({
     hookTimeout: 60000,
     teardownTimeout: 60000,
     globals: true,
-    setupFiles: ['./tests/setup.ts'],
+    setupFiles: ['./src/__tests__/setup.ts'],
     include: [
-      'tests/**/*.test.ts',
-      'src/**/*.test.ts'
+      'src/**/*.test.ts',
+      'src/__tests__/**/*.test.ts'
     ],
     exclude: [
       'node_modules/**',

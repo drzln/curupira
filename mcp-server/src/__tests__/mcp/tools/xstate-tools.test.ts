@@ -58,7 +58,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_list_machines', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_list_machines')!
 
     it('should list all XState machines', async () => {
       const mockMachines = [
@@ -90,6 +89,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_list_machines')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -103,6 +104,8 @@ describe('XStateToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
 
+      const handler = provider.getHandler('xstate_list_machines')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -113,7 +116,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_list_actors', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_list_actors')!
 
     it('should list all active actors', async () => {
       const mockActors = [
@@ -137,6 +139,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_list_actors')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -147,7 +151,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_inspect_machine', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_inspect_machine')!
 
     it('should inspect machine configuration', async () => {
       const mockMachine = {
@@ -176,6 +179,8 @@ describe('XStateToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('xstate_inspect_machine')!
 
       const result = await handler.execute({
         machineId: 'authMachine',
@@ -207,6 +212,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_inspect_machine')!
+
       const result = await handler.execute({
         machineId: 'unknownMachine',
       })
@@ -220,7 +227,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_inspect_actor', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_inspect_actor')!
 
     it('should inspect actor state', async () => {
       const mockActor = {
@@ -251,6 +257,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_inspect_actor')!
+
       const result = await handler.execute({
         actorId: 'auth.actor',
       })
@@ -263,7 +271,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_send_event', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_send_event')!
 
     it('should send event to actor', async () => {
       mockChromeClient.send
@@ -280,6 +287,8 @@ describe('XStateToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('xstate_send_event')!
 
       const result = await handler.execute({
         actorId: 'auth.actor',
@@ -318,6 +327,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_send_event')!
+
       const result = await handler.execute({
         actorId: 'auth.actor',
         event: 'LOGOUT',
@@ -335,7 +346,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_get_state_value', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_get_state_value')!
 
     it('should get current state value', async () => {
       mockChromeClient.send
@@ -354,6 +364,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_get_state_value')!
+
       const result = await handler.execute({
         actorId: 'auth.actor',
       })
@@ -370,7 +382,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_enable_inspector', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_enable_inspector')!
 
     it('should enable XState inspector', async () => {
       mockChromeClient.send
@@ -388,6 +399,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_enable_inspector')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -401,7 +414,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('xstate_disable_inspector', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_disable_inspector')!
 
     it('should disable XState inspector', async () => {
       mockChromeClient.send
@@ -416,6 +428,8 @@ describe('XStateToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('xstate_disable_inspector')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -426,7 +440,6 @@ describe('XStateToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new XStateToolProvider().getHandler('xstate_list_machines')!
 
     it('should handle evaluation errors', async () => {
       mockChromeClient.send

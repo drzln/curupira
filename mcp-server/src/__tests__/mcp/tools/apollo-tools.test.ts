@@ -57,7 +57,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_inspect_cache', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_inspect_cache')!
 
     it('should inspect Apollo cache', async () => {
       const mockCache = {
@@ -94,6 +93,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_inspect_cache')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -107,6 +108,8 @@ describe('ApolloToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Runtime.enable
         .mockResolvedValueOnce(createCDPResponse({ result: { value: { available: false } } }))
 
+      const handler = provider.getHandler('apollo_inspect_cache')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -117,7 +120,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_extract_cache', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_extract_cache')!
 
     it('should extract cache data by query', async () => {
       const mockExtracted = {
@@ -140,6 +142,8 @@ describe('ApolloToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('apollo_extract_cache')!
 
       const result = await handler.execute({
         query: 'query GetUser($id: ID!) { user(id: $id) { id name email } }',
@@ -172,6 +176,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_extract_cache')!
+
       const result = await handler.execute({
         query: 'query NonExistent { nonExistent }',
       })
@@ -185,7 +191,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_write_cache', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_write_cache')!
 
     it('should write data to cache', async () => {
       const dataToWrite = {
@@ -212,6 +217,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_write_cache')!
+
       const result = await handler.execute({
         query: 'query GetUser($id: ID!) { user(id: $id) { id name email } }',
         data: dataToWrite,
@@ -229,7 +236,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_evict_cache', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_evict_cache')!
 
     it('should evict cache by id', async () => {
       mockChromeClient.send
@@ -246,6 +252,8 @@ describe('ApolloToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('apollo_evict_cache')!
 
       const result = await handler.execute({
         id: 'User:123',
@@ -277,6 +285,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_evict_cache')!
+
       const result = await handler.execute({
         field: 'posts',
         args: { limit: 10 },
@@ -294,7 +304,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_list_active_queries', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_list_active_queries')!
 
     it('should list active queries', async () => {
       const mockQueries = [
@@ -328,6 +337,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_list_active_queries')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -338,7 +349,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_refetch_queries', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_refetch_queries')!
 
     it('should refetch specific queries', async () => {
       mockChromeClient.send
@@ -355,6 +365,8 @@ describe('ApolloToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('apollo_refetch_queries')!
 
       const result = await handler.execute({
         queries: ['GetUser', 'GetPosts'],
@@ -392,6 +404,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_refetch_queries')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -405,7 +419,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('apollo_get_client_state', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_get_client_state')!
 
     it('should get Apollo Client state', async () => {
       const mockState = {
@@ -440,6 +453,8 @@ describe('ApolloToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('apollo_get_client_state')!
+
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -450,7 +465,6 @@ describe('ApolloToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new ApolloToolProvider().getHandler('apollo_inspect_cache')!
 
     it('should handle evaluation errors', async () => {
       mockChromeClient.send

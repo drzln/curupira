@@ -38,7 +38,7 @@ describe('NetworkToolProvider', () => {
     it('should return all network tools', () => {
       const tools = provider.listTools()
       
-      expect(tools).toHaveLength(9)
+      expect(tools).toHaveLength(7)
       
       const toolNames = tools.map(t => t.name)
       expect(toolNames).toContain('network_enable_request_interception')
@@ -54,13 +54,14 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_enable_request_interception', () => {
-    const handler = new NetworkToolProvider().getHandler('network_enable_request_interception')!
 
     it('should enable request interception', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Network.enable
         .mockResolvedValueOnce(undefined) // Fetch.enable
         .mockResolvedValueOnce(undefined) // Network.setRequestInterception
+
+      const handler = provider.getHandler('network_enable_request_interception')!
 
       const result = await handler.execute({})
 
@@ -92,6 +93,8 @@ describe('NetworkToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Network.setRequestInterception
 
       const patterns = ['*api/*', '*.json']
+      const handler = provider.getHandler('network_enable_request_interception')!
+
       const result = await handler.execute({ patterns })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
@@ -104,12 +107,13 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_disable_request_interception', () => {
-    const handler = new NetworkToolProvider().getHandler('network_disable_request_interception')!
 
     it('should disable request interception', async () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Fetch.disable
         .mockResolvedValueOnce(undefined) // Network.setRequestInterception
+
+      const handler = provider.getHandler('network_disable_request_interception')!
 
       const result = await handler.execute({})
 
@@ -131,7 +135,6 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_set_request_interception', () => {
-    const handler = new NetworkToolProvider().getHandler('network_set_request_interception')!
 
     it('should set request interception rules', async () => {
       const rules = [
@@ -151,6 +154,8 @@ describe('NetworkToolProvider', () => {
         .mockResolvedValueOnce(undefined) // Network.enable
         .mockResolvedValueOnce(undefined) // Network.setRequestInterception
 
+      const handler = provider.getHandler('network_set_request_interception')!
+
       const result = await handler.execute({ rules })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
@@ -166,7 +171,6 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_mock_response', () => {
-    const handler = new NetworkToolProvider().getHandler('network_mock_response')!
 
     it('should mock API response', async () => {
       const mockConfig = {
@@ -187,6 +191,8 @@ describe('NetworkToolProvider', () => {
             },
           })
         )
+
+      const handler = provider.getHandler('network_mock_response')!
 
       const result = await handler.execute(mockConfig)
 
@@ -214,6 +220,8 @@ describe('NetworkToolProvider', () => {
           })
         )
 
+      const handler = provider.getHandler('network_mock_response')!
+
       const result = await handler.execute({
         url: '/api/.*/users',
         regex: true,
@@ -228,10 +236,11 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_set_throttling', () => {
-    const handler = new NetworkToolProvider().getHandler('network_set_throttling')!
 
     it('should set network throttling', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
+
+      const handler = provider.getHandler('network_set_throttling')!
 
       const result = await handler.execute({
         downloadThroughput: 1.5 * 1024 * 1024, // 1.5 Mbps
@@ -262,6 +271,8 @@ describe('NetworkToolProvider', () => {
     it('should use preset profiles', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
 
+      const handler = provider.getHandler('network_set_throttling')!
+
       const result = await handler.execute({
         profile: 'Slow 3G',
       })
@@ -280,6 +291,8 @@ describe('NetworkToolProvider', () => {
 
     it('should disable throttling', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.emulateNetworkConditions
+
+      const handler = provider.getHandler('network_set_throttling')!
 
       const result = await handler.execute({
         disabled: true,
@@ -300,7 +313,6 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_set_headers', () => {
-    const handler = new NetworkToolProvider().getHandler('network_set_headers')!
 
     it('should set extra headers', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.setExtraHTTPHeaders
@@ -309,6 +321,9 @@ describe('NetworkToolProvider', () => {
         'Authorization': 'Bearer token123',
         'X-Custom-Header': 'value',
       }
+      
+      const handler = provider.getHandler('network_set_headers')!
+
       
       const result = await handler.execute({ headers })
 
@@ -325,7 +340,6 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_block_urls', () => {
-    const handler = new NetworkToolProvider().getHandler('network_block_urls')!
 
     it('should block URLs by patterns', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.setBlockedURLs
@@ -335,6 +349,9 @@ describe('NetworkToolProvider', () => {
         '*.tracking.js',
         'https://ads.example.com/*',
       ]
+      
+      const handler = provider.getHandler('network_block_urls')!
+
       
       const result = await handler.execute({ patterns })
 
@@ -352,6 +369,8 @@ describe('NetworkToolProvider', () => {
     it('should clear blocked URLs with empty array', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.setBlockedURLs
 
+      const handler = provider.getHandler('network_block_urls')!
+
       const result = await handler.execute({ patterns: [] })
 
       expect(mockChromeClient.send).toHaveBeenCalledWith(
@@ -364,10 +383,11 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_clear_browser_cache', () => {
-    const handler = new NetworkToolProvider().getHandler('network_clear_browser_cache')!
 
     it('should clear browser cache', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.clearBrowserCache
+
+      const handler = provider.getHandler('network_clear_browser_cache')!
 
       const result = await handler.execute({})
 
@@ -384,10 +404,11 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('network_clear_browser_cookies', () => {
-    const handler = new NetworkToolProvider().getHandler('network_clear_browser_cookies')!
 
     it('should clear all browser cookies', async () => {
       mockChromeClient.send.mockResolvedValueOnce(undefined) // Network.clearBrowserCookies
+
+      const handler = provider.getHandler('network_clear_browser_cookies')!
 
       const result = await handler.execute({})
 
@@ -406,6 +427,8 @@ describe('NetworkToolProvider', () => {
       mockChromeClient.send
         .mockResolvedValueOnce(undefined) // Network.deleteCookies
 
+      const handler = provider.getHandler('network_clear_browser_cookies')!
+
       const result = await handler.execute({
         domain: 'example.com',
       })
@@ -423,11 +446,11 @@ describe('NetworkToolProvider', () => {
   })
 
   describe('error handling', () => {
-    const handler = new NetworkToolProvider().getHandler('network_enable_request_interception')!
 
     it('should handle CDP errors', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Network domain not enabled'))
 
+      const handler = provider.getHandler('network_enable_request_interception')!
       const result = await handler.execute({})
 
       expect(result).toEqual({
@@ -439,6 +462,7 @@ describe('NetworkToolProvider', () => {
     it('should handle invalid parameters', async () => {
       mockChromeClient.send.mockRejectedValueOnce(new Error('Invalid pattern'))
 
+      const handler = provider.getHandler('network_enable_request_interception')!
       const result = await handler.execute({
         patterns: ['invalid pattern'],
       })

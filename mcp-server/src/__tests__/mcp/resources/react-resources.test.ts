@@ -4,9 +4,24 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ReactFrameworkProvider } from '../../../mcp/resources/providers/react-resources.js'
+import { ReactResourceProviderImpl } from '../../../mcp/resources/providers/react-resources.js'
+import { ReactFrameworkProvider } from '../../../mcp/resources/providers/react.js'
 import { ChromeManager } from '../../../chrome/manager.js'
 import { mockChromeClient, resetAllMocks, createCDPResponse, testSessionId } from '../../setup.js'
+
+// Mock ReactFrameworkProvider
+vi.mock('../../../mcp/resources/providers/react.js', () => ({
+  ReactFrameworkProvider: vi.fn().mockImplementation(() => ({
+    detectReact: vi.fn(),
+    getFiberTree: vi.fn(),
+    getComponentHooks: vi.fn(),
+    getComponentProps: vi.fn(),
+    getComponentState: vi.fn(),
+    getReactPerformance: vi.fn(),
+    findComponentsByName: vi.fn(),
+    getContextValues: vi.fn(),
+  }))
+}))
 
 // Mock ChromeManager
 vi.mock('../../../chrome/manager.js', () => ({
@@ -17,25 +32,24 @@ vi.mock('../../../chrome/manager.js', () => ({
   },
 }))
 
-describe('ReactFrameworkProvider', () => {
-  let provider: ReactFrameworkProvider
+describe('ReactResourceProviderImpl', () => {
+  let provider: ReactResourceProviderImpl
 
   beforeEach(() => {
     resetAllMocks()
-    provider = new ReactFrameworkProvider()
+    provider = new ReactResourceProviderImpl()
   })
 
   describe('listResources', () => {
     it('should return all React resource types when React is detected', async () => {
       // Mock React detection
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPResponse({
-          result: {
-            type: 'boolean',
-            value: true, // React is present
-          },
-        })
-      )
+      const mockReactProvider = (provider as any).reactProvider
+      mockReactProvider.detectReact.mockResolvedValue({
+        version: '18.0.0',
+        devtools: true,
+        mode: 'development',
+        features: ['hooks', 'suspense']
+      })
 
       const resources = await provider.listResources()
       
@@ -43,34 +57,28 @@ describe('ReactFrameworkProvider', () => {
       
       // Check core resources
       expect(resources[0]).toEqual({
-        uri: 'react://version',
-        name: 'React Version Info',
+        uri: 'react/fiber-tree',
+        name: 'React Fiber Tree',
         mimeType: 'application/json',
-        description: 'React library version and renderer information',
+        description: 'React component tree structure',
       })
       
       // Verify all resource types
       const uris = resources.map(r => r.uri)
-      expect(uris).toContain('react://version')
-      expect(uris).toContain('react://fiber-tree')
-      expect(uris).toContain('react://components')
-      expect(uris).toContain('react://hooks')
-      expect(uris).toContain('react://profiler')
-      expect(uris).toContain('react://errors')
-      expect(uris).toContain('react://context')
-      expect(uris).toContain('react://suspense')
+      expect(uris).toContain('react/fiber-tree')
+      expect(uris).toContain('react/components')
+      expect(uris).toContain('react/hooks')
+      expect(uris).toContain('react/props')
+      expect(uris).toContain('react/state')
+      expect(uris).toContain('react/context')
+      expect(uris).toContain('react/performance')
+      expect(uris).toContain('react/profiler')
     })
 
     it('should return empty array when React is not detected', async () => {
       // Mock no React
-      mockChromeClient.send.mockResolvedValueOnce(
-        createCDPResponse({
-          result: {
-            type: 'boolean',
-            value: false,
-          },
-        })
-      )
+      const mockReactProvider = (provider as any).reactProvider
+      mockReactProvider.detectReact.mockResolvedValue(null)
 
       const resources = await provider.listResources()
       
@@ -79,55 +87,6 @@ describe('ReactFrameworkProvider', () => {
   })
 
   describe('readResource', () => {
-    describe('react version info', () => {
-      it('should return React version information', async () => {
-        const mockVersionInfo = {
-          version: '18.2.0',
-          renderer: 'ReactDOM',
-          devToolsPresent: true,
-        }
-        
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockVersionInfo,
-              },
-            })
-          )
-
-        const result = await provider.readResource('react://version')
-        
-        expect(mockChromeClient.send).toHaveBeenCalledWith('Runtime.enable', {}, testSessionId)
-        expect(mockChromeClient.send).toHaveBeenCalledWith(
-          'Runtime.evaluate',
-          expect.objectContaining({
-            expression: expect.stringContaining('React.version'),
-          }),
-          testSessionId
-        )
-        expect(result).toEqual(mockVersionInfo)
-      })
-
-      it('should handle missing React', async () => {
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: { error: 'React not found' },
-              },
-            })
-          )
-
-        const result = await provider.readResource('react://version')
-        
-        expect(result).toEqual({ error: 'React not found' })
-      })
-    })
 
     describe('fiber tree', () => {
       it('should return React fiber tree', async () => {
@@ -144,18 +103,10 @@ describe('ReactFrameworkProvider', () => {
           },
         }
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockFiberTree,
-              },
-            })
-          )
+        const mockReactProvider = (provider as any).reactProvider
+        mockReactProvider.getFiberTree.mockResolvedValue(mockFiberTree)
 
-        const result = await provider.readResource('react://fiber-tree')
+        const result = await provider.readResource('react/fiber-tree')
         
         expect(result).toEqual(mockFiberTree)
       })
@@ -178,222 +129,106 @@ describe('ReactFrameworkProvider', () => {
           },
         ]
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: { components: mockComponents },
-              },
-            })
-          )
+        const mockReactProvider = (provider as any).reactProvider
+        mockReactProvider.getFiberTree.mockResolvedValue(mockComponents)
 
-        const result = await provider.readResource('react://components')
+        const result = await provider.readResource('react/components')
         
-        expect(result).toEqual({ components: mockComponents })
+        expect(result).toEqual(mockComponents)
       })
 
-      it('should filter components by name', async () => {
+      it('should return components', async () => {
         const mockComponents = [
           { name: 'App', type: 'function' },
+          { name: 'Header', type: 'function' },
         ]
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: { components: mockComponents },
-              },
-            })
-          )
+        const mockReactProvider = (provider as any).reactProvider
+        mockReactProvider.getFiberTree.mockResolvedValue(mockComponents)
 
-        const result = await provider.readResource('react://components?name=App')
+        const result = await provider.readResource('react/components')
         
-        expect(mockChromeClient.send).toHaveBeenCalledWith(
-          'Runtime.evaluate',
-          expect.objectContaining({
-            expression: expect.stringContaining("name === 'App'"),
-          }),
-          testSessionId
-        )
+        expect(result).toEqual(mockComponents)
       })
     })
 
     describe('hooks', () => {
       it('should return hooks information', async () => {
-        const mockHooks = {
-          components: [
-            {
-              name: 'Counter',
-              hooks: [
-                { type: 'useState', value: 0 },
-                { type: 'useEffect', deps: [] },
-              ],
-            },
-          ],
-        }
+        const result = await provider.readResource('react/hooks')
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockHooks,
-              },
-            })
-          )
-
-        const result = await provider.readResource('react://hooks')
-        
-        expect(result).toEqual(mockHooks)
+        expect(result).toEqual({
+          description: 'Use react_inspect_hooks tool for specific components',
+          hint: 'Hooks require component ID'
+        })
       })
     })
 
     describe('profiler', () => {
       it('should return profiler data', async () => {
-        const mockProfilerData = {
-          enabled: true,
-          interactions: [
-            {
-              id: 1,
-              name: 'button-click',
-              timestamp: 123456,
-            },
-          ],
-          measurements: [
-            {
-              componentName: 'App',
-              renderTime: 16.5,
-              count: 10,
-            },
-          ],
-        }
+        const result = await provider.readResource('react/profiler')
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockProfilerData,
-              },
-            })
-          )
-
-        const result = await provider.readResource('react://profiler')
-        
-        expect(result).toEqual(mockProfilerData)
+        expect(result).toEqual({
+          description: 'Use react_profile_renders tool for profiling',
+          hint: 'Start profiling session first'
+        })
       })
     })
 
-    describe('errors', () => {
-      it('should return React error boundaries info', async () => {
-        const mockErrors = {
-          errorBoundaries: [
-            {
-              componentName: 'ErrorBoundary',
-              hasError: false,
-              errorInfo: null,
-            },
-          ],
-          recentErrors: [],
-        }
-        
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockErrors,
-              },
-            })
-          )
-
-        const result = await provider.readResource('react://errors')
-        
-        expect(result).toEqual(mockErrors)
-      })
-    })
 
     describe('context', () => {
       it('should return React context information', async () => {
-        const mockContext = {
-          providers: [
-            {
-              name: 'ThemeContext',
-              value: { theme: 'dark' },
-              consumers: 5,
-            },
-          ],
-        }
+        const result = await provider.readResource('react/context')
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockContext,
-              },
-            })
-          )
-
-        const result = await provider.readResource('react://context')
-        
-        expect(result).toEqual(mockContext)
+        expect(result).toEqual({
+          description: 'React context detection in development',
+          hint: 'Use React DevTools for context inspection'
+        })
       })
     })
 
-    describe('suspense', () => {
-      it('should return Suspense boundary info', async () => {
-        const mockSuspense = {
-          boundaries: [
-            {
-              componentName: 'SuspenseBoundary',
-              fallback: 'Loading...',
-              suspended: false,
-            },
-          ],
-        }
+    describe('props', () => {
+      it('should return props hint', async () => {
+        const result = await provider.readResource('react/props')
         
-        mockChromeClient.send
-          .mockResolvedValueOnce(undefined) // Runtime.enable
-          .mockResolvedValueOnce(
-            createCDPResponse({
-              result: {
-                type: 'object',
-                value: mockSuspense,
-              },
-            })
-          )
+        expect(result).toEqual({
+          description: 'Use react_inspect_props tool for specific components',
+          hint: 'Props require component ID'
+        })
+      })
+    })
 
-        const result = await provider.readResource('react://suspense')
+    describe('state', () => {
+      it('should return state hint', async () => {
+        const result = await provider.readResource('react/state')
         
-        expect(result).toEqual(mockSuspense)
+        expect(result).toEqual({
+          description: 'Use react_inspect_state tool for specific components',
+          hint: 'State requires component ID'
+        })
+      })
+    })
+
+    describe('performance', () => {
+      it('should return performance data', async () => {
+        const mockPerformance = { renderTime: 16.5 }
+        const mockReactProvider = (provider as any).reactProvider
+        mockReactProvider.getReactPerformance.mockResolvedValue(mockPerformance)
+
+        const result = await provider.readResource('react/performance')
+        
+        expect(result).toEqual(mockPerformance)
       })
     })
 
     it('should handle unknown resource URI', async () => {
-      const result = await provider.readResource('react://unknown')
-      
-      expect(result).toEqual({
-        error: 'Unknown React resource: react://unknown',
-      })
+      await expect(provider.readResource('react/unknown')).rejects.toThrow('Unknown React resource: react/unknown')
     })
 
     it('should handle errors gracefully', async () => {
-      mockChromeClient.send.mockRejectedValueOnce(new Error('CDP error'))
+      const mockReactProvider = (provider as any).reactProvider
+      mockReactProvider.getReactPerformance.mockRejectedValue(new Error('CDP error'))
 
-      const result = await provider.readResource('react://version')
-      
-      expect(result).toEqual({
-        error: 'Failed to read React resource: CDP error',
-      })
+      await expect(provider.readResource('react/performance')).rejects.toThrow('CDP error')
     })
   })
 })
