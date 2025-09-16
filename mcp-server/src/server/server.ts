@@ -226,8 +226,16 @@ export class CurupiraServer {
         
         this.logger.info({ tool: name }, 'Tool executed successfully');
         
-        // MCP expects the tool result data directly, not wrapped
-        return result.data || {};
+        // MCP expects a content array with the tool result
+        // Always return a meaningful response, even if no data
+        const content = [{
+          type: 'text' as const,
+          text: result.data ? 
+            (typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)) : 
+            `Tool '${name}' executed successfully but returned no data.`
+        }];
+        
+        return { content };
       } catch (error) {
         this.logger.error({ error, tool: name }, 'Tool execution error');
         throw error;
