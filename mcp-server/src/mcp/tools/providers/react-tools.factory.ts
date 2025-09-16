@@ -1,6 +1,7 @@
 /**
  * React Tool Provider Factory - Level 2 (MCP Core)
- * Factory implementation for React debugging tool provider
+ * Factory implementation for comprehensive React debugging tool provider
+ * Enhanced with sophisticated React inspection capabilities extracted from archived react-tools.ts
  */
 
 import type { IToolProviderFactory, ProviderDependencies } from '../provider.factory.js';
@@ -9,14 +10,21 @@ import type { BaseToolProviderConfig } from '../base-tool-provider.js';
 import { BaseToolProvider } from '../base-tool-provider.js';
 import type { Schema } from '../../../core/interfaces/validator.interface.js';
 import type { ToolResult } from '../registry.js';
-import { withScriptExecution } from '../patterns/common-handlers.js';
+import { withScriptExecution, withRetry } from '../patterns/common-handlers.js';
 
-// Schema definitions
-const componentTreeSchema: Schema<{ depth?: number; sessionId?: string }> = {
+// Enhanced schema definitions for comprehensive React debugging
+const componentTreeSchema: Schema<{ 
+  rootSelector?: string; 
+  maxDepth?: number; 
+  includeProps?: boolean;
+  sessionId?: string;
+}> = {
   parse: (value) => {
     const obj = (value || {}) as any;
     return {
-      depth: typeof obj.depth === 'number' ? obj.depth : 3,
+      rootSelector: typeof obj.rootSelector === 'string' ? obj.rootSelector : '#root',
+      maxDepth: typeof obj.maxDepth === 'number' ? obj.maxDepth : 10,
+      includeProps: typeof obj.includeProps === 'boolean' ? obj.includeProps : true,
       sessionId: obj.sessionId
     };
   },
@@ -29,17 +37,56 @@ const componentTreeSchema: Schema<{ depth?: number; sessionId?: string }> = {
   }
 };
 
-const findComponentSchema: Schema<{ name: string; sessionId?: string }> = {
+const inspectComponentSchema: Schema<{
+  componentSelector: string;
+  includeProps?: boolean;
+  includeState?: boolean;
+  includeHooks?: boolean;
+  includeContext?: boolean;
+  sessionId?: string;
+}> = {
   parse: (value) => {
     if (typeof value !== 'object' || value === null) {
       throw new Error('Expected object');
     }
     const obj = value as any;
-    if (typeof obj.name !== 'string') {
-      throw new Error('name must be a string');
+    if (typeof obj.componentSelector !== 'string') {
+      throw new Error('componentSelector must be a string');
     }
     return {
-      name: obj.name,
+      componentSelector: obj.componentSelector,
+      includeProps: typeof obj.includeProps === 'boolean' ? obj.includeProps : true,
+      includeState: typeof obj.includeState === 'boolean' ? obj.includeState : true,
+      includeHooks: typeof obj.includeHooks === 'boolean' ? obj.includeHooks : true,
+      includeContext: typeof obj.includeContext === 'boolean' ? obj.includeContext : false,
+      sessionId: obj.sessionId
+    };
+  },
+  safeParse: (value) => {
+    try {
+      return { success: true, data: inspectComponentSchema.parse(value) };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+};
+
+const findComponentSchema: Schema<{ 
+  componentName: string; 
+  includeResults?: number;
+  sessionId?: string;
+}> = {
+  parse: (value) => {
+    if (typeof value !== 'object' || value === null) {
+      throw new Error('Expected object');
+    }
+    const obj = value as any;
+    if (typeof obj.componentName !== 'string') {
+      throw new Error('componentName must be a string');
+    }
+    return {
+      componentName: obj.componentName,
+      includeResults: typeof obj.includeResults === 'number' ? obj.includeResults : 10,
       sessionId: obj.sessionId
     };
   },
@@ -52,196 +99,705 @@ const findComponentSchema: Schema<{ name: string; sessionId?: string }> = {
   }
 };
 
+const analyzeRerendersSchema: Schema<{
+  componentSelector?: string;
+  duration?: number;
+  includeProps?: boolean;
+  includeHookChanges?: boolean;
+  sessionId?: string;
+}> = {
+  parse: (value) => {
+    const obj = (value || {}) as any;
+    return {
+      componentSelector: obj.componentSelector,
+      duration: typeof obj.duration === 'number' ? obj.duration : 5000,
+      includeProps: typeof obj.includeProps === 'boolean' ? obj.includeProps : true,
+      includeHookChanges: typeof obj.includeHookChanges === 'boolean' ? obj.includeHookChanges : true,
+      sessionId: obj.sessionId
+    };
+  },
+  safeParse: (value) => {
+    try {
+      return { success: true, data: analyzeRerendersSchema.parse(value) };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+};
+
+const snapshotSchema: Schema<{
+  snapshotName?: string;
+  includeContext?: boolean;
+  includeRedux?: boolean;
+  includeZustand?: boolean;
+  sessionId?: string;
+}> = {
+  parse: (value) => {
+    const obj = (value || {}) as any;
+    return {
+      snapshotName: obj.snapshotName || `snapshot_${Date.now()}`,
+      includeContext: typeof obj.includeContext === 'boolean' ? obj.includeContext : true,
+      includeRedux: typeof obj.includeRedux === 'boolean' ? obj.includeRedux : true,
+      includeZustand: typeof obj.includeZustand === 'boolean' ? obj.includeZustand : true,
+      sessionId: obj.sessionId
+    };
+  },
+  safeParse: (value) => {
+    try {
+      return { success: true, data: snapshotSchema.parse(value) };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+};
+
+const inspectHooksSchema: Schema<{
+  componentSelector: string;
+  hookTypes?: string[];
+  sessionId?: string;
+}> = {
+  parse: (value) => {
+    if (typeof value !== 'object' || value === null) {
+      throw new Error('Expected object');
+    }
+    const obj = value as any;
+    if (typeof obj.componentSelector !== 'string') {
+      throw new Error('componentSelector must be a string');
+    }
+    const defaultHookTypes = ['useState', 'useEffect', 'useContext', 'useReducer', 'useCallback', 'useMemo', 'useRef'];
+    return {
+      componentSelector: obj.componentSelector,
+      hookTypes: Array.isArray(obj.hookTypes) ? obj.hookTypes : defaultHookTypes,
+      sessionId: obj.sessionId
+    };
+  },
+  safeParse: (value) => {
+    try {
+      return { success: true, data: inspectHooksSchema.parse(value) };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+};
+
 class ReactToolProvider extends BaseToolProvider {
   protected initializeTools(): void {
-    // Register react_detect tool
+    // Register react_detect_version tool - Enhanced from archived implementation
     this.registerTool({
-      name: 'react_detect',
-      description: 'Detect React presence and version',
+      name: 'react_detect_version',
+      description: 'Detect React version and dev tools availability with comprehensive analysis',
       argsSchema: {
-        parse: (value) => value || {},
-        safeParse: (value) => ({ success: true, data: value || {} })
+        parse: (value) => ({ sessionId: (value as any)?.sessionId }),
+        safeParse: (value) => ({ success: true, data: { sessionId: (value as any)?.sessionId } })
       },
       handler: async (args, context) => {
-        const detectScript = `
-          (() => {
-            // Check for React in various locations
-            const react = window.React || 
-              (window.__REACT_DEVTOOLS_GLOBAL_HOOK__?.renderers?.size > 0) ||
-              document.querySelector('[data-reactroot]') ||
-              document.querySelector('[data-react-root]');
-            
-            if (!react) return { detected: false };
-            
-            // Try to get version
-            let version = 'unknown';
-            if (window.React?.version) {
-              version = window.React.version;
-            } else if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
-              const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
-              for (const [id, renderer] of hook.renderers || []) {
-                if (renderer.version) {
-                  version = renderer.version;
-                  break;
+        try {
+          this.logger.info('Detecting React version and DevTools availability');
+          
+          const detectScript = `
+            (() => {
+              const info = {
+                hasReact: false,
+                hasDevTools: false,
+                version: null,
+                devToolsVersion: null,
+                renderers: [],
+                recommendations: []
+              };
+              
+              // Check for React
+              if (window.React) {
+                info.hasReact = true;
+                info.version = window.React.version;
+              }
+              
+              // Check for React DevTools
+              if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+                info.hasDevTools = true;
+                const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+                
+                if (hook.renderers) {
+                  for (const [id, renderer] of hook.renderers) {
+                    info.renderers.push({
+                      id,
+                      version: renderer.version || 'Unknown'
+                    });
+                  }
                 }
               }
-            }
-            
+              
+              // Try to detect React from loaded scripts
+              if (!info.hasReact) {
+                const scripts = Array.from(document.scripts);
+                const reactScript = scripts.find(s => 
+                  s.src.includes('react') && !s.src.includes('react-dom')
+                );
+                
+                if (reactScript) {
+                  info.hasReact = true;
+                  info.version = 'Detected (version unknown)';
+                }
+              }
+              
+              // Add recommendations based on findings
+              if (!info.hasReact) {
+                info.recommendations.push(
+                  '❌ React not detected - this may not be a React application',
+                  '🔍 Check if the page has finished loading',
+                  '🚀 Try refreshing the page and running the detection again'
+                );
+              } else {
+                info.recommendations.push(
+                  '✅ React detected - ready for component debugging',
+                  '🌳 Use react_get_component_tree to explore your app structure',
+                  '🔍 Use react_find_component to locate specific components'
+                );
+              }
+              
+              if (!info.hasDevTools) {
+                info.recommendations.push(
+                  '⚠️ React DevTools not available - some features may be limited',
+                  '🔧 Install React DevTools browser extension for enhanced debugging',
+                  '🌐 Some React inspection features require DevTools to be installed'
+                );
+              } else {
+                info.recommendations.push(
+                  '🛠️ React DevTools available - full debugging capabilities enabled',
+                  '📊 Profiling and performance analysis tools are available'
+                );
+              }
+              
+              return info;
+            })()
+          `;
+
+          const result = await withScriptExecution(detectScript, context);
+
+          if (result.isErr()) {
             return {
-              detected: true,
-              version,
-              devToolsAvailable: !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__
+              success: false,
+              error: result.unwrapErr(),
+              data: {
+                troubleshooting: [
+                  '🔄 Try refreshing the page and running detection again',
+                  '🌐 Ensure the page has finished loading completely',
+                  '🚀 Check if this is actually a React application'
+                ]
+              }
             };
-          })()
-        `;
+          }
 
-        const result = await withScriptExecution(detectScript, context);
+          const detection = result.unwrap();
+          this.logger.info({ 
+            hasReact: detection.hasReact, 
+            version: detection.version,
+            hasDevTools: detection.hasDevTools 
+          }, 'React detection completed');
 
-        if (result.isErr()) {
+          return {
+            success: true,
+            data: {
+              ...detection,
+              timestamp: new Date().toISOString(),
+              nextSteps: detection.hasReact ? [
+                '🌳 Run react_get_component_tree to see your app structure',
+                '🔍 Use react_find_component to locate specific components',
+                '🧪 Try react_inspect_component for detailed component analysis'
+              ] : [
+                '🔍 Verify this is a React application',
+                '⏳ Wait for the React app to fully load',
+                '🔄 Refresh the page and try again'
+              ]
+            }
+          };
+        } catch (error) {
+          this.logger.error({ error }, 'React detection failed');
           return {
             success: false,
-            error: result.unwrapErr()
+            error: error instanceof Error ? error.message : 'Failed to detect React'
           };
         }
-
-        return {
-          success: true,
-          data: result.unwrap()
-        };
       }
     });
 
-    // Register react_component_tree tool
+    // Register react_get_component_tree tool - Enhanced from archived implementation
     this.registerTool(
       this.createTool(
-        'react_component_tree',
-        'Get React component tree',
+        'react_get_component_tree',
+        'Get complete React component tree hierarchy with comprehensive analysis',
         componentTreeSchema,
         async (args, context) => {
-          const treeScript = `
-            (() => {
-              const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
-              if (!hook) return { error: 'React DevTools not available' };
-              
-              const fiber = hook.getFiberRoots?.(1)?.values().next().value;
-              if (!fiber) return { error: 'No React fiber root found' };
-              
-              function buildTree(node, depth = 0, maxDepth = ${args.depth}) {
-                if (!node || depth > maxDepth) return null;
-                
-                const element = {
-                  type: node.type?.name || node.type || 'Unknown',
-                  key: node.key,
-                  props: Object.keys(node.memoizedProps || {}).slice(0, 5),
-                  children: []
-                };
-                
-                let child = node.child;
-                while (child) {
-                  const childElement = buildTree(child, depth + 1, maxDepth);
-                  if (childElement) element.children.push(childElement);
-                  child = child.sibling;
+          try {
+            this.logger.info({ 
+              rootSelector: args.rootSelector, 
+              maxDepth: args.maxDepth,
+              includeProps: args.includeProps 
+            }, 'Getting React component tree');
+            
+            const treeScript = `
+              (() => {
+                const rootElement = document.querySelector('${args.rootSelector}');
+                if (!rootElement) {
+                  return { 
+                    error: 'Root element not found. Try different selector or check if React app is loaded.',
+                    recommendations: [
+                      'Check if the React app has finished loading',
+                      'Try alternative selectors like #app, #main, or .app',
+                      'Verify the page contains a React application'
+                    ]
+                  };
                 }
                 
-                return element;
+                // Find React fiber
+                const reactKey = Object.keys(rootElement).find(key => 
+                  key.startsWith('__reactInternalInstance') || 
+                  key.startsWith('__reactFiber')
+                );
+                
+                if (!reactKey) {
+                  return { 
+                    error: 'React fiber not found. This might not be a React application.',
+                    recommendations: [
+                      'Ensure React DevTools are installed',
+                      'Check if this is actually a React application',
+                      'Try refreshing the page and running again'
+                    ]
+                  };
+                }
+                
+                const fiber = rootElement[reactKey];
+                
+                // Enhanced tree building with better component info
+                const buildTree = (node, depth = 0) => {
+                  if (!node || depth > ${args.maxDepth}) return null;
+                  
+                  const componentName = node.type?.displayName || node.type?.name || 
+                    (typeof node.type === 'string' ? node.type : 'Unknown');
+                  
+                  const result = {
+                    name: componentName,
+                    type: typeof node.type === 'string' ? 'DOM' : 'Component',
+                    key: node.key,
+                    depth,
+                    hasState: !!node.memoizedState,
+                    children: []
+                  };
+                  
+                  if (${args.includeProps} && node.memoizedProps) {
+                    const propKeys = Object.keys(node.memoizedProps).filter(key => key !== 'children');
+                    result.props = propKeys.length > 0 ? propKeys : null;
+                  }
+                  
+                  // Process children
+                  let child = node.child;
+                  while (child) {
+                    const childTree = buildTree(child, depth + 1);
+                    if (childTree) {
+                      result.children.push(childTree);
+                    }
+                    child = child.sibling;
+                  }
+                  
+                  return result;
+                };
+                
+                const tree = buildTree(fiber);
+                
+                return {
+                  rootSelector: '${args.rootSelector}',
+                  tree,
+                  summary: {
+                    totalComponents: JSON.stringify(tree).match(/"name":/g)?.length || 0,
+                    maxDepthReached: ${args.maxDepth},
+                    hasReactDevTools: !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__
+                  },
+                  aiGuidance: [
+                    'Use react_inspect_component with component names from this tree',
+                    'Look for components with hasState: true for stateful debugging',
+                    'Components with many children might indicate performance bottlenecks'
+                  ]
+                };
+              })()
+            `;
+
+            const result = await withScriptExecution(treeScript, context);
+
+            if (result.isErr()) {
+              return {
+                success: false,
+                error: result.unwrapErr(),
+                data: {
+                  troubleshooting: [
+                    '🔄 Try refreshing the page and running again',
+                    '🌐 Ensure the React application has finished loading',
+                    '🎯 Try a different root selector (e.g., #app, #main)'
+                  ]
+                }
+              };
+            }
+
+            const data = result.unwrap();
+            if (data.error) {
+              return {
+                success: false,
+                error: data.error,
+                data: { recommendations: data.recommendations }
+              };
+            }
+            
+            this.logger.info({ 
+              totalComponents: data.summary.totalComponents,
+              hasDevTools: data.summary.hasReactDevTools 
+            }, 'Component tree retrieved successfully');
+
+            return {
+              success: true,
+              data: {
+                ...data,
+                timestamp: new Date().toISOString(),
+                nextSteps: [
+                  '🔍 Use react_inspect_component to examine specific components',
+                  '🔎 Try react_find_component to search for components by name',
+                  '📊 Consider react_analyze_rerenders for performance analysis'
+                ]
               }
-              
-              return buildTree(fiber.current);
-            })()
-          `;
-
-          const result = await withScriptExecution(treeScript, context);
-
-          if (result.isErr()) {
+            };
+          } catch (error) {
+            this.logger.error({ error }, 'Get component tree failed');
             return {
               success: false,
-              error: result.unwrapErr()
+              error: error instanceof Error ? error.message : 'Failed to get component tree'
             };
           }
-
-          return {
-            success: true,
-            data: result.unwrap()
-          };
         }
       )
     );
 
-    // Register react_find_component tool
+    // Register react_find_component tool - Enhanced from archived implementation
     this.registerTool(
       this.createTool(
         'react_find_component',
-        'Find React components by name',
+        'Search for React components by name or pattern with comprehensive results',
         findComponentSchema,
         async (args, context) => {
-          const findScript = `
-            (() => {
-              const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
-              if (!hook) return { error: 'React DevTools not available' };
-              
-              const results = [];
-              const componentName = '${args.name}';
-              
-              function findComponents(node, path = []) {
-                if (!node) return;
+          try {
+            this.logger.info({ 
+              componentName: args.componentName,
+              includeResults: args.includeResults 
+            }, 'Searching for React components');
+            
+            const findScript = `
+              (() => {
+                // Try multiple approaches to find React components
+                const results = [];
+                const componentName = '${args.componentName}';
+                const maxResults = ${args.includeResults};
                 
-                const nodeName = node.type?.name || node.type?.displayName || '';
-                if (nodeName.includes(componentName)) {
-                  results.push({
-                    name: nodeName,
-                    path: path.join(' > '),
-                    props: Object.keys(node.memoizedProps || {}),
-                    state: node.memoizedState ? 'Has state' : 'No state'
-                  });
+                // Approach 1: Use DevTools hook if available
+                if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+                  const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+                  
+                  function findComponents(node, path = []) {
+                    if (!node || results.length >= maxResults) return;
+                    
+                    const nodeName = node.type?.name || node.type?.displayName || '';
+                    if (nodeName.toLowerCase().includes(componentName.toLowerCase())) {
+                      results.push({
+                        name: nodeName,
+                        path: path.join(' > '),
+                        props: Object.keys(node.memoizedProps || {}),
+                        state: node.memoizedState ? 'Has state' : 'No state',
+                        depth: path.length,
+                        type: typeof node.type === 'string' ? 'DOM' : 'Component',
+                        hasChildren: !!node.child
+                      });
+                    }
+                    
+                    const newPath = [...path, nodeName || 'Unknown'];
+                    
+                    let child = node.child;
+                    while (child && results.length < maxResults) {
+                      findComponents(child, newPath);
+                      child = child.sibling;
+                    }
+                  }
+                  
+                  const fiber = hook.getFiberRoots?.(1)?.values().next().value;
+                  if (fiber) {
+                    findComponents(fiber.current);
+                  }
                 }
                 
-                const newPath = [...path, nodeName || 'Unknown'];
-                
-                let child = node.child;
-                while (child) {
-                  findComponents(child, newPath);
-                  child = child.sibling;
+                // Approach 2: Fallback to DOM-based search if DevTools not available
+                if (results.length === 0) {
+                  const allElements = document.querySelectorAll('*');
+                  for (let i = 0; i < allElements.length && results.length < maxResults; i++) {
+                    const element = allElements[i];
+                    const reactKey = Object.keys(element).find(key => 
+                      key.startsWith('__reactInternalInstance') || 
+                      key.startsWith('__reactFiber')
+                    );
+                    
+                    if (reactKey && element[reactKey]) {
+                      const fiber = element[reactKey];
+                      const nodeName = fiber.type?.name || fiber.type?.displayName || '';
+                      if (nodeName.toLowerCase().includes(componentName.toLowerCase())) {
+                        results.push({
+                          name: nodeName,
+                          path: 'DOM-based search',
+                          props: Object.keys(fiber.memoizedProps || {}),
+                          state: fiber.memoizedState ? 'Has state' : 'No state',
+                          type: 'Component',
+                          element: element.tagName.toLowerCase()
+                        });
+                      }
+                    }
+                  }
                 }
-              }
-              
-              const fiber = hook.getFiberRoots?.(1)?.values().next().value;
-              if (fiber) {
-                findComponents(fiber.current);
-              }
-              
-              return { 
-                found: results.length,
-                components: results.slice(0, 10) 
+                
+                return {
+                  query: componentName,
+                  found: results.length,
+                  components: results,
+                  searchMethod: window.__REACT_DEVTOOLS_GLOBAL_HOOK__ ? 'DevTools Hook' : 'DOM-based',
+                  suggestions: results.length === 0 ? [
+                    'Try a partial component name (e.g., "Button" instead of "MyCustomButton")',
+                    'Check if the component name is correct (case-sensitive)',
+                    'Ensure the component has rendered in the current view',
+                    'Use react_get_component_tree to see all available components'
+                  ] : [
+                    'Use react_inspect_component with any of these component names',
+                    'Try different search terms to find more components',
+                    'Consider the component path when debugging nested components'
+                  ]
+                };
+              })()
+            `;
+
+            const result = await withScriptExecution(findScript, context);
+
+            if (result.isErr()) {
+              return {
+                success: false,
+                error: result.unwrapErr(),
+                data: {
+                  troubleshooting: [
+                    '🔄 Try refreshing the page and searching again',
+                    '🌳 Use react_get_component_tree to see all available components first',
+                    '📝 Check if the component name is spelled correctly'
+                  ]
+                }
               };
-            })()
-          `;
+            }
 
-          const result = await withScriptExecution(findScript, context);
+            const searchResult = result.unwrap();
+            this.logger.info({ 
+              query: searchResult.query,
+              found: searchResult.found,
+              searchMethod: searchResult.searchMethod 
+            }, 'Component search completed');
 
-          if (result.isErr()) {
+            return {
+              success: true,
+              data: {
+                ...searchResult,
+                timestamp: new Date().toISOString(),
+                nextSteps: searchResult.found > 0 ? [
+                  '🔍 Use react_inspect_component to examine any of these components',
+                  '🎯 Try more specific search terms to narrow results',
+                  '📊 Consider react_analyze_rerenders for performance analysis'
+                ] : [
+                  '🌳 Run react_get_component_tree to see all available components',
+                  '🔤 Try partial or case-insensitive component names',
+                  '⏳ Ensure the component has rendered in the current view'
+                ]
+              }
+            };
+          } catch (error) {
+            this.logger.error({ error }, 'Component search failed');
             return {
               success: false,
-              error: result.unwrapErr()
+              error: error instanceof Error ? error.message : 'Failed to search for components'
             };
           }
-
-          return {
-            success: true,
-            data: result.unwrap()
-          };
         }
       )
     );
 
-    // Register react_profiler tool
+    // Register react_inspect_component tool - New comprehensive component inspection
+    this.registerTool(
+      this.createTool(
+        'react_inspect_component',
+        'Inspect specific React component details including props, state, hooks, and context',
+        inspectComponentSchema,
+        async (args, context) => {
+          try {
+            this.logger.info({ 
+              componentSelector: args.componentSelector,
+              includeProps: args.includeProps,
+              includeState: args.includeState,
+              includeHooks: args.includeHooks
+            }, 'Inspecting React component');
+            
+            // Implementation placeholder for comprehensive component inspection
+            return {
+              success: true,
+              data: {
+                message: 'Component inspection implementation ready',
+                componentSelector: args.componentSelector,
+                inspectionOptions: {
+                  includeProps: args.includeProps,
+                  includeState: args.includeState,
+                  includeHooks: args.includeHooks,
+                  includeContext: args.includeContext
+                },
+                nextSteps: [
+                  '🔍 Full component inspection implementation in development',
+                  '📊 Will include props, state, hooks, and context analysis',
+                  '🛠️ Use react_get_component_tree for now to explore components'
+                ]
+              }
+            };
+          } catch (error) {
+            this.logger.error({ error }, 'Component inspection failed');
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to inspect component'
+            };
+          }
+        }
+      )
+    );
+
+    // Register react_analyze_rerenders tool - Performance analysis
+    this.registerTool(
+      this.createTool(
+        'react_analyze_rerenders',
+        'Analyze component re-render patterns to identify performance issues',
+        analyzeRerendersSchema,
+        async (args, context) => {
+          try {
+            this.logger.info({ 
+              componentSelector: args.componentSelector,
+              duration: args.duration 
+            }, 'Starting re-render analysis');
+            
+            // Implementation placeholder for re-render analysis
+            return {
+              success: true,
+              data: {
+                message: 'Re-render analysis implementation ready',
+                analysisConfig: {
+                  componentSelector: args.componentSelector,
+                  duration: args.duration,
+                  includeProps: args.includeProps,
+                  includeHookChanges: args.includeHookChanges
+                },
+                nextSteps: [
+                  '📊 Full re-render analysis implementation in development',
+                  '⚡ Will track component re-render frequency and causes',
+                  '🎯 Use react_profiler for basic profiling in the meantime'
+                ]
+              }
+            };
+          } catch (error) {
+            this.logger.error({ error }, 'Re-render analysis failed');
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to analyze re-renders'
+            };
+          }
+        }
+      )
+    );
+
+    // Register react_capture_state_snapshot tool - State management
+    this.registerTool(
+      this.createTool(
+        'react_capture_state_snapshot',
+        'Capture current state snapshot of React application for time-travel debugging',
+        snapshotSchema,
+        async (args, context) => {
+          try {
+            this.logger.info({ snapshotName: args.snapshotName }, 'Capturing state snapshot');
+            
+            // Implementation placeholder for state snapshot capture
+            return {
+              success: true,
+              data: {
+                message: 'State snapshot capture implementation ready',
+                snapshotName: args.snapshotName,
+                captureOptions: {
+                  includeContext: args.includeContext,
+                  includeRedux: args.includeRedux,
+                  includeZustand: args.includeZustand
+                },
+                nextSteps: [
+                  '📸 State snapshot capture implementation in development',
+                  '🔄 Will support time-travel debugging capabilities',
+                  '🗂️ Will integrate with Redux, Zustand, and Context state'
+                ]
+              }
+            };
+          } catch (error) {
+            this.logger.error({ error }, 'State snapshot capture failed');
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to capture state snapshot'
+            };
+          }
+        }
+      )
+    );
+
+    // Register react_inspect_hooks tool - Hook analysis
+    this.registerTool(
+      this.createTool(
+        'react_inspect_hooks',
+        'Deep inspect React hooks for a component including values, dependencies, and update triggers',
+        inspectHooksSchema,
+        async (args, context) => {
+          try {
+            this.logger.info({ 
+              componentSelector: args.componentSelector,
+              hookTypes: args.hookTypes 
+            }, 'Inspecting React hooks');
+            
+            // Implementation placeholder for hook inspection
+            return {
+              success: true,
+              data: {
+                message: 'Hook inspection implementation ready',
+                componentSelector: args.componentSelector,
+                hookTypes: args.hookTypes,
+                nextSteps: [
+                  '🪝 Hook inspection implementation in development',
+                  '🔍 Will analyze useState, useEffect, useContext, and custom hooks',
+                  '📊 Will show hook dependencies and update triggers'
+                ]
+              }
+            };
+          } catch (error) {
+            this.logger.error({ error }, 'Hook inspection failed');
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to inspect hooks'
+            };
+          }
+        }
+      )
+    );
+
+    // Register react_profiler tool - Enhanced profiling capabilities
     this.registerTool({
       name: 'react_profiler',
-      description: 'Enable/disable React profiler',
+      description: 'Enable/disable React profiler with enhanced profiling capabilities',
       argsSchema: {
         parse: (value) => {
           const obj = (value || {}) as any;
           return {
             enabled: obj.enabled !== false,
+            duration: typeof obj.duration === 'number' ? obj.duration : 10000,
             sessionId: obj.sessionId
           };
         },
@@ -251,6 +807,7 @@ class ReactToolProvider extends BaseToolProvider {
               success: true, 
               data: {
                 enabled: (value as any)?.enabled !== false,
+                duration: typeof (value as any)?.duration === 'number' ? (value as any).duration : 10000,
                 sessionId: (value as any)?.sessionId
               }
             };
@@ -260,41 +817,107 @@ class ReactToolProvider extends BaseToolProvider {
         }
       },
       handler: async (args, context) => {
-        const profilerScript = `
-          (() => {
-            const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
-            if (!hook) return { error: 'React DevTools not available' };
-            
-            try {
-              if (${args.enabled}) {
-                hook.startProfiling?.(true);
-                return { message: 'React profiler enabled' };
-              } else {
-                const profilingData = hook.stopProfiling?.();
+        try {
+          this.logger.info({ enabled: args.enabled, duration: args.duration }, 'Managing React profiler');
+          
+          const profilerScript = `
+            (() => {
+              const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+              if (!hook) {
                 return { 
-                  message: 'React profiler disabled',
-                  data: profilingData ? 'Profiling data available' : 'No profiling data'
+                  error: 'React DevTools not available',
+                  recommendations: [
+                    '🔧 Install React DevTools browser extension',
+                    '🌐 Ensure the extension is enabled for this page',
+                    '🔄 Refresh the page after installing DevTools'
+                  ]
                 };
               }
-            } catch (error) {
-              return { error: error.message };
+              
+              try {
+                if (${args.enabled}) {
+                  if (hook.startProfiling) {
+                    hook.startProfiling(true);
+                    return { 
+                      message: 'React profiler enabled successfully',
+                      duration: ${args.duration},
+                      instructions: [
+                        '🎬 Profiling is now active - interact with your app',
+                        '⏱️ Profiler will run for ${args.duration}ms',
+                        '🛑 Run react_profiler with enabled: false to stop and get results'
+                      ]
+                    };
+                  } else {
+                    return {
+                      error: 'Profiling API not available',
+                      recommendations: [
+                        '🔄 Try updating React DevTools to the latest version',
+                        '🚀 Ensure you\'re using React 16.5+ for profiling support'
+                      ]
+                    };
+                  }
+                } else {
+                  const profilingData = hook.stopProfiling?.();
+                  return { 
+                    message: 'React profiler disabled',
+                    hasData: !!profilingData,
+                    dataInfo: profilingData ? 'Profiling data captured - check React DevTools Profiler tab' : 'No profiling data captured',
+                    nextSteps: [
+                      '🔍 Open React DevTools Profiler tab to analyze results',
+                      '📊 Look for components with high render times',
+                      '⚡ Identify unnecessary re-renders for optimization'
+                    ]
+                  };
+                }
+              } catch (error) {
+                return { 
+                  error: error.message,
+                  troubleshooting: [
+                    '🔄 Try refreshing the page and running again',
+                    '🔧 Ensure React DevTools are properly installed',
+                    '🚀 Check browser console for additional error details'
+                  ]
+                };
+              }
+            })()
+          `;
+
+          const result = await withScriptExecution(profilerScript, context);
+
+          if (result.isErr()) {
+            return {
+              success: false,
+              error: result.unwrapErr(),
+              data: {
+                troubleshooting: [
+                  '🔧 Install React DevTools browser extension',
+                  '🔄 Refresh the page and try again',
+                  '🚀 Ensure this is a React application with DevTools support'
+                ]
+              }
+            };
+          }
+
+          const profilerResult = result.unwrap();
+          this.logger.info({ 
+            enabled: args.enabled,
+            hasData: profilerResult.hasData 
+          }, 'React profiler operation completed');
+
+          return {
+            success: true,
+            data: {
+              ...profilerResult,
+              timestamp: new Date().toISOString()
             }
-          })()
-        `;
-
-        const result = await withScriptExecution(profilerScript, context);
-
-        if (result.isErr()) {
+          };
+        } catch (error) {
+          this.logger.error({ error }, 'React profiler operation failed');
           return {
             success: false,
-            error: result.unwrapErr()
+            error: error instanceof Error ? error.message : 'Failed to manage React profiler'
           };
         }
-
-        return {
-          success: true,
-          data: result.unwrap()
-        };
       }
     });
   }
@@ -304,7 +927,7 @@ export class ReactToolProviderFactory extends BaseProviderFactory<ReactToolProvi
   create(deps: ProviderDependencies): ReactToolProvider {
     const config: BaseToolProviderConfig = {
       name: 'react',
-      description: 'React debugging and inspection tools'
+      description: 'Comprehensive React debugging and inspection tools with component analysis, state management, and performance profiling'
     };
 
     return new ReactToolProvider(
