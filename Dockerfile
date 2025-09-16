@@ -69,11 +69,13 @@ ENV HOST=0.0.0.0
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD node -e "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-# Metadata
+# Copy package.json for dynamic version reading
+COPY package.json ./
+
+# Metadata with dynamic version
 LABEL org.opencontainers.image.source="https://github.com/drzln/curupira"
 LABEL org.opencontainers.image.description="Curupira MCP Server - Enhanced CDP-native MCP debugging platform with 85+ resources and 40+ tools"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.version="1.2.0-enhanced"
 LABEL curupira.features="cdp,react,xstate,zustand,apollo,connectivity"
 
 # Use dumb-init to handle signals properly
