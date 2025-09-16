@@ -56,6 +56,8 @@ This guide outlines the systematic approach to developing Curupira - the CDP-nat
 
 - **Develop for maximum testability and maintainance**
 
+### RULE 8: **Archive, do not delete** 📦
+
 ## 📊 Strict Hierarchy (Dependencies Flow DOWN Only)
 
 ```
@@ -74,4 +76,3 @@ Level 4: Server        → transport, routing, main server
 2. **Bottom-Up**: Build Level 0 → 4
 3. **Test Each Level**: Before proceeding up
 4. **Enforce Hierarchy**: No upward imports
-

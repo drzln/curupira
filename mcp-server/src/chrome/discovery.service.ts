@@ -113,7 +113,7 @@ export class ChromeDiscoveryService implements IChromeDiscoveryService {
     }
   }
 
-  private async discoverOnPort(host: string, port: number, timeout: number): Promise<ChromeInstance[]> {
+  private async discoverOnPort(host: string, port: number, timeout: number, preferredPatterns: string[]): Promise<ChromeInstance[]> {
     try {
       const baseUrl = `http://${host}:${port}`;
       
@@ -145,25 +145,102 @@ export class ChromeDiscoveryService implements IChromeDiscoveryService {
         faviconUrl?: string;
       }>;
 
-      // Filter for page targets only
+      // Filter for page targets and enhance with detection metadata
       return targets
         .filter(target => target.type === 'page')
-        .map(target => ({
-          id: target.id,
-          type: target.type,
-          url: target.url,
-          title: target.title,
-          description: target.description,
-          webSocketDebuggerUrl: target.webSocketDebuggerUrl,
-          faviconUrl: target.faviconUrl,
-          host,
-          port
-        }));
+        .map(target => {
+          const instance: ChromeInstance = {
+            id: target.id,
+            type: target.type,
+            url: target.url,
+            title: target.title,
+            description: target.description,
+            webSocketDebuggerUrl: target.webSocketDebuggerUrl,
+            faviconUrl: target.faviconUrl,
+            host,
+            port
+          };
+
+          // Enhanced React app detection
+          instance.isReactApp = this.detectReactApp(instance, preferredPatterns);
+          instance.isDevelopmentApp = this.detectDevelopmentApp(instance);
+          instance.confidence = this.calculateConfidence(instance, preferredPatterns);
+
+          return instance;
+        });
 
     } catch (error) {
       this.logger.debug({ host, port, error }, 'No Chrome instance found on port');
       return [];
     }
+  }
+
+  private detectReactApp(instance: ChromeInstance, preferredPatterns: string[]): boolean {
+    const title = instance.title.toLowerCase();
+    const url = instance.url.toLowerCase();
+    
+    // Check title patterns
+    const reactTitlePatterns = ['react', 'vite', 'next', 'webpack', 'development'];
+    const titleMatches = reactTitlePatterns.some(pattern => title.includes(pattern));
+    
+    // Check URL patterns
+    const reactUrlPatterns = [
+      'localhost', '127.0.0.1', 
+      ':3000', ':3001', ':5173', ':8080', ':4173'
+    ];
+    const urlMatches = reactUrlPatterns.some(pattern => url.includes(pattern));
+    
+    // Check preferred patterns from config
+    const preferredMatches = preferredPatterns.some(pattern => 
+      title.includes(pattern.toLowerCase()) || url.includes(pattern.toLowerCase())
+    );
+    
+    return titleMatches || urlMatches || preferredMatches;
+  }
+
+  private detectDevelopmentApp(instance: ChromeInstance): boolean {
+    const url = instance.url.toLowerCase();
+    const title = instance.title.toLowerCase();
+    
+    const devPatterns = [
+      'localhost', '127.0.0.1', 'dev', 'staging', 
+      'development', 'local', ':3000', ':8080'
+    ];
+    
+    return devPatterns.some(pattern => 
+      url.includes(pattern) || title.includes(pattern)
+    );
+  }
+
+  private calculateConfidence(instance: ChromeInstance, preferredPatterns: string[]): number {
+    let confidence = 0;
+    
+    // Base confidence for any page
+    confidence += 1;
+    
+    // React app indicators
+    if (instance.isReactApp) confidence += 5;
+    
+    // Development indicators
+    if (instance.isDevelopmentApp) confidence += 3;
+    
+    // Preferred pattern matches
+    const title = instance.title.toLowerCase();
+    const url = instance.url.toLowerCase();
+    preferredPatterns.forEach(pattern => {
+      if (title.includes(pattern.toLowerCase()) || url.includes(pattern.toLowerCase())) {
+        confidence += 2;
+      }
+    });
+    
+    // URL quality indicators
+    if (url.includes('localhost') || url.includes('127.0.0.1')) confidence += 2;
+    if (url.includes(':3000') || url.includes(':5173')) confidence += 3; // Common React ports
+    
+    // Title quality indicators
+    if (title && title !== 'new tab' && title !== 'about:blank') confidence += 1;
+    
+    return Math.min(confidence, 10); // Cap at 10
   }
 
   getRecommendations(instances: ChromeInstance[]): string[] {
