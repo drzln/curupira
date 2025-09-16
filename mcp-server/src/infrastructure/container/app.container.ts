@@ -91,11 +91,17 @@ export function createApplicationContainer(): Container {
     return new ErrorHandler(logger);
   });
 
-  // Register Chrome service
+  // Register Chrome services
   container.register(ChromeServiceToken, (c) => {
     const config = c.resolve(ChromeConfigToken);
     const logger = c.resolve(LoggerToken);
     return new ChromeService(config, logger);
+  });
+
+  container.register(ChromeDiscoveryServiceToken, (c) => {
+    const config = c.resolve(ChromeDiscoveryConfigToken);
+    const logger = c.resolve(LoggerToken);
+    return new ChromeDiscoveryService(config, logger);
   });
 
   // Register registries
@@ -116,10 +122,15 @@ export function registerToolProviders(container: Container): void {
     validator: container.resolve(ValidatorToken)
   };
 
-  // Register all tool provider factories
+  // Special deps for Chrome tools that need discovery service
+  const chromeProviderDeps = {
+    ...providerDeps,
+    chromeDiscoveryService: container.resolve(ChromeDiscoveryServiceToken)
+  };
+
+  // Register tool provider factories
   const factories = [
     new CDPToolProviderFactory(),
-    new ChromeToolProviderFactory(),
     new ReactToolProviderFactory(),
     new ConsoleToolProviderFactory(),
     new DebuggerToolProviderFactory(),
@@ -133,11 +144,16 @@ export function registerToolProviders(container: Container): void {
     new StorageToolProviderFactory()
   ];
 
-  // Create and register each provider
+  // Create and register standard providers
   for (const factory of factories) {
     const provider = factory.create(providerDeps);
     toolRegistry.register(provider);
   }
+
+  // Register Chrome tool provider with discovery service
+  const chromeToolFactory = new ChromeToolProviderFactory();
+  const chromeProvider = chromeToolFactory.create(chromeProviderDeps);
+  toolRegistry.register(chromeProvider);
 }
 
 /**
