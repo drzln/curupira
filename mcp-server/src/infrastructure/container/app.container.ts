@@ -20,6 +20,7 @@ import {
 
 // Service implementations
 import { ChromeService } from '../../chrome/chrome.service.js';
+import { ChromeDiscoveryService } from '../../chrome/discovery.service.js';
 import { ToolRegistry } from '../../mcp/tools/registry.js';
 import { ResourceRegistry } from '../../mcp/resources/registry.js';
 import { PinoLoggerAdapter } from '../logger/pino-logger.js';
@@ -57,6 +58,15 @@ export function createApplicationContainer(): Container {
     port: parseInt(process.env.CHROME_PORT || '9222', 10),
     secure: process.env.CHROME_SECURE === 'true',
     defaultTimeout: parseInt(process.env.CHROME_TIMEOUT || '30000', 10)
+  }));
+
+  container.register(ChromeDiscoveryConfigToken, () => ({
+    enabled: process.env.CHROME_DISCOVERY_ENABLED !== 'false',
+    hosts: (process.env.CHROME_DISCOVERY_HOSTS || 'localhost').split(','),
+    ports: (process.env.CHROME_DISCOVERY_PORTS || '9222,9223,9224,9225,9226').split(',').map(p => parseInt(p, 10)),
+    timeout: parseInt(process.env.CHROME_DISCOVERY_TIMEOUT || '5000', 10),
+    autoConnect: process.env.CHROME_DISCOVERY_AUTO_CONNECT === 'true',
+    preferredPatterns: (process.env.CHROME_DISCOVERY_PATTERNS || 'localhost,react,vite,next').split(',')
   }));
 
   container.register(ServerConfigToken, () => ({
