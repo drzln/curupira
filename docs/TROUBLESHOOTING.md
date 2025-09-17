@@ -4,9 +4,9 @@
 
 - [Common Issues](#common-issues)
 - [Connection Problems](#connection-problems)
-- [Performance Issues](#performance-issues)
-- [Security & Authentication](#security--authentication)
-- [Debugging Curupira Itself](#debugging-curupira-itself)
+- [Configuration Issues](#configuration-issues)
+- [Tool Execution Errors](#tool-execution-errors)
+- [Debugging Curupira](#debugging-curupira)
 - [FAQ](#faq)
 
 ## Common Issues
@@ -14,374 +14,247 @@
 ### 1. Cannot Connect to Chrome
 
 **Symptoms:**
-- "Failed to connect to Chrome DevTools Protocol"
-- Connection timeout errors
+- "Chrome not connected" errors
+- Tools fail with "Chrome connection required"
 
 **Solutions:**
 
-1. **Verify Chrome is running with debugging enabled:**
+1. **Ensure Browserless Chrome is running:**
    ```bash
-   # Check if Chrome is listening
-   curl http://localhost:9222/json/version
+   # Start Browserless Chrome
+   docker run -d -p 3000:3000 browserless/chrome
    
-   # Start Chrome with debugging
-   google-chrome --remote-debugging-port=9222 --no-first-run --no-default-browser-check
+   # Verify it's accessible
+   curl http://localhost:3000/json/version
    ```
 
-2. **Check environment variables:**
+2. **Check Chrome service configuration:**
    ```bash
-   echo $CURUPIRA_CDP_HOST  # Should be localhost or chrome service
-   echo $CURUPIRA_CDP_PORT  # Should be 9222 or 3000 for browserless
+   # Verify environment variable
+   echo $CHROME_SERVICE_URL  # Should be http://localhost:3000
+   
+   # Or check config file
+   cat config/base.yaml | grep serviceUrl
    ```
 
-3. **For Kubernetes deployments:**
+3. **Use chrome_connect tool first:**
+   ```
+   Ask Claude: "Connect to Chrome browser"
+   ```
+
+4. **Enable debug logging:**
    ```bash
-   # Verify Chrome service is running
-   kubectl get svc -n shared-services chrome-headless
-   
-   # Check connectivity
-   kubectl run test-pod --rm -it --image=curlimages/curl -- \
-     curl http://chrome-headless.shared-services.svc.cluster.local:3000/json/version
+   LOGGING_LEVEL=debug npm run start
+   # Look for Chrome connection attempts in logs
    ```
 
 ### 2. No React Components Found
 
 **Symptoms:**
-- Empty component tree
-- "React not detected" errors
+- react_detect_version returns false
+- react_get_component_tree returns empty
 
 **Solutions:**
 
-1. **Verify React DevTools is available:**
-   ```javascript
-   // In browser console
-   window.__REACT_DEVTOOLS_GLOBAL_HOOK__
+1. **Navigate to React app first:**
+   ```
+   Ask Claude: "Navigate to my React app at http://localhost:3000"
    ```
 
-2. **Check React version compatibility:**
-   - Curupira supports React 16.8+
-   - React must be in development mode for full features
+2. **Use react_detect_version tool:**
+   ```
+   Ask Claude: "Check if React is available on this page"
+   ```
 
 3. **For production React apps:**
-   ```javascript
-   // Some features are limited in production builds
-   // Consider using React Profiler build for better debugging
-   ```
+   - React DevTools may not be available
+   - Some debugging features are limited
+   - Consider running app in development mode
 
-### 3. State Management Not Detected
+### 3. Tools Not Working
 
 **Symptoms:**
-- XState machines not found
-- Zustand stores empty
+- "Tool not found" errors
+- Tools appear but don't execute
 
 **Solutions:**
 
-1. **Ensure stores are properly exposed:**
-   ```javascript
-   // For Zustand
-   window.__ZUSTAND_STORES__ = new Map();
-   
-   // For XState
-   window.__XSTATE_MACHINES__ = new Map();
-   ```
+1. **Ensure Chrome is connected first:**
+   - Most tools require Chrome connection
+   - Use `chrome_connect` before other tools
 
-2. **Check if state management is initialized:**
-   ```javascript
-   // Verify in console
-   Array.from(window.__ZUSTAND_STORES__.keys())
-   ```
+2. **Check tool names:**
+   - Tool names use underscores: `react_inspect_component`
+   - Not camelCase or kebab-case
+
+3. **Verify tool parameters:**
+   - Check required parameters in API documentation
+   - Use proper types (strings, numbers, booleans)
 
 ## Connection Problems
 
-### WebSocket Connection Failed
+### MCP Connection Failed
 
-**Error:** "WebSocket connection to 'ws://localhost:3000/mcp' failed"
-
-**Solutions:**
-
-1. **Check transport type:**
-   ```bash
-   # For stdio (default)
-   CURUPIRA_TRANSPORT=stdio
-   
-   # For HTTP/SSE
-   CURUPIRA_TRANSPORT=sse
-   CURUPIRA_PORT=3000
-   ```
-
-2. **Verify CORS settings:**
-   ```javascript
-   // For browser connections
-   CURUPIRA_CORS_ORIGINS=http://localhost:3000,https://myapp.com
-   ```
-
-3. **Check firewall/proxy settings:**
-   - Ensure port 3000 is accessible
-   - WebSocket upgrade headers must be allowed
-
-### Authentication Failures
-
-**Error:** "Authentication failed" or "No token provided"
+**Error:** "Failed to connect to MCP server"
 
 **Solutions:**
 
-1. **In development (auth disabled):**
-   ```bash
-   NODE_ENV=development
+1. **Check Claude Desktop configuration:**
+   ```json
+   // ~/.config/claude/claude_desktop_config.json
+   {
+     "mcpServers": {
+       "curupira": {
+         "command": "node",
+         "args": ["/path/to/curupira/mcp-server/dist/main.js"]
+       }
+     }
+   }
    ```
 
-2. **In production (JWT required):**
-   ```javascript
-   // Include token in header
-   Authorization: Bearer <your-jwt-token>
+2. **Verify server is running:**
+   ```bash
+   # Check if process is running
+   ps aux | grep curupira
    
-   // Or in query string for SSE
-   /mcp?token=<your-jwt-token>
+   # Test with stdio
+   echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | node dist/main.js
    ```
 
-3. **Verify JWT configuration:**
-   ```bash
-   # Required environment variables
-   CURUPIRA_JWT_SECRET=your-secret
-   CURUPIRA_JWT_ISSUER=curupira.nexus.io
-   CURUPIRA_JWT_AUDIENCE=curupira-mcp
-   ```
+## Configuration Issues
 
-## Performance Issues
-
-### High Memory Usage
+### Configuration Not Loading
 
 **Symptoms:**
-- Memory usage growing over time
-- Slow response times
+- Default values used instead of config
+- Environment variables not working
 
 **Solutions:**
 
-1. **Adjust cache settings:**
+1. **Check config file location:**
    ```bash
-   CURUPIRA_CACHE_SIZE=50  # Reduce from default 100
-   CURUPIRA_MAX_CONSOLE_LOGS=500  # Reduce from 1000
-   CURUPIRA_MAX_NETWORK_REQUESTS=250  # Reduce from 500
-   ```
-
-2. **Enable memory limits:**
-   ```yaml
-   # In Kubernetes
-   resources:
-     limits:
-       memory: "512Mi"
-   ```
-
-3. **Monitor memory usage:**
-   ```bash
-   # Check metrics endpoint
-   curl http://localhost:3000/metrics | grep memory
-   ```
-
-### Slow Resource Queries
-
-**Symptoms:**
-- Timeouts when reading resources
-- Slow component tree traversal
-
-**Solutions:**
-
-1. **Optimize queries:**
-   ```javascript
-   // Limit component depth
-   CURUPIRA_MAX_COMPONENT_DEPTH=10
+   # Default locations checked
+   ./config/base.yaml
+   ./config/{environment}.yaml
    
-   // Reduce detail level
-   CURUPIRA_COMPONENT_DETAIL_LEVEL=basic
+   # Or specify explicitly
+   CURUPIRA_CONFIG_PATH=./my-config.yaml npm run start
    ```
 
-2. **Use caching effectively:**
-   ```javascript
-   // Resources are cached for better performance
-   // Clear cache if stale data is an issue
-   ```
-
-## Security & Authentication
-
-### Command Blocked by Security Policy
-
-**Error:** "Operation blocked by security policy"
-
-**Solutions:**
-
-1. **Check whitelist configuration:**
-   ```javascript
-   // In production, certain commands are blocked
-   // Review allowed commands in security policy
-   ```
-
-2. **For development/testing:**
+2. **Verify environment variable format:**
    ```bash
-   # Disable security restrictions
-   NODE_ENV=development
-   CURUPIRA_SECURITY_ENABLED=false
+   # Correct format
+   SERVER_PORT=3000
+   CHROME_SERVICE_URL=http://localhost:3000
+   LOGGING_LEVEL=debug
+   
+   # NOT curupira_server_port or CURUPIRA_SERVER_PORT
    ```
 
-### Rate Limit Exceeded
-
-**Error:** "Rate limit exceeded. Try again in X seconds"
-
-**Solutions:**
-
-1. **Check current limits:**
+3. **Check YAML syntax:**
    ```bash
-   # Response headers show limits
-   X-RateLimit-Limit: 100
-   X-RateLimit-Remaining: 0
-   X-RateLimit-Reset: 1234567890
+   # Validate YAML file
+   npx js-yaml config/base.yaml
    ```
 
-2. **Adjust rate limits (development):**
-   ```javascript
-   CURUPIRA_RATE_LIMIT_GLOBAL_MAX=1000
-   CURUPIRA_RATE_LIMIT_WINDOW=1m
-   ```
+## Tool Execution Errors
 
-3. **Use authenticated requests:**
-   - Authenticated users typically have higher limits
+### "Chrome not connected" Error
 
-## Debugging Curupira Itself
+**Solution:** Always connect to Chrome first:
+```
+1. Ask Claude: "Connect to Chrome"
+2. Then use other tools
+```
+
+### "Invalid parameters" Error
+
+**Common causes:**
+- Missing required parameters
+- Wrong parameter types
+- Typos in parameter names
+
+**Example fix:**
+```
+Wrong: { "selector": ".button", "All": true }
+Right: { "selector": ".button", "all": true }
+```
+
+## Debugging Curupira
 
 ### Enable Debug Logging
 
 ```bash
-# Verbose logging
-CURUPIRA_LOG_LEVEL=debug
-CURUPIRA_LOG_PRETTY=true
+# Maximum verbosity
+LOGGING_LEVEL=trace npm run start
 
-# View specific components
-DEBUG=curupira:* npm start
+# Debug specific areas
+DEBUG=curupira:chrome,curupira:mcp npm run start
 ```
 
-### Check Health Status
+### Test Individual Components
 
 ```bash
-# Health endpoint
-curl http://localhost:3000/health
+# Test Chrome connection
+node scripts/test-cdp-connection.ts
 
-# Expected response
-{
-  "status": "healthy",
-  "checks": {
-    "chrome": { "connected": true },
-    "memory": { "heapUsed": 50000000 }
-  }
-}
+# Test MCP protocol
+npm run test:mcp
+
+# Run integration tests
+npm run test:integration
 ```
 
-### Common Log Messages
+### Check Dependency Injection
 
+```typescript
+// In debug mode, log container state
+import { createApplicationContainer } from './infrastructure/container/app.container.js'
+
+const container = createApplicationContainer()
+console.log('Services:', container.getRegistrations())
 ```
-INFO: Starting Curupira MCP server
-INFO: Connected to Chrome DevTools Protocol
-WARN: Chrome connection lost, attempting reconnect...
-ERROR: Failed to execute tool: dom/click
-```
-
-### Using Chrome DevTools
-
-1. **Inspect WebSocket traffic:**
-   - Open Chrome DevTools > Network > WS
-   - Filter for MCP messages
-
-2. **Monitor CDP commands:**
-   ```javascript
-   // Enable CDP logging
-   CURUPIRA_CDP_DEBUG=true
-   ```
 
 ## FAQ
 
-### Q: Why can't I see all React components?
+### Q: Why are all tools visible even when Chrome isn't connected?
 
-**A:** In production builds, React removes some debugging information. For full debugging:
-1. Use React development builds
-2. Enable React Profiler builds
-3. Some internal components may be hidden
+A: Due to Claude Code limitations, all tools are registered statically at startup. They check Chrome connection when executed.
 
-### Q: How do I debug Curupira in a container?
+### Q: Can I use Curupira with regular Chrome instead of Browserless?
 
-**A:** Use these techniques:
+A: Yes, but you need to start Chrome with debugging:
 ```bash
-# View logs
-docker logs curupira-container
-
-# Execute commands inside container
-docker exec -it curupira-container sh
-
-# Enable debug mode
-docker run -e CURUPIRA_LOG_LEVEL=debug ...
+google-chrome --remote-debugging-port=9222 --no-first-run
+CHROME_SERVICE_URL=http://localhost:9222 npm run start
 ```
 
-### Q: Can I use Curupira with Chrome extensions?
+### Q: How do I add custom tools?
 
-**A:** Yes, but with limitations:
-- Extensions run in isolated contexts
-- Some CDP commands may not work
-- Use extension debugging mode
+A: Create a new tool provider following the factory pattern:
+1. Create `MyToolProviderFactory` extending `BaseProviderFactory`
+2. Register tools using `provider.registerTool()`
+3. Add to `registerToolProviders()` in `app.container.ts`
 
-### Q: How do I handle large applications?
+### Q: What's the difference between resources and tools?
 
-**A:** For apps with many components:
-1. Increase memory limits
-2. Use filtered queries
-3. Enable pagination for large result sets
-4. Consider sampling instead of full traversal
+A: 
+- **Resources**: Read-only data (DOM tree, network requests)
+- **Tools**: Actions that modify state (navigate, click, evaluate)
 
-### Q: What's the performance impact?
+### Q: How do I debug WebSocket connections?
 
-**A:** Typical overhead:
-- Memory: 50-100MB base + cache
-- CPU: <5% during active debugging
-- Network: Minimal (local WebSocket)
+A: Use Chrome DevTools:
+1. Open Network tab
+2. Filter by WS
+3. Check WebSocket frames
+4. Look for CDP messages
 
 ### Q: Can I use Curupira in production?
 
-**A:** Yes, with precautions:
-1. Enable authentication
-2. Use security policies
-3. Set appropriate rate limits
-4. Monitor resource usage
-5. Consider read-only access
-
-## Getting Help
-
-### 1. Check Logs
-```bash
-# Curupira logs
-CURUPIRA_LOG_LEVEL=debug npm start 2>&1 | tee debug.log
-
-# Chrome logs
-google-chrome --enable-logging --v=1
-```
-
-### 2. Diagnostic Commands
-```bash
-# Test Chrome connection
-curl http://localhost:9222/json/version
-
-# Test Curupira health
-curl http://localhost:3000/health
-
-# List available resources
-curl http://localhost:3000/mcp \
-  -X POST \
-  -d '{"method": "resources/list"}'
-```
-
-### 3. Report Issues
-
-Include:
-- Curupira version
-- Chrome version
-- Node.js version
-- Environment (OS, Docker, K8s)
-- Error messages and logs
-- Steps to reproduce
-
-GitHub Issues: https://github.com/drzln/curupira/issues
+A: Yes, but:
+- Enable authentication: `AUTH_ENABLED=true`
+- Use secure transports: HTTPS/WSS
+- Restrict CORS origins
+- Enable rate limiting
+- Use proper Chrome isolation

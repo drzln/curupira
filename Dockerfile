@@ -27,7 +27,7 @@ COPY mcp-server/ ./mcp-server/
 RUN npm run build --workspace=@curupira/shared && npm run build --workspace=curupira-mcp-server
 
 # Production stage
-FROM --platform=$TARGETPLATFORM node:20-alpine AS production
+FROM node:20-alpine AS production
 
 # Install dumb-init and security updates
 RUN apk add --no-cache dumb-init ca-certificates && \

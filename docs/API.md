@@ -2,93 +2,116 @@
 
 ## Overview
 
-Curupira MCP Server provides a Model Context Protocol (MCP) interface for debugging React applications through Chrome DevTools Protocol (CDP). This document describes all available resources, tools, and prompts.
+Curupira MCP Server provides a Model Context Protocol (MCP) interface for debugging web applications through Chrome DevTools Protocol (CDP). This document describes all available resources, tools, and prompts.
 
 ## Table of Contents
 
 - [Resources](#resources)
   - [Browser Resources](#browser-resources)
-  - [React Resources](#react-resources)
-  - [State Management Resources](#state-management-resources)
+  - [DOM Resources](#dom-resources)
   - [Network Resources](#network-resources)
+  - [State Resources](#state-resources)
 - [Tools](#tools)
-  - [DOM Tools](#dom-tools)
-  - [Runtime Tools](#runtime-tools)
-  - [Network Tools](#network-tools)
-  - [Performance Tools](#performance-tools)
+  - [Chrome Connection Tools](#chrome-connection-tools)
+  - [CDP Tools](#cdp-tools)
+  - [React Tools](#react-tools)
+  - [Framework Tools](#framework-tools)
+  - [State Management Tools](#state-management-tools)
+  - [Development Tools](#development-tools)
+  - [UI/Animation Tools](#uianimation-tools)
 - [Prompts](#prompts)
-- [Authentication](#authentication)
+- [Configuration](#configuration)
 - [Error Handling](#error-handling)
 
 ## Resources
 
-Resources provide read-only access to browser and application state.
+Resources provide read-only access to browser and application state. Resources are registered dynamically based on Chrome connection status.
 
 ### Browser Resources
 
-#### `browser://page/info`
-Get current page information.
+#### `browser://status`
+Get current browser connection status and capabilities.
 
 **Response:**
 ```json
 {
-  "url": "https://example.com",
-  "title": "Example Page",
-  "viewport": {
-    "width": 1920,
-    "height": 1080,
-    "deviceScaleFactor": 1
-  },
-  "userAgent": "Mozilla/5.0...",
-  "secure": true,
-  "timestamp": "2024-01-15T10:00:00Z"
+  "connected": true,
+  "serviceUrl": "chrome://localhost:9222",
+  "activeSessions": 1,
+  "sessions": [{
+    "sessionId": "default",
+    "createdAt": "2024-01-15T10:00:00Z",
+    "duration": 0
+  }],
+  "capabilities": {
+    "screenshot": true,
+    "evaluate": true,
+    "navigate": true,
+    "profiling": true,
+    "debugging": true
+  }
 }
 ```
 
-#### `browser://console/logs`
-Get console logs (last 1000 entries).
+### DOM Resources
+
+#### `chrome://dom/tree`
+Get the current DOM tree structure.
 
 **Response:**
 ```json
 {
-  "logs": [
-    {
-      "level": "info",
-      "text": "Application started",
-      "timestamp": 1234567890,
-      "source": "console-api",
-      "args": ["Application", "started"]
-    }
-  ],
-  "total": 42,
-  "truncated": false
+  "rootNode": {
+    "nodeId": 1,
+    "nodeName": "HTML",
+    "nodeType": 1,
+    "children": [...]
+  }
 }
 ```
 
-#### `browser://storage/all`
-Get all browser storage data.
+### Network Resources
+
+#### `chrome://network/requests`
+Get recent network requests.
 
 **Response:**
 ```json
 {
-  "localStorage": {
-    "key1": "value1"
-  },
-  "sessionStorage": {
-    "session_id": "abc123"
-  },
-  "cookies": [
-    {
-      "name": "session",
-      "value": "[REDACTED]",
-      "domain": ".example.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": true
-    }
-  ]
+  "requests": [{
+    "requestId": "123",
+    "url": "https://api.example.com/data",
+    "method": "GET",
+    "status": 200,
+    "responseTime": 123
+  }]
 }
 ```
+
+#### `chrome://network/websockets`
+Get active WebSocket connections.
+
+**Response:**
+```json
+{
+  "connections": [{
+    "url": "wss://ws.example.com",
+    "state": "open",
+    "messages": []
+  }]
+}
+```
+
+### State Resources
+
+#### `chrome://state/react`
+Get React component state information.
+
+#### `chrome://state/apollo`
+Get Apollo GraphQL cache state.
+
+#### `chrome://state/zustand`
+Get Zustand store state.
 
 ### React Resources
 
@@ -232,12 +255,108 @@ Get recent network requests (last 500).
 
 ## Tools
 
-Tools provide actions that can modify browser state.
+Tools provide actions to interact with the browser and debug applications. All tools are registered at startup but require Chrome connection to function.
+
+### Chrome Connection Tools
+
+#### `chrome_connect`
+Connect to Chrome browser via CDP.
+
+**Parameters:**
+```json
+{
+  "host": "localhost",
+  "port": 3000,
+  "timeout": 5000
+}
+```
+
+#### `chrome_disconnect`
+Disconnect from Chrome browser.
+
+#### `chrome_list_targets`
+List all available Chrome targets/tabs.
+
+### CDP Tools
+
+#### `cdp_evaluate`
+Evaluate JavaScript expression in the browser.
+
+**Parameters:**
+```json
+{
+  "expression": "document.title",
+  "sessionId": "optional-session-id"
+}
+```
+
+#### `cdp_navigate`
+Navigate to a URL.
+
+**Parameters:**
+```json
+{
+  "url": "https://example.com",
+  "sessionId": "optional-session-id"
+}
+```
+
+#### `cdp_get_cookies`
+Get browser cookies.
+
+**Parameters:**
+```json
+{
+  "urls": ["https://example.com"],
+  "sessionId": "optional-session-id"
+}
+```
+
+### React Tools
+
+#### `react_detect_version`
+Detect React version and DevTools availability.
+
+#### `react_get_component_tree`
+Get the React component tree structure.
+
+**Parameters:**
+```json
+{
+  "rootSelector": "#root",
+  "maxDepth": 10,
+  "includeProps": true
+}
+```
+
+#### `react_inspect_component`
+Inspect a specific React component.
+
+**Parameters:**
+```json
+{
+  "componentSelector": "App > Header",
+  "includeProps": true,
+  "includeState": true,
+  "includeHooks": true
+}
+```
+
+#### `react_analyze_rerenders`
+Analyze component re-renders for performance.
+
+**Parameters:**
+```json
+{
+  "componentSelector": "MyComponent",
+  "duration": 5000
+}
+```
 
 ### DOM Tools
 
-#### `dom/querySelector`
-Find elements using CSS selector.
+#### `dom_query_selector`
+Find DOM elements using CSS selectors.
 
 **Parameters:**
 ```json
@@ -247,30 +366,8 @@ Find elements using CSS selector.
 }
 ```
 
-**Response:**
-```json
-{
-  "selector": ".btn-primary",
-  "found": true,
-  "elements": [
-    {
-      "tagName": "button",
-      "id": "submit-btn",
-      "className": "btn btn-primary",
-      "textContent": "Submit",
-      "boundingBox": {
-        "x": 100,
-        "y": 200,
-        "width": 120,
-        "height": 40
-      }
-    }
-  ]
-}
-```
-
-#### `dom/click`
-Click an element.
+#### `dom_click`
+Click a DOM element.
 
 **Parameters:**
 ```json
@@ -279,273 +376,178 @@ Click an element.
 }
 ```
 
-#### `dom/setAttribute`
-Set element attribute.
-
-**Parameters:**
-```json
-{
-  "selector": "#my-input",
-  "attribute": "value",
-  "value": "new value"
-}
-```
-
-#### `dom/highlight`
-Highlight element temporarily.
-
-**Parameters:**
-```json
-{
-  "selector": ".error-message",
-  "color": "#ff0000",
-  "duration": 2000
-}
-```
-
-### Runtime Tools
-
-#### `runtime/evaluate`
-Execute JavaScript in page context.
-
-**Parameters:**
-```json
-{
-  "expression": "document.title",
-  "awaitPromise": true,
-  "returnByValue": true
-}
-```
-
-**Security Note:** Expressions are sanitized and dangerous patterns are blocked in production.
-
-#### `runtime/consoleLog`
-Log message to browser console.
-
-**Parameters:**
-```json
-{
-  "level": "info",
-  "message": "Debug message",
-  "args": ["additional", "data"]
-}
-```
-
-#### `runtime/setGlobal`
-Set global variable.
-
-**Parameters:**
-```json
-{
-  "name": "DEBUG_MODE",
-  "value": true
-}
-```
-
 ### Network Tools
 
-#### `network/setCacheDisabled`
-Enable/disable browser cache.
+#### `network_get_requests`
+Get recent network requests.
 
-**Parameters:**
-```json
-{
-  "disabled": true
-}
-```
+#### `network_get_websockets`
+Get active WebSocket connections.
 
-#### `network/throttleNetwork`
-Simulate slow network (requires additional setup).
+#### `network_intercept_requests`
+Intercept and modify network requests.
 
-**Parameters:**
-```json
-{
-  "downloadThroughput": 50000,
-  "uploadThroughput": 20000,
-  "latency": 200
-}
-```
+### Storage Tools
 
-### Performance Tools
+#### `get_local_storage`
+Get localStorage items.
 
-#### `performance/captureMetrics`
-Capture performance metrics.
+#### `get_session_storage`
+Get sessionStorage items.
 
-**Parameters:**
-```json
-{
-  "categories": ["paint", "layout", "script", "network", "memory"]
-}
-```
+#### `get_cookies`
+Get browser cookies.
 
-**Response:**
-```json
-{
-  "timestamp": 1234567890,
-  "metrics": {
-    "paint": {
-      "firstPaint": 120.5,
-      "firstContentfulPaint": 250.3,
-      "largestContentfulPaint": 450.7
-    },
-    "memory": {
-      "usedJSHeapSize": 15000000,
-      "totalJSHeapSize": 30000000
-    }
-  }
-}
-```
+#### `set_cookie`
+Set a browser cookie.
 
-#### `performance/analyzeLongTasks`
-Analyze long-running tasks.
+### Console Tools
 
-**Parameters:**
-```json
-{
-  "threshold": 50
-}
-```
+#### `console_get_messages`
+Get console log messages.
+
+#### `console_execute`
+Execute code in the browser console.
+
+#### `console_clear`
+Clear the console.
+
+### Debugger Tools
+
+#### `debugger_enable`
+Enable Chrome debugger.
+
+#### `debugger_pause`
+Pause JavaScript execution.
+
+#### `debugger_resume`
+Resume JavaScript execution.
+
+#### `debugger_set_breakpoint`
+Set a breakpoint.
+
+### State Management Tools
+
+#### `apollo_get_cache`
+Get Apollo GraphQL cache state.
+
+#### `zustand_get_stores`
+Get Zustand store states.
+
+#### `xstate_get_machines`
+Get XState machine states.
+
+#### `tanstack_query_get_cache`
+Get TanStack Query cache.
+
+### Development Tools
+
+#### `vite_dev_server_info`
+Get Vite dev server information.
+
+#### `react_router_get_routes`
+Get React Router routes.
+
+#### `react_hook_form_get_forms`
+Get React Hook Form states.
+
+### UI/Animation Tools
+
+#### `framer_motion_get_animations`
+Get Framer Motion animations.
+
+#### `panda_css_get_styles`
+Get Panda CSS styles and tokens.
 
 ## Prompts
 
-Pre-configured prompts for common debugging scenarios.
+Prompts provide pre-configured debugging scenarios for common use cases.
 
-### `debug-react-component`
-Debug a specific React component.
-
-**Arguments:**
-- `componentName`: Name of the component to debug
-
-### `debug-state-issue`
-Debug state management issues.
+### `debug-lazy-loading`
+Debug lazy-loaded component issues.
 
 **Arguments:**
-- `problem`: Description of the issue
-- `stateDescription`: What state to look for
+- `componentName` (required): Name of the component having issues
 
-### `analyze-performance`
-Analyze application performance.
-
-**Arguments:**
-- `targetArea`: Area to analyze (e.g., "checkout flow")
-
-### `debug-network-requests`
-Debug network request issues.
+### `trace-graphql-error`
+Trace GraphQL query errors.
 
 **Arguments:**
-- `endpoint`: API endpoint or URL pattern
+- `operation` (required): GraphQL operation name
+- `error` (required): Error message
 
-### `debug-cart-state`
-Debug shopping cart state (e-commerce specific).
+### `profile-performance`
+Profile component render performance.
 
-### `debug-application`
-General application debugging.
+**Arguments:**
+- `component` (optional): Component to profile
 
-## Authentication
+## Configuration
 
-### Development Mode
-Authentication is disabled by default in development mode.
+Curupira follows the Nexus configuration pattern: Base YAML → Environment YAML → Environment Variables.
 
-### Staging/Production
-JWT authentication is required. Include the token in:
+### Configuration Files
 
-**Authorization Header:**
+```yaml
+# config/base.yaml
+server:
+  name: "curupira-mcp-server"
+  version: "1.1.3"
+  host: "localhost"
+  port: 8080
+
+chrome:
+  serviceUrl: "http://localhost:3000"
+  connectTimeout: 5000
+
+transports:
+  websocket:
+    enabled: true
+  http:
+    enabled: true
+  sse:
+    enabled: true
 ```
-Authorization: Bearer <jwt-token>
-```
 
-**Query Parameter (for SSE):**
-```
-/mcp?token=<jwt-token>
-```
+### Environment Variables
 
-### JWT Token Structure
-```json
-{
-  "sub": "user-id",
-  "iat": 1234567890,
-  "exp": 1234571490,
-  "aud": "curupira-mcp",
-  "iss": "curupira.nexus.io",
-  "scope": ["read", "write"]
-}
+All configuration can be overridden via environment variables:
+
+```bash
+# Server
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
+
+# Chrome
+CHROME_SERVICE_URL=http://browserless:3000
+CHROME_DISCOVERY_ENABLED=true
+
+# Logging
+LOGGING_LEVEL=debug
+
+# Storage
+STORAGE_MINIO_ENABLED=true
 ```
 
 ## Error Handling
 
-### Error Response Format
+All errors follow a consistent format:
+
 ```json
 {
-  "error": {
-    "code": "RESOURCE_NOT_FOUND",
-    "message": "Resource not found: react://component/invalid",
-    "details": {
-      "uri": "react://component/invalid"
-    }
+  "error": "Chrome not connected",
+  "code": "CHROME_DISCONNECTED",
+  "details": {
+    "suggestion": "Use chrome_connect tool first"
   }
 }
 ```
 
 ### Common Error Codes
-- `RESOURCE_NOT_FOUND`: Requested resource doesn't exist
-- `TOOL_NOT_FOUND`: Unknown tool name
-- `INVALID_PARAMETERS`: Tool parameters validation failed
-- `CDP_ERROR`: Chrome DevTools Protocol error
-- `AUTHENTICATION_FAILED`: Invalid or missing auth token
-- `RATE_LIMIT_EXCEEDED`: Too many requests
-- `SECURITY_BLOCKED`: Operation blocked by security policy
 
-## Rate Limiting
+- `CHROME_DISCONNECTED`: Chrome browser not connected
+- `SESSION_NOT_FOUND`: Invalid session ID
+- `TOOL_EXECUTION_FAILED`: Tool failed to execute
+- `RESOURCE_NOT_FOUND`: Requested resource not found
+- `INVALID_PARAMETERS`: Invalid tool parameters
 
-### Default Limits
-- Global: 100 requests per minute
-- MCP endpoint: 1000 requests per minute
-- Health/Metrics: 10 requests per minute
-
-### Rate Limit Headers
-```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1234567890
-Retry-After: 60
-```
-
-## Health & Monitoring
-
-### Health Check Endpoint
-```
-GET /health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-01-15T10:00:00Z",
-  "uptime": 3600000,
-  "checks": {
-    "chrome": {
-      "connected": true,
-      "version": "121.0.6167.85"
-    },
-    "memory": {
-      "heapUsed": 50000000,
-      "heapTotal": 100000000
-    }
-  }
-}
-```
-
-### Metrics Endpoint (Prometheus Format)
-```
-GET /metrics
-```
-
-**Response:**
-```
-curupira_uptime_seconds 3600
-curupira_memory_heap_used_bytes 50000000
-curupira_chrome_connected 1
-curupira_resources_count 15
-curupira_tools_count 20
-```
