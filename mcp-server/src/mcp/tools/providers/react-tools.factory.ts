@@ -11,6 +11,9 @@ import { BaseToolProvider } from '../base-tool-provider.js';
 import type { Schema } from '../../../core/interfaces/validator.interface.js';
 import type { ToolResult } from '../registry.js';
 import { withScriptExecution, withRetry } from '../patterns/common-handlers.js';
+import { ReactDetector } from '../../../integrations/react/detector.js';
+import { ReactDevToolsInjector } from '../../../integrations/react/devtools-injector.js';
+import { RuntimeDomain } from '../../../chrome/domains/runtime.js';
 
 // Enhanced schema definitions for comprehensive React debugging
 const componentTreeSchema: Schema<{ 
@@ -194,127 +197,122 @@ class ReactToolProvider extends BaseToolProvider {
         try {
           this.logger.info('Detecting React version and DevTools availability');
           
-          const detectScript = `
-            (() => {
-              const info = {
-                hasReact: false,
-                hasDevTools: false,
-                version: null,
-                devToolsVersion: null,
-                renderers: [],
-                recommendations: []
-              };
-              
-              // Check for React
-              if (window.React) {
-                info.hasReact = true;
-                info.version = window.React.version;
-              }
-              
-              // Check for React DevTools
-              if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
-                info.hasDevTools = true;
-                const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
-                
-                if (hook.renderers) {
-                  for (const [id, renderer] of hook.renderers) {
-                    info.renderers.push({
-                      id,
-                      version: renderer.version || 'Unknown'
-                    });
-                  }
-                }
-              }
-              
-              // Try to detect React from loaded scripts
-              if (!info.hasReact) {
-                const scripts = Array.from(document.scripts);
-                const reactScript = scripts.find(s => 
-                  s.src.includes('react') && !s.src.includes('react-dom')
-                );
-                
-                if (reactScript) {
-                  info.hasReact = true;
-                  info.version = 'Detected (version unknown)';
-                }
-              }
-              
-              // Add recommendations based on findings
-              if (!info.hasReact) {
-                info.recommendations.push(
-                  '❌ React not detected - this may not be a React application',
-                  '🔍 Check if the page has finished loading',
-                  '🚀 Try refreshing the page and running the detection again'
-                );
-              } else {
-                info.recommendations.push(
-                  '✅ React detected - ready for component debugging',
-                  '🌳 Use react_get_component_tree to explore your app structure',
-                  '🔍 Use react_find_component to locate specific components'
-                );
-              }
-              
-              if (!info.hasDevTools) {
-                info.recommendations.push(
-                  '⚠️ React DevTools not available - some features may be limited',
-                  '🔧 Install React DevTools browser extension for enhanced debugging',
-                  '🌐 Some React inspection features require DevTools to be installed'
-                );
-              } else {
-                info.recommendations.push(
-                  '🛠️ React DevTools available - full debugging capabilities enabled',
-                  '📊 Profiling and performance analysis tools are available'
-                );
-              }
-              
-              return info;
-            })()
-          `;
-
-          const result = await withScriptExecution(detectScript, context);
-
-          if (result.isErr()) {
-            return {
-              success: false,
-              error: result.unwrapErr(),
-              data: {
-                troubleshooting: [
-                  '🔄 Try refreshing the page and running detection again',
-                  '🌐 Ensure the page has finished loading completely',
-                  '🚀 Check if this is actually a React application'
-                ]
-              }
-            };
+          // Get Chrome service from provider
+          const chromeService = this.chromeService;
+          if (!chromeService) {
+            throw new Error('Chrome service not available');
           }
 
-          const detection = result.unwrap();
-          this.logger.info({ 
-            hasReact: detection.hasReact, 
-            version: detection.version,
-            hasDevTools: detection.hasDevTools 
-          }, 'React detection completed');
+          // Get the current session  
+          const sessionId = args.sessionId || context.sessionId;
+          if (!sessionId) {
+            throw new Error('No active Chrome session');
+          }
+
+          // Create runtime domain
+          const client = context.chromeClient;
+          const runtime = new RuntimeDomain(client, sessionId);
+          
+          // Use the enhanced React detector
+          const detector = new ReactDetector(runtime);
+          const detectionResult = await detector.detect();
+          
+          // If React is detected but no DevTools, try to inject them
+          if (detectionResult.detected && !detectionResult.hasDevTools) {
+            this.logger.info('React detected without DevTools, attempting to inject hook');
+            const injector = new ReactDevToolsInjector(runtime);
+            const injected = await injector.inject();
+            
+            if (injected) {
+              // Re-detect after injection
+              const reDetection = await detector.detect();
+              Object.assign(detectionResult, reDetection);
+            }
+          }
+          
+          // Get component statistics if React is detected
+          let componentStats = null;
+          if (detectionResult.detected) {
+            try {
+              componentStats = await detector.getComponentStats();
+            } catch (error) {
+              this.logger.debug({ error }, 'Could not get component stats');
+            }
+          }
+          
+          // Build comprehensive result
+          const info = {
+            hasReact: detectionResult.detected,
+            hasDevTools: detectionResult.hasDevTools || false,
+            version: detectionResult.version || null,
+            isProduction: detectionResult.isProduction || false,
+            hasFiber: detectionResult.hasFiber || false,
+            rendererVersion: detectionResult.rendererVersion || null,
+            componentStats,
+            recommendations: [] as string[]
+          };
+          
+          // Add recommendations based on findings
+          if (!info.hasReact) {
+            info.recommendations.push(
+              '❌ React not detected - this may not be a React application',
+              '🔍 Check if the page has finished loading',
+              '🚀 Try refreshing the page and running the detection again'
+            );
+          } else {
+            info.recommendations.push(
+              '✅ React detected - ready for component debugging',
+              '🌳 Use react_get_component_tree to explore your app structure',
+              '🔍 Use react_find_component to locate specific components'
+            );
+            
+            if (info.isProduction) {
+              info.recommendations.push(
+                '🏭 Production build detected - some debugging features may be limited',
+                '💡 Consider using development builds for enhanced debugging'
+              );
+            }
+          }
+          
+          if (!info.hasDevTools) {
+            info.recommendations.push(
+              '⚠️ React DevTools not available - some features may be limited',
+              '🔧 Install React DevTools browser extension for enhanced debugging',
+              '🌐 Some React inspection features require DevTools to be installed'
+            );
+          } else {
+            info.recommendations.push(
+              '🛠️ React DevTools available - full debugging capabilities enabled',
+              '📊 Profiling and performance analysis tools are available'
+            );
+          }
+          
+          if (componentStats) {
+            info.recommendations.push(
+              `📊 Found ${componentStats.totalComponents} components (${componentStats.functionComponents} function, ${componentStats.classComponents} class)`,
+              `🌳 Component tree depth: ${componentStats.depth} levels`
+            );
+          }
 
           return {
             success: true,
             data: {
-              ...detection,
-              timestamp: new Date().toISOString(),
-              nextSteps: detection.hasReact ? [
-                '🌳 Run react_get_component_tree to see your app structure',
-                '🔍 Use react_find_component to locate specific components',
-                '🧪 Try react_inspect_component for detailed component analysis'
-              ] : [
-                '🔍 Verify this is a React application',
-                '⏳ Wait for the React app to fully load',
-                '🔄 Refresh the page and try again'
-              ]
+              ...info,
+              timestamp: new Date().toISOString()
             }
           };
         } catch (error) {
           this.logger.error({ error }, 'React detection failed');
           return {
             success: false,
-            error: error instanceof Error ? error.message : 'Failed to detect React'
+            error: error instanceof Error ? error.message : 'Unknown error',
+            data: {
+              troubleshooting: [
+                '🔄 Try refreshing the page and running detection again',
+                '🌐 Ensure the page has finished loading completely',
+                '🚀 Check if this is actually a React application'
+              ]
+            }
           };
         }
       }
