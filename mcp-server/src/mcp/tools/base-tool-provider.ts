@@ -70,15 +70,64 @@ export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = 
    * List all tools provided by this provider
    */
   listTools(): Tool[] {
-    return Array.from(this.tools.values()).map(def => ({
-      name: def.name,
-      description: def.description,
-      inputSchema: {
-        type: 'object',
-        properties: {},
-        required: []
+    return Array.from(this.tools.values()).map(def => {
+      // For chrome_connect, we need the proper schema
+      if (def.name === 'chrome_connect') {
+        return {
+          name: def.name,
+          description: def.description,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              host: { type: 'string', description: 'Chrome host' },
+              port: { type: 'number', description: 'Chrome debugging port', default: 9222 },
+              secure: { type: 'boolean', description: 'Use secure connection', default: false }
+            },
+            required: ['host']
+          }
+        };
       }
-    }));
+      
+      // For chrome_discover
+      if (def.name === 'chrome_discover') {
+        return {
+          name: def.name,
+          description: def.description,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              hosts: { 
+                type: 'array', 
+                items: { type: 'string' },
+                description: 'Hosts to scan for Chrome instances'
+              },
+              ports: { 
+                type: 'array', 
+                items: { type: 'number' },
+                description: 'Ports to scan'
+              },
+              timeout: { 
+                type: 'number',
+                description: 'Discovery timeout in ms',
+                default: 5000
+              }
+            },
+            required: []
+          }
+        };
+      }
+      
+      // Default for other tools
+      return {
+        name: def.name,
+        description: def.description,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      };
+    });
   }
 
   /**

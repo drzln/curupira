@@ -30,7 +30,7 @@ import type { IResourceRegistry } from '../../core/interfaces/resource-registry.
 
 // Provider factories
 import { CDPToolProviderFactory } from '../../mcp/tools/providers/cdp-tools.factory.js';
-import { ChromeToolProviderFactory } from '../../mcp/tools/providers/chrome-tools.factory.js';
+// ChromeToolProviderFactory removed - using chrome-connection provider for Chrome tools
 import { ChromeConnectionToolProviderFactory } from '../../mcp/tools/providers/chrome-connection-tools.factory.js';
 import { ReactToolProviderFactory } from '../../mcp/tools/providers/react-tools.factory.js';
 import { ConsoleToolProviderFactory } from '../../mcp/tools/providers/console-tools.factory.js';
@@ -208,37 +208,32 @@ export function registerToolProviders(container: Container): void {
   const chromeConnectionProvider = chromeConnectionFactory.create(chromeProviderDeps);
   toolRegistry.register(chromeConnectionProvider); // Not dynamic
 
-  // Setup Chrome event listeners for dynamic tool registration
-  if ('on' in chromeService) {
-    const eventEmitter = chromeService as any;
-    
-    eventEmitter.on('connected', async () => {
-      // Register Chrome-dependent tool providers dynamically
-      const dynamicFactories = [
-        new CDPToolProviderFactory(),
-        new ReactToolProviderFactory(),
-        new ConsoleToolProviderFactory(),
-        new DebuggerToolProviderFactory(),
-        new DOMToolProviderFactory(),
-        new NetworkToolProviderFactory(),
-        new PerformanceToolProviderFactory(),
-        new FrameworkToolProviderFactory(),
-        new NavigationToolProviderFactory(),
-        new ScreenshotToolProviderFactory(),
-        new SecurityToolProviderFactory(),
-        new StorageToolProviderFactory(),
-        new ChromeToolProviderFactory() // Chrome operation tools
-      ];
+  // WORKAROUND: Register all tools statically due to Claude Code dynamic tool limitation
+  // Previously we registered these dynamically on Chrome connection, but Claude Code
+  // doesn't update its tool list after the initial MCP connection
+  const allToolFactories = [
+    new CDPToolProviderFactory(),
+    new ReactToolProviderFactory(),
+    new ConsoleToolProviderFactory(),
+    new DebuggerToolProviderFactory(),
+    new DOMToolProviderFactory(),
+    new NetworkToolProviderFactory(),
+    new PerformanceToolProviderFactory(),
+    new FrameworkToolProviderFactory(),
+    new NavigationToolProviderFactory(),
+    new ScreenshotToolProviderFactory(),
+    new SecurityToolProviderFactory(),
+    new StorageToolProviderFactory()
+  ];
 
-      // Create and register dynamic providers
-      for (const factory of dynamicFactories) {
-        const provider = factory instanceof ChromeToolProviderFactory 
-          ? factory.create(chromeProviderDeps)
-          : factory.create(providerDeps);
-        (toolRegistry as any).register(provider, true); // Dynamic registration
-      }
-    });
+  // Register all providers statically at startup
+  for (const factory of allToolFactories) {
+    const provider = factory.create(providerDeps);
+    toolRegistry.register(provider); // Static registration - available immediately
   }
+  
+  // Note: Tools will now check Chrome connection status internally
+  // This ensures they're visible in Claude Code from the start
 }
 
 /**

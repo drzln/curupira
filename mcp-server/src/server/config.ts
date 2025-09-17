@@ -26,6 +26,7 @@ export interface ServerConfig {
   version?: string
   host?: string
   port?: number
+  transport?: 'stdio' | 'http' | 'sse'
   environment?: 'development' | 'staging' | 'production'
   logLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
   healthCheck?: boolean

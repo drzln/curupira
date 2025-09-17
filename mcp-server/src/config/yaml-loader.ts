@@ -20,6 +20,8 @@ const YamlConfigSchema = z.object({
     logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
   }).optional(),
   
+  transport: z.enum(['stdio', 'http', 'sse']).optional(),
+  
   transports: z.object({
     websocket: z.object({
       enabled: z.boolean().default(true),
@@ -106,6 +108,7 @@ export function loadYamlConfig(configPath: string): Partial<ServerConfig> {
       version: validatedConfig.server?.version,
       host: validatedConfig.server?.host,
       port: validatedConfig.server?.port,
+      transport: validatedConfig.transport,
       environment: validatedConfig.server?.environment,
       logLevel: validatedConfig.server?.logLevel,
       healthCheck: validatedConfig.healthCheck?.enabled,

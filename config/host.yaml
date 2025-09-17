@@ -1,0 +1,93 @@
+# Curupira Host Configuration for Direct Chrome Connection
+# Optimized for running curupira directly on host with chrome-dev
+
+# Server configuration
+server:
+  name: "curupira-host"
+  version: "2.4.27"
+  host: "0.0.0.0"
+  port: 8080
+  environment: "development"
+
+# Logging configuration
+logging:
+  level: "info"
+  pretty: true
+  format: "json"
+
+# Transport configuration
+transport: "stdio"  # Main transport mode: stdio, http, sse
+transports:
+  websocket:
+    enabled: true
+    path: "/mcp"
+    pingInterval: 30000
+    pongTimeout: 5000
+  http:
+    enabled: true
+    path: "/mcp"
+    timeout: 30000
+  sse:
+    enabled: true
+    path: "/mcp/sse"
+    keepAliveInterval: 30000
+
+# Health check settings
+healthCheck:
+  enabled: true
+  path: "/health"
+  interval: 30000
+
+# CORS configuration
+cors:
+  origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  credentials: true
+
+# Rate limiting (disabled for development)
+rateLimit:
+  enabled: false
+  max: 100
+  window: 60000
+
+# Authentication (disabled for development)
+auth:
+  enabled: false
+  jwtSecret: "development-secret"
+  tokenExpiry: "24h"
+
+# Chrome connection settings - Direct localhost connection
+chrome:
+  enabled: true
+  serviceUrl: "http://localhost:9222"  # Direct chrome-dev connection
+  connectTimeout: 5000
+  pageTimeout: 30000
+  defaultViewport:
+    width: 1920
+    height: 1080
+  discovery:
+    enabled: true
+    hosts:
+      - "localhost"
+      - "127.0.0.1"
+    ports:
+      - 9222  # Chrome DevTools Protocol port
+    timeout: 3000
+    autoConnect: false
+    preferredPatterns:
+      - "chrome-dev"
+      - "react"
+      - "localhost"
+
+# Performance settings
+performance:
+  maxMessageSize: 10485760
+  debounceMs: 100
+  throttleMs: 1000
+
+# Resource limits
+resources:
+  maxConsoleLogEntries: 1000
+  maxNetworkRequests: 500
+  cacheSize: 100

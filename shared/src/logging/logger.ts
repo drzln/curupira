@@ -171,7 +171,14 @@ export function createLogger(config: CurupiraLoggerConfig | SimpleLoggerConfig):
   }
 
   // Environment-specific configuration
-  if (fullConfig.environment === 'development' && !fullConfig.destination) {
+  if (process.env.CURUPIRA_STDIO_MODE === 'true' || process.env.CURUPIRA_TRANSPORT === 'stdio') {
+    // In stdio mode, write only to stderr to avoid polluting stdout
+    baseConfig.transport = {
+      target: 'pino/file',
+      options: { destination: 2 } // stderr
+    }
+    baseConfig.level = 'error' // Only log errors in stdio mode
+  } else if (fullConfig.environment === 'development' && !fullConfig.destination) {
     // Only try pino-pretty if not in test mode (no custom destination)
     // and check if pino-pretty is available
     let usePretty = false

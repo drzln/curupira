@@ -12,7 +12,10 @@ import { createApplicationContainer, registerToolProviders, registerResourceProv
 import { createLogger } from '@curupira/shared/logging'
 import type { LogLevel } from '@curupira/shared/types'
 
-const logger = createLogger({ level: 'info', name: 'cli' })
+// Create logger but suppress in stdio mode
+const logger = process.env.CURUPIRA_STDIO_MODE === 'true' 
+  ? { info: () => {}, error: console.error, debug: () => {}, warn: () => {} } as any
+  : createLogger({ level: 'info', name: 'cli' })
 
 /**
  * Parse log level string
@@ -386,6 +389,56 @@ program
 
     } catch (error) {
       logger.error({ error }, 'Failed to start dev server')
+      process.exit(1)
+    }
+  })
+
+/**
+ * Stdio command - Start server in stdio mode for MCP
+ */
+program
+  .command('stdio')
+  .description('Start MCP server in stdio mode (for Claude Code)')
+  .option('--config <path>', 'Path to configuration file')
+  .action(async (options) => {
+    try {
+      // Set stdio mode FIRST to suppress all logging
+      process.env.CURUPIRA_STDIO_MODE = 'true'
+      process.env.CURUPIRA_TRANSPORT = 'stdio'
+      
+      // Load configuration from YAML first if provided
+      if (options.config) {
+        await initializeConfiguration(options.config)
+      }
+      
+      // Create container and register providers
+      const container = createApplicationContainer()
+      registerToolProviders(container)
+      registerResourceProviders(container)
+      
+      // Create and start server
+      const server = new CurupiraServer(container)
+      
+      // Set up graceful shutdown
+      process.on('SIGTERM', async () => {
+        logger.info('Received SIGTERM, shutting down gracefully')
+        await server.stop()
+        process.exit(0)
+      })
+
+      process.on('SIGINT', async () => {
+        logger.info('Received SIGINT, shutting down gracefully')
+        await server.stop()
+        process.exit(0)
+      })
+
+      // Start server
+      await server.start()
+      
+      // In stdio mode, we communicate via stdin/stdout - no log messages
+
+    } catch (error) {
+      logger.error({ error }, 'Failed to start server in stdio mode')
       process.exit(1)
     }
   })

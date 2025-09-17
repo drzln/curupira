@@ -1,6 +1,6 @@
 {
   "name": "curupira",
-  "version": "2.4.20",
+  "version": "2.4.27",
   "description": "MCP Frontend Debugging Tool - AI-powered debugging for React applications",
   "private": false,
   "type": "module",
@@ -17,6 +17,7 @@
     "// === DEVELOPMENT === ": "",
     "dev": "concurrently -n server,extension \"npm:dev:*\"",
     "dev:server": "cd mcp-server && npm run dev",
+    "dev:host": "cd mcp-server && node dist/cli.js stdio --config ../config/host.yaml",
     "dev:extension": "cd chrome-extension && npm run dev",
     "dev:shared": "cd shared && npm run dev",
     "// === BUILDING === ": "",

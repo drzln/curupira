@@ -10,20 +10,31 @@ export class PinoLoggerAdapter implements ILogger {
   private pino: PinoLogger;
 
   constructor(options?: pino.LoggerOptions) {
-    this.pino = pino({
-      level: options?.level ?? 'info',
-      transport: process.env.NODE_ENV !== 'production' 
-        ? {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              translateTime: 'HH:MM:ss Z',
-              ignore: 'pid,hostname'
+    // In stdio mode, create a logger that writes to stderr to avoid polluting stdout
+    if (process.env.CURUPIRA_STDIO_MODE === 'true' || process.env.CURUPIRA_TRANSPORT === 'stdio') {
+      this.pino = pino({
+        level: 'error', // Only log errors in stdio mode
+        transport: {
+          target: 'pino/file',
+          options: { destination: 2 } // stderr
+        }
+      });
+    } else {
+      this.pino = pino({
+        level: options?.level ?? 'info',
+        transport: process.env.NODE_ENV !== 'production' 
+          ? {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                translateTime: 'HH:MM:ss Z',
+                ignore: 'pid,hostname'
+              }
             }
-          }
-        : undefined,
-      ...options
-    });
+          : undefined,
+        ...options
+      });
+    }
   }
 
   debug(contextOrMessage: LogContext | string, message?: string): void {

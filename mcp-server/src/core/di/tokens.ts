@@ -54,6 +54,7 @@ export interface ChromeDiscoveryConfig {
 export interface ServerConfig {
   port: number;
   host: string;
+  transport?: 'stdio' | 'http' | 'sse';
   logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
   name?: string;
   version?: string;

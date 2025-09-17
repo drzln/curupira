@@ -110,7 +110,7 @@ export class CurupiraServer {
       this.setupRequestHandlers();
 
       // Initialize transport based on configuration
-      const transportType = process.env.CURUPIRA_TRANSPORT || 'stdio';
+      const transportType = process.env.CURUPIRA_TRANSPORT || this.config.transport || 'stdio';
       
       if (transportType !== 'stdio') {
         const port = process.env.CURUPIRA_PORT ? parseInt(process.env.CURUPIRA_PORT) : this.config.port;

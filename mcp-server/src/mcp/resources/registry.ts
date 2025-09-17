@@ -24,7 +24,9 @@ export class ResourceRegistry {
       logger.warn(`Resource provider ${provider.name} already registered, overwriting`)
     }
     this.providers.set(provider.name, provider)
-    logger.info(`Registered resource provider: ${provider.name}`)
+    if (process.env.CURUPIRA_STDIO_MODE !== 'true') {
+      logger.info(`Registered resource provider: ${provider.name}`)
+    }
   }
   
   async listAllResources(): Promise<Resource[]> {

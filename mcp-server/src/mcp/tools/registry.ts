@@ -64,7 +64,9 @@ export class ToolRegistry implements IToolRegistry {
       }
     }
     
-    logger.info(`Registered ${isDynamic ? 'dynamic ' : ''}tool provider: ${provider.name} with ${tools.length} tools`)
+    if (process.env.CURUPIRA_STDIO_MODE !== 'true') {
+      logger.info(`Registered ${isDynamic ? 'dynamic ' : ''}tool provider: ${provider.name} with ${tools.length} tools`)
+    }
     
     // Notify MCP clients if this is a dynamic registration and server is set
     if (isDynamic && this.server) {
