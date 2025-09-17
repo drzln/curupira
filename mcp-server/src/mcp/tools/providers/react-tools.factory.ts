@@ -346,24 +346,71 @@ class ReactToolProvider extends BaseToolProvider {
                   };
                 }
                 
-                // Find React fiber
-                const reactKey = Object.keys(rootElement).find(key => 
-                  key.startsWith('__reactInternalInstance') || 
-                  key.startsWith('__reactFiber')
-                );
+                // Enhanced React fiber detection - works with React 16+ 
+                function findReactFiber(element) {
+                  // Try multiple approaches to find the React fiber
+                  
+                  // Method 1: Look for React internal keys (React 16+)
+                  for (const key in element) {
+                    if (key.startsWith('_reactInternalInstance') || 
+                        key.startsWith('__reactInternalInstance') ||
+                        key.startsWith('_reactInternalFiber') ||
+                        key.startsWith('__reactFiber') ||
+                        key.startsWith('__reactContainer$')) {
+                      return element[key];
+                    }
+                  }
+                  
+                  // Method 2: Try React DevTools global hook
+                  if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+                    const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+                    if (hook.findFiberByHostInstance) {
+                      try {
+                        return hook.findFiberByHostInstance(element);
+                      } catch (e) {
+                        // Continue to next method
+                      }
+                    }
+                  }
+                  
+                  // Method 3: Look for React container
+                  if (element._reactRootContainer) {
+                    return element._reactRootContainer._internalRoot?.current;
+                  }
+                  
+                  // Method 4: React 18+ container (dynamic key)
+                  for (const key in element) {
+                    if (key.startsWith('__reactContainer$')) {
+                      const container = element[key];
+                      if (container && container.current) {
+                        return container.current;
+                      }
+                      return container;
+                    }
+                  }
+                  
+                  return null;
+                }
                 
-                if (!reactKey) {
+                const fiber = findReactFiber(rootElement);
+                
+                if (!fiber) {
                   return { 
-                    error: 'React fiber not found. This might not be a React application.',
+                    error: 'React fiber not found. This might not be a React application or React version is not supported.',
+                    debugInfo: {
+                      elementKeys: Object.keys(rootElement).filter(k => k.includes('react')),
+                      hasDevTools: !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__,
+                      reactContainer: !!rootElement._reactRootContainer,
+                      reactContainer18: !!rootElement._reactContainer
+                    },
                     recommendations: [
-                      'Ensure React DevTools are installed',
-                      'Check if this is actually a React application',
-                      'Try refreshing the page and running again'
+                      'Ensure this is a React application (check for React in network tab)',
+                      'Try using a different root selector (like #root, #app, or .container)',
+                      'Check if React DevTools extension is installed',
+                      'Verify React version is 16+ (older versions not supported)'
                     ]
                   };
                 }
-                
-                const fiber = rootElement[reactKey];
                 
                 // Enhanced tree building with better component info
                 const buildTree = (node, depth = 0) => {

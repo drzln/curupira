@@ -127,8 +127,8 @@ export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = 
         };
       }
       
-      // Default for other tools - empty schema causes validation issues
-      this.logger.warn({ tool: def.name }, 'No JSON schema defined for tool');
+      // Default for other tools - warn but continue (temporarily during migration)
+      this.logger.warn({ tool: def.name }, 'No JSON schema defined for tool - using fallback');
       return {
         name: def.name,
         description: def.description,

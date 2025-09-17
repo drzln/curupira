@@ -231,14 +231,15 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
     );
 
     // Register chrome_disconnect tool
-    this.registerTool({
-      name: 'chrome_disconnect',
-      description: 'Disconnect from Chrome instance',
-      argsSchema: {
-        parse: (value) => value || {},
-        safeParse: (value) => ({ success: true, data: value || {} })
-      },
-      handler: async (args, context) => {
+    this.registerTool(
+      this.createTool(
+        'chrome_disconnect',
+        'Disconnect from Chrome instance',
+        {
+          parse: (value) => value || {},
+          safeParse: (value) => ({ success: true, data: value || {} })
+        },
+        async (args, context) => {
         try {
           await this.chromeService.disconnect();
           return {
@@ -255,18 +256,25 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
             error: error instanceof Error ? error.message : 'Failed to disconnect'
           };
         }
-      }
-    });
+        },
+        {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      )
+    );
 
     // Register chrome_status tool - checks connection without requiring it
-    this.registerTool({
-      name: 'chrome_status',
-      description: 'Get Chrome connection status',
-      argsSchema: {
-        parse: (value) => value || {},
-        safeParse: (value) => ({ success: true, data: value || {} })
-      },
-      handler: async (args, context) => {
+    this.registerTool(
+      this.createTool(
+        'chrome_status',
+        'Get Chrome connection status',
+        {
+          parse: (value) => value || {},
+          safeParse: (value) => ({ success: true, data: value || {} })
+        },
+        async (args, context) => {
         try {
           const isConnected = this.chromeService.isConnected();
           const client = this.chromeService.getCurrentClient();
@@ -310,8 +318,14 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
             error: error instanceof Error ? error.message : 'Failed to get Chrome status'
           };
         }
-      }
-    });
+        },
+        {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      )
+    );
   }
 }
 

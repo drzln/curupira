@@ -36,6 +36,9 @@ class PerformanceToolProvider extends BaseToolProvider {
       description: 'Get performance metrics',
       argsSchema: metricsSchema,
       handler: async (args, context) => {
+        // Enable Performance domain first
+        await withCDPCommand('Performance.enable', {}, context);
+        
         const result = await withCDPCommand(
           'Performance.getMetrics',
           {},
@@ -52,11 +55,79 @@ class PerformanceToolProvider extends BaseToolProvider {
         const metrics = result.unwrap() as any;
         
         // Convert metrics array to object for easier access
-        const metricsObj: Record<string, number> = {};
-        if (metrics.metrics) {
+        const metricsObj: Record<string, any> = {};
+        
+        // Debug: Add raw CDP metrics response
+        metricsObj.cdpMetrics = metrics;
+        
+        if (metrics.metrics && Array.isArray(metrics.metrics)) {
+          metricsObj.cdpMetricsCount = metrics.metrics.length;
           for (const metric of metrics.metrics) {
-            metricsObj[metric.name] = metric.value;
+            if (metric && metric.name && metric.value !== undefined) {
+              metricsObj[metric.name] = metric.value;
+            }
           }
+        } else {
+          metricsObj.cdpMetricsCount = 0;
+          metricsObj.cdpMetricsError = 'No metrics array found';
+        }
+
+        // Get comprehensive browser performance info
+        const perfResult = await withCDPCommand(
+          'Runtime.evaluate',
+          {
+            expression: `(() => {
+              const timing = performance.timing || {};
+              const memory = performance.memory || {};
+              const navigation = performance.navigation || {};
+              
+              // Get performance entries
+              const entries = performance.getEntriesByType ? {
+                navigation: performance.getEntriesByType('navigation'),
+                paint: performance.getEntriesByType('paint'),
+                measure: performance.getEntriesByType('measure'),
+                mark: performance.getEntriesByType('mark')
+              } : {};
+              
+              return {
+                timestamp: Date.now(),
+                timing: {
+                  navigationStart: timing.navigationStart,
+                  domContentLoadedEventStart: timing.domContentLoadedEventStart,
+                  domContentLoadedEventEnd: timing.domContentLoadedEventEnd,
+                  loadEventStart: timing.loadEventStart,
+                  loadEventEnd: timing.loadEventEnd,
+                  domComplete: timing.domComplete,
+                  domInteractive: timing.domInteractive
+                },
+                memory: {
+                  usedJSHeapSize: memory.usedJSHeapSize,
+                  totalJSHeapSize: memory.totalJSHeapSize,
+                  jsHeapSizeLimit: memory.jsHeapSizeLimit
+                },
+                navigation: {
+                  type: navigation.type,
+                  redirectCount: navigation.redirectCount
+                },
+                performanceEntries: entries,
+                now: performance.now()
+              };
+            })()`,
+            returnByValue: true
+          },
+          context
+        );
+
+        if (perfResult.isOk()) {
+          const result = perfResult.unwrap() as any;
+          if (result.result?.value) {
+            metricsObj.browserPerformance = result.result.value;
+          } else {
+            metricsObj.browserPerformanceError = 'Failed to get browser performance data';
+            metricsObj.browserPerformanceResult = result;
+          }
+        } else {
+          metricsObj.browserPerformanceError = perfResult.unwrapErr();
         }
 
         return {
@@ -144,26 +215,29 @@ class PerformanceToolProvider extends BaseToolProvider {
             throw new Error('Expected object');
           }
           const obj = value as any;
-          if (typeof obj.expression !== 'string') {
-            throw new Error('expression must be a string');
+          const code = obj.code || obj.expression;
+          if (typeof code !== 'string') {
+            throw new Error('code/expression must be a string');
           }
           return {
-            expression: obj.expression,
-            iterations: typeof obj.iterations === 'number' ? obj.iterations : 1,
+            code,
+            iterations: (() => {
+              if (typeof obj.iterations === 'number') {
+                return Math.max(1, obj.iterations);
+              }
+              if (typeof obj.iterations === 'string') {
+                const parsed = parseInt(obj.iterations, 10);
+                return isNaN(parsed) ? 1 : Math.max(1, parsed);
+              }
+              return 1;
+            })(),
             sessionId: obj.sessionId
           };
         },
-        safeParse: (value) => {
+        safeParse: function(value) {
           try {
-            const obj = (value || {}) as any;
-            return { 
-              success: true, 
-              data: {
-                expression: obj.expression || '',
-                iterations: typeof obj.iterations === 'number' ? obj.iterations : 1,
-                sessionId: obj.sessionId
-              }
-            };
+            const parsed = this.parse(value);
+            return { success: true, data: parsed };
           } catch (error) {
             return { success: false, error };
           }
@@ -177,7 +251,7 @@ class PerformanceToolProvider extends BaseToolProvider {
             
             for (let i = 0; i < iterations; i++) {
               const start = performance.now();
-              ${args.expression};
+              ${args.code};
               const end = performance.now();
               times.push(end - start);
             }

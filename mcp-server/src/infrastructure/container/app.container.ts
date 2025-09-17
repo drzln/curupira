@@ -49,6 +49,17 @@ import { NavigationToolProviderFactory } from '../../mcp/tools/providers/navigat
 import { ScreenshotToolProviderFactory } from '../../mcp/tools/providers/screenshot-tools.factory.js';
 import { SecurityToolProviderFactory } from '../../mcp/tools/providers/security-tools.factory.js';
 import { StorageToolProviderFactory } from '../../mcp/tools/providers/storage-tools.factory.js';
+import { CSSToolsFactory } from '../../mcp/tools/providers/css-tools.factory.js';
+import { ApolloToolProviderFactory } from '../../mcp/tools/providers/apollo-tools.factory.js';
+import { ZustandToolProviderFactory } from '../../mcp/tools/providers/zustand-tools.factory.js';
+import { TanStackQueryToolProviderFactory } from '../../mcp/tools/providers/tanstack-query-tools.factory.js';
+import { PandaCSSToolProviderFactory } from '../../mcp/tools/providers/panda-css-tools.factory.js';
+import { XStateToolProviderFactory } from '../../mcp/tools/providers/xstate-tools.factory.js';
+import { WebSocketGraphQLToolProviderFactory } from '../../mcp/tools/providers/websocket-graphql-tools.factory.js';
+import { ReactHookFormToolProviderFactory } from '../../mcp/tools/providers/react-hook-form-tools.factory.js';
+import { ViteToolProviderFactory } from '../../mcp/tools/providers/vite-tools.factory.js';
+import { ReactRouterToolProviderFactory } from '../../mcp/tools/providers/react-router-tools.factory.js';
+import { FramerMotionToolProviderFactory } from '../../mcp/tools/providers/framer-motion-tools.factory.js';
 
 // Resource provider factories
 import { createBrowserResourceProvider } from '../../mcp/resources/browser.js';
@@ -259,7 +270,18 @@ export function registerToolProviders(container: Container): void {
     new NavigationToolProviderFactory(),
     new ScreenshotToolProviderFactory(),
     new SecurityToolProviderFactory(),
-    new StorageToolProviderFactory()
+    new StorageToolProviderFactory(),
+    new CSSToolsFactory(),
+    new ApolloToolProviderFactory(),
+    new ZustandToolProviderFactory(),
+    new TanStackQueryToolProviderFactory(),
+    new PandaCSSToolProviderFactory(),
+    new XStateToolProviderFactory(),
+    new WebSocketGraphQLToolProviderFactory(),
+    new ReactHookFormToolProviderFactory(),
+    new ViteToolProviderFactory(),
+    new ReactRouterToolProviderFactory(),
+    new FramerMotionToolProviderFactory()
   ];
 
   // Register all providers statically at startup

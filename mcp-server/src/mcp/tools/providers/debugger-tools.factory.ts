@@ -30,9 +30,10 @@ const setBreakpointSchema: Schema<{ url: string; lineNumber: number; sessionId?:
       sessionId: obj.sessionId
     };
   },
-  safeParse: (value) => {
+  safeParse: function(value) {
     try {
-      return { success: true, data: setBreakpointSchema.parse(value) };
+      const parsed = this.parse(value);
+      return { success: true, data: parsed };
     } catch (error) {
       return { success: false, error };
     }
@@ -53,9 +54,10 @@ const removeBreakpointSchema: Schema<{ breakpointId: string; sessionId?: string 
       sessionId: obj.sessionId
     };
   },
-  safeParse: (value) => {
+  safeParse: function(value) {
     try {
-      return { success: true, data: removeBreakpointSchema.parse(value) };
+      const parsed = this.parse(value);
+      return { success: true, data: parsed };
     } catch (error) {
       return { success: false, error };
     }
@@ -74,9 +76,10 @@ const stepSchema: Schema<{ type?: 'into' | 'over' | 'out'; sessionId?: string }>
       sessionId: obj.sessionId
     };
   },
-  safeParse: (value) => {
+  safeParse: function(value) {
     try {
-      return { success: true, data: stepSchema.parse(value) };
+      const parsed = this.parse(value);
+      return { success: true, data: parsed };
     } catch (error) {
       return { success: false, error };
     }
@@ -263,6 +266,15 @@ class DebuggerToolProvider extends BaseToolProvider {
             success: true,
             data: result.unwrap()
           };
+        },
+        {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'URL of the file to set breakpoint in' },
+            lineNumber: { type: 'number', description: 'Line number to set breakpoint (1-based)' },
+            sessionId: { type: 'string', description: 'Optional Chrome session ID' }
+          },
+          required: ['url', 'lineNumber']
         }
       )
     );

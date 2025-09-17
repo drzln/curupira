@@ -159,15 +159,64 @@ class FrameworkToolProvider extends BaseToolProvider {
               
               switch(framework) {
                 case 'react':
-                  if (window.React) {
+                  // Enhanced React detection (works even when React is not global)
+                  let reactVersion = null;
+                  let hasReact = false;
+                  
+                  // Method 1: Check global React
+                  if (window.React?.version) {
+                    reactVersion = window.React.version;
+                    hasReact = true;
+                  }
+                  
+                  // Method 2: Check DevTools hook for version
+                  if (!hasReact && window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+                    const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+                    if (hook.renderers && hook.renderers.size > 0) {
+                      for (const [id, renderer] of hook.renderers) {
+                        if (renderer.version) {
+                          reactVersion = renderer.version;
+                          hasReact = true;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Method 3: Check for React in DOM
+                  if (!hasReact) {
+                    const reactElements = document.querySelectorAll('[data-reactroot], [data-react-checksum]');
+                    if (reactElements.length > 0) {
+                      hasReact = true;
+                      reactVersion = 'detected (version unknown)';
+                    }
+                  }
+                  
+                  // Method 4: Check for React fiber properties
+                  if (!hasReact) {
+                    const allElements = document.querySelectorAll('*');
+                    for (const element of allElements) {
+                      const keys = Object.keys(element);
+                      if (keys.some(key => key.startsWith('__reactFiber') || key.startsWith('_reactInternalFiber'))) {
+                        hasReact = true;
+                        reactVersion = 'detected (version unknown)';
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (hasReact) {
                     result = {
                       framework: 'React',
                       found: true,
-                      version: window.React.version,
+                      version: reactVersion || 'unknown',
                       details: {
                         devtools: !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__,
                         strictMode: !!document.querySelector('[data-react-strict-mode]'),
-                        concurrent: !!window.React.unstable_createRoot
+                        concurrent: !!(window.React?.unstable_createRoot || window.React?.createRoot),
+                        fiberDetected: !!document.querySelector('*[class*="__reactFiber"], *[class*="_reactInternalFiber"]'),
+                        globalReact: !!window.React,
+                        rendererCount: window.__REACT_DEVTOOLS_GLOBAL_HOOK__?.renderers?.size || 0
                       }
                     };
                   }

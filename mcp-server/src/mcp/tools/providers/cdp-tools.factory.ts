@@ -238,6 +238,16 @@ class CDPToolProvider extends BaseToolProvider {
               }
             };
           }
+        },
+        {
+          type: 'object',
+          properties: {
+            expression: { type: 'string', description: 'JavaScript expression to evaluate' },
+            awaitPromise: { type: 'boolean', description: 'Wait for promises to resolve', default: false },
+            returnByValue: { type: 'boolean', description: 'Return result by value', default: true },
+            sessionId: { type: 'string', description: 'Optional Chrome session ID' }
+          },
+          required: ['expression']
         }
       )
     );
