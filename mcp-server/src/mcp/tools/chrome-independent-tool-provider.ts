@@ -64,11 +64,22 @@ export abstract class ChromeIndependentToolProvider<TConfig extends BaseToolProv
 
         // Execute the tool
         try {
-          return await definition.handler(validationResult.unwrap(), context);
+          this.logger.debug({ tool: toolName, args: validationResult.unwrap() }, 'Executing Chrome-independent tool');
+          const result = await definition.handler(validationResult.unwrap(), context);
+          this.logger.debug({ tool: toolName, success: result.success }, 'Chrome-independent tool completed');
+          return result;
         } catch (error) {
           this.logger.error(
-            { error, tool: toolName, provider: this.name },
-            'Tool execution failed'
+            { 
+              error: error instanceof Error ? {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+              } : error,
+              tool: toolName, 
+              provider: this.name 
+            },
+            'Chrome-independent tool execution failed'
           );
 
           return {

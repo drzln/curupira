@@ -224,7 +224,7 @@ export class CurupiraServer {
           throw new Error(result.error || 'Tool execution failed');
         }
         
-        this.logger.info({ tool: name }, 'Tool executed successfully');
+        this.logger.info({ tool: name, hasData: !!result.data }, 'Tool executed successfully');
         
         // MCP expects a content array with the tool result
         // Always return a meaningful response, even if no data
@@ -235,9 +235,19 @@ export class CurupiraServer {
             `Tool '${name}' executed successfully but returned no data.`
         }];
         
+        this.logger.debug({ tool: name, contentLength: content[0].text.length }, 'Returning tool result');
+        
         return { content };
       } catch (error) {
-        this.logger.error({ error, tool: name }, 'Tool execution error');
+        this.logger.error({ 
+          error: error instanceof Error ? {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          } : error,
+          tool: name,
+          args 
+        }, 'Tool execution error');
         throw error;
       }
     });

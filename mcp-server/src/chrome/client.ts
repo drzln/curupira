@@ -83,6 +83,7 @@ export class ChromeClient implements IChromeClient {
       return;
     }
 
+    this.logger.info('Starting Chrome connection process');
     this.state = 'connecting';
     this.eventEmitter.emit('stateChange', this.state);
 
@@ -122,10 +123,11 @@ export class ChromeClient implements IChromeClient {
     const protocol = this.config.secure ? 'wss' : 'ws';
     const wsUrl = `${protocol}://${this.config.host}:${this.config.port}/`;
     
-    this.logger.info({ wsUrl }, 'Connecting to Browserless WebSocket');
+    this.logger.info({ wsUrl }, 'Connecting to Browserless root WebSocket');
     
     return new Promise((resolve, reject) => {
       this.browserWs = new WebSocket(wsUrl);
+      this.logger.debug('WebSocket instance created, waiting for connection...');
       
       const timeout = setTimeout(() => {
         if (this.browserWs) {
@@ -136,8 +138,22 @@ export class ChromeClient implements IChromeClient {
       
       this.browserWs.on('open', () => {
         clearTimeout(timeout);
-        this.logger.info('Browser WebSocket connected');
-        resolve();
+        this.logger.info('Browser WebSocket connected successfully');
+        this.logger.debug({ readyState: this.browserWs?.readyState }, 'WebSocket ready state');
+        
+        // Ensure WebSocket is truly ready by testing a simple command
+        this.sendBrowserCommand('Target.getVersion')
+          .then((version) => {
+            this.logger.info({ version }, 'Browser WebSocket verified with version check');
+            resolve();
+          })
+          .catch((error) => {
+            this.logger.error({ error }, 'Browser WebSocket verification failed');
+            if (this.browserWs) {
+              this.browserWs.close();
+            }
+            reject(new Error('Browser WebSocket verification failed'));
+          });
       });
       
       this.browserWs.on('message', (data) => {
@@ -211,7 +227,10 @@ export class ChromeClient implements IChromeClient {
   }
 
   async createSession(targetId?: string): Promise<CDPSession> {
+    this.logger.info({ targetId, state: this.state }, 'Creating Chrome session');
+    
     if (this.state !== 'connected') {
+      this.logger.error({ state: this.state }, 'Cannot create session - not connected');
       throw new Error('Not connected to Chrome');
     }
 
@@ -241,12 +260,18 @@ export class ChromeClient implements IChromeClient {
     // For Browserless, use Target.attachToTarget
     if (this.browserInfo?.isBrowserless && this.browserWs) {
       try {
-        this.logger.info({ targetId: target.targetId }, 'Attaching to Browserless target');
+        this.logger.info({ 
+          targetId: target.targetId,
+          browserWsState: this.browserWs.readyState,
+          browserWsReady: this.browserWs.readyState === WebSocket.OPEN
+        }, 'Attaching to Browserless target via CDP');
         
         const result = await this.sendBrowserCommand<{ sessionId: string }>('Target.attachToTarget', {
           targetId: target.targetId,
           flatten: true // Important for Browserless
         });
+        
+        this.logger.info({ sessionId: result.sessionId }, 'Target attached successfully');
         
         const sessionInfo: SessionInfo = {
           sessionId: result.sessionId,
@@ -257,8 +282,10 @@ export class ChromeClient implements IChromeClient {
         this.sessions.set(result.sessionId, sessionInfo);
         
         // Enable necessary domains
+        this.logger.debug({ sessionId: result.sessionId }, 'Enabling Runtime and Page domains');
         await this.send('Runtime.enable', {}, result.sessionId);
         await this.send('Page.enable', {}, result.sessionId);
+        this.logger.info({ sessionId: result.sessionId }, 'Session fully initialized');
         
         return {
           id: result.sessionId,
@@ -278,11 +305,18 @@ export class ChromeClient implements IChromeClient {
 
   private async sendBrowserCommand<T>(method: string, params?: any): Promise<T> {
     if (!this.browserWs || this.browserWs.readyState !== WebSocket.OPEN) {
+      this.logger.error({ 
+        browserWs: !!this.browserWs,
+        readyState: this.browserWs?.readyState,
+        expected: WebSocket.OPEN
+      }, 'Browser WebSocket not ready');
       throw new Error('Browser WebSocket not connected');
     }
     
     const id = this.browserMessageId++;
     const message = { id, method, params: params || {} };
+    
+    this.logger.debug({ id, method, params }, 'Sending browser command');
     
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -370,7 +404,10 @@ export class ChromeClient implements IChromeClient {
   }
 
   async updateTargets(): Promise<void> {
+    this.logger.debug({ state: this.state }, 'Updating targets');
+    
     if (this.state !== 'connected' && this.state !== 'connecting') {
+      this.logger.error({ state: this.state }, 'Cannot update targets - invalid state');
       throw new Error('Not connected to Chrome');
     }
 
@@ -424,7 +461,9 @@ export class ChromeClient implements IChromeClient {
         });
       }
 
-      this.eventEmitter.emit('targetsUpdated', Array.from(this.targets.values()));
+      const targetList = Array.from(this.targets.values());
+      this.logger.info({ targetCount: targetList.length }, 'Targets updated');
+      this.eventEmitter.emit('targetsUpdated', targetList);
     } catch (error) {
       this.logger.error({ error }, 'Failed to update targets');
       throw error;
@@ -508,7 +547,9 @@ export class ChromeClient implements IChromeClient {
 
   // State and info getters
   isConnected(): boolean {
-    return this.state === 'connected';
+    const connected = this.state === 'connected';
+    this.logger.debug({ state: this.state, connected }, 'isConnected check');
+    return connected;
   }
 
   getState(): CDPConnectionState {
