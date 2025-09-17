@@ -33,6 +33,13 @@ export class ChromeConnectionError extends BaseError {
       { type: 'not_connected' }
     );
   }
+
+  static sessionCreationFailed(message: string): ChromeConnectionError {
+    return new ChromeConnectionError(
+      `Failed to create Chrome session: ${message}`,
+      { type: 'session_creation_failed', message }
+    );
+  }
 }
 
 export class ChromeSessionError extends BaseError {

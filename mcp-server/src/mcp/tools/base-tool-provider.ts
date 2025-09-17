@@ -160,14 +160,30 @@ export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = 
       return Result.err(ChromeConnectionError.notConnected());
     }
 
-    // For now, use a default session ID
-    // In the future, this will properly manage sessions
-    const defaultSessionId = 'default' as SessionId;
+    // For tools that need sessions, create one only when needed
+    // For chrome_discover and other connection tools, don't create sessions
+    if (sessionId) {
+      // If a specific session is requested, try to use it
+      return Result.ok({
+        sessionId: sessionId as SessionId,
+        client
+      });
+    }
 
-    return Result.ok({
-      sessionId: sessionId as SessionId || defaultSessionId,
-      client
-    });
+    // If no sessionId provided, try to create a session for tools that need it
+    try {
+      this.logger.debug('Creating new Chrome CDP session for tool that requires it');
+      const session = await client.createSession();
+      return Result.ok({
+        sessionId: session.sessionId as SessionId,
+        client
+      });
+    } catch (error) {
+      this.logger.error({ error }, 'Failed to create Chrome session');
+      return Result.err(ChromeConnectionError.sessionCreationFailed(
+        error instanceof Error ? error.message : 'Unknown session creation error'
+      ));
+    }
   }
 
   /**

@@ -131,21 +131,36 @@ export class TransportManager {
         await this.server.connect(transport)
       })
     } else if (this.options.type === 'http') {
-      // HTTP Transport using StreamableHTTPServerTransport
-      // Create a single transport instance and connect it once during startup
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => 'default'
-      })
-      
-      // Connect the transport once during server startup
-      await this.server.connect(transport)
-      this.logger.info('MCP server connected to HTTP transport')
+      // HTTP Transport using StreamableHTTPServerTransport with session management
+      const transports = new Map<string, StreamableHTTPServerTransport>()
       
       this.httpServer.post('/mcp', async (request: FastifyRequest, reply: FastifyReply) => {
         this.logger.info({ method: 'POST', path: '/mcp' }, 'HTTP request for MCP')
         
         try {
-          // Handle request with the already-connected transport
+          // Get or create session - use fixed session ID if none provided
+          const sessionId = (request.headers['mcp-session-id'] as string) || 'default-session'
+          let transport = transports.get(sessionId)
+          
+          if (!transport) {
+            this.logger.info({ sessionId }, 'Creating new MCP transport session')
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => sessionId
+            })
+            transports.set(sessionId, transport)
+            
+            // Connect to MCP server for this session
+            await this.server.connect(transport)
+            this.logger.info({ sessionId }, 'MCP transport session connected')
+            
+            // Clean up on close
+            transport.onclose = () => {
+              this.logger.info({ sessionId }, 'Transport session closed')
+              transports.delete(sessionId)
+            }
+          }
+          
+          // Handle request with transport
           await transport.handleRequest(request.raw, reply.raw, request.body)
         } catch (error) {
           this.logger.error({ error }, 'Failed to handle HTTP transport')

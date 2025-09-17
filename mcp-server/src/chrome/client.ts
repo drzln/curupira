@@ -147,10 +147,23 @@ export class ChromeClient implements CDPClient, IChromeClient {
       // Find first available page target
       const targets = Array.from(this.targets.values());
       target = targets.find(t => t.type === 'page');
+      
       if (!target) {
-        throw new Error('No page target available');
+        // For Browserless, we need to navigate an existing target to a new page
+        // rather than trying to create a new target
+        if (this.browserInfo?.isBrowserless && targets.length > 0) {
+          // Use the first available target
+          target = targets[0];
+          actualTargetId = target.targetId;
+          
+          // We'll navigate to about:blank later if needed
+          this.logger.info({ targetId: actualTargetId }, 'Using existing Browserless target');
+        } else {
+          throw new Error('No page target available');
+        }
+      } else {
+        actualTargetId = target.targetId;
       }
-      actualTargetId = target.targetId;
     }
 
     try {
@@ -255,7 +268,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
   }
 
   async updateTargets(): Promise<void> {
-    if (this.state !== 'connected') {
+    if (this.state !== 'connected' && this.state !== 'connecting') {
       throw new Error('Not connected to Chrome');
     }
 
@@ -700,6 +713,7 @@ export class ChromeClient implements CDPClient, IChromeClient {
 
     return result.result.value as T;
   }
+
 
   async screenshot(
     sessionId: string,
