@@ -41,6 +41,38 @@ const storageOperationSchema: Schema<{
   }
 };
 
+// Specific schema for set operations
+const setStorageSchema: Schema<{
+  key: string;
+  value: string;
+  sessionId?: string;
+}> = {
+  parse: (value) => {
+    if (typeof value !== 'object' || value === null) {
+      throw new Error('Expected object');
+    }
+    const obj = value as any;
+    if (typeof obj.key !== 'string') {
+      throw new Error('key must be a string');
+    }
+    if (typeof obj.value !== 'string') {
+      throw new Error('value must be a string');
+    }
+    return {
+      key: obj.key,
+      value: obj.value,
+      sessionId: obj.sessionId
+    };
+  },
+  safeParse: (value) => {
+    try {
+      return { success: true, data: setStorageSchema.parse(value) };
+    } catch (error) {
+      return { success: false, error };
+    }
+  }
+};
+
 const clearStorageSchema: Schema<{ 
   types?: string[];
   confirm?: boolean;
@@ -134,7 +166,7 @@ class StorageToolProvider extends BaseToolProvider {
       this.createTool(
         'set_local_storage',
         'Set localStorage item',
-        storageOperationSchema,
+        setStorageSchema,
         async (args, context) => {
           if (!args.key || args.value === undefined) {
             return {

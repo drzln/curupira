@@ -377,9 +377,10 @@ class DebuggerToolProvider extends BaseToolProvider {
             sessionId: obj.sessionId
           };
         },
-        safeParse: (value) => {
+        safeParse: function(value) {
           try {
-            return { success: true, data: (this as any).argsSchema.parse(value) };
+            const parsed = this.parse(value);
+            return { success: true, data: parsed };
           } catch (error) {
             return { success: false, error };
           }
@@ -460,9 +461,10 @@ class DebuggerToolProvider extends BaseToolProvider {
             sessionId: obj.sessionId
           };
         },
-        safeParse: (value) => {
+        safeParse: function(value) {
           try {
-            return { success: true, data: (this as any).argsSchema.parse(value) };
+            const parsed = this.parse(value);
+            return { success: true, data: parsed };
           } catch (error) {
             return { success: false, error };
           }
