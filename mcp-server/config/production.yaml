@@ -1,38 +1,38 @@
-# Curupira MCP Server - Production Configuration
-# Inherits from base.yaml with production overrides
+# Production environment overrides
+# Inherits from base.yaml
 
 server:
   environment: "production"
+  host: "0.0.0.0"
+  port: 8080
 
 logging:
   level: "warn"
   pretty: false
+  format: "json"
 
 auth:
   enabled: true
-  jwtSecret: "${JWT_SECRET}"
+  # jwtSecret should be overridden via ENVVAR
 
 cors:
   origins:
-    - "https://claude.ai"
-    - "https://*.claude.ai"
-    - "${ALLOWED_ORIGINS}"
+    - "https://app.example.com"
+    - "https://admin.example.com"
 
 rateLimit:
   max: 1000
   window: 60000
 
-chrome:
-  discovery:
-    autoConnect: false
-    timeout: 10000
-
-performance:
-  maxMessageSize: 5242880  # 5MB for production
-  debounceMs: 200
-  throttleMs: 2000
-
-resources:
-  maxConsoleLogEntries: 500
-  maxNetworkRequests: 250
-  cacheSize: 50
+# MinIO configuration for production
+# Using the Kubernetes MinIO instance
+storage:
+  minio:
+    enabled: true
+    endPoint: "minio.storage.svc.cluster.local"
+    port: 9000
+    useSSL: false
+    # accessKey and secretKey should be overridden via ENVVARs
+    bucket: "curupira-production"
+    region: "us-east-1"
+    signedUrlExpiry: 7200  # 2 hours

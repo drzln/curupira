@@ -1,7 +1,7 @@
-# Curupira MCP Server - Base Configuration
-# Following Nexus Configuration Standards
+# Base configuration for Curupira MCP Server
+# This file contains default values for all environments
 
-version: "1.0"
+version: "1.0.0"
 
 server:
   name: "curupira-mcp-server"
@@ -21,12 +21,10 @@ transports:
     path: "/mcp"
     pingInterval: 30000
     pongTimeout: 5000
-  
   http:
     enabled: true
     path: "/mcp"
     timeout: 30000
-  
   sse:
     enabled: true
     path: "/mcp/sse"
@@ -38,10 +36,8 @@ healthCheck:
   interval: 30000
 
 cors:
-  origins: 
+  origins:
     - "http://localhost:3000"
-    - "http://localhost:8080"
-    - "http://127.0.0.1:3000"
   credentials: true
 
 rateLimit:
@@ -56,24 +52,19 @@ auth:
 
 chrome:
   enabled: true
-  serviceUrl: "http://localhost:9222"
+  serviceUrl: "http://localhost:3000"
   connectTimeout: 5000
   pageTimeout: 30000
   defaultViewport:
     width: 1920
     height: 1080
-  
   discovery:
     enabled: true
     hosts:
       - "localhost"
       - "127.0.0.1"
     ports:
-      - 9222
-      - 9223
-      - 9224
-      - 9225
-      - 9226
+      - 3000
     timeout: 5000
     autoConnect: false
     preferredPatterns:
@@ -81,12 +72,9 @@ chrome:
       - "react"
       - "vite"
       - "next"
-      - "webpack"
-      - "development"
-      - "dev"
 
 performance:
-  maxMessageSize: 10485760  # 10MB
+  maxMessageSize: 10485760
   debounceMs: 100
   throttleMs: 1000
 
@@ -94,3 +82,16 @@ resources:
   maxConsoleLogEntries: 1000
   maxNetworkRequests: 500
   cacheSize: 100
+
+# MinIO/S3 storage configuration for large responses
+storage:
+  minio:
+    enabled: false
+    endPoint: "localhost"
+    port: 9000
+    useSSL: false
+    accessKey: "minioadmin"
+    secretKey: "minioadmin"
+    bucket: "curupira-screenshots"
+    region: "us-east-1"
+    signedUrlExpiry: 3600  # 1 hour

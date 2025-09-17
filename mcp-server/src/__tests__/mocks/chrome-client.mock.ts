@@ -74,6 +74,22 @@ export class MockChromeClient extends EventEmitter implements IChromeClient {
     return this.connected ? 'connected' : 'disconnected';
   }
 
+  onSessionEvent(sessionId: string, event: string, handler: (params: any) => void): void {
+    // Mock implementation - store handlers for testing
+    const key = `${sessionId}:${event}`;
+    this.on(key, handler);
+  }
+
+  offSessionEvent(sessionId: string, event: string, handler?: (params: any) => void): void {
+    // Mock implementation - remove handlers
+    const key = `${sessionId}:${event}`;
+    if (handler) {
+      this.off(key, handler);
+    } else {
+      this.removeAllListeners(key);
+    }
+  }
+
   // Test helper methods
   simulateConnection(): void {
     this.connected = true;

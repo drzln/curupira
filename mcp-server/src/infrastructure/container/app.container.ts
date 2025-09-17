@@ -15,12 +15,18 @@ import {
   ErrorHandlerToken,
   ChromeConfigToken,
   ChromeDiscoveryConfigToken,
-  ServerConfigToken
+  ServerConfigToken,
+  ConsoleBufferServiceToken,
+  NetworkBufferServiceToken,
+  MinIOServiceToken
 } from '../../core/di/tokens.js';
 
 // Service implementations
 import { ChromeService } from '../../chrome/chrome.service.js';
 import { ChromeDiscoveryService } from '../../chrome/discovery.service.js';
+import { ConsoleBufferService } from '../../chrome/services/console-buffer.service.js';
+import { NetworkBufferService } from '../../chrome/services/network-buffer.service.js';
+import { MinIOService } from '../storage/minio.service.js';
 import { ToolRegistry } from '../../mcp/tools/registry.js';
 import { ResourceRegistry } from '../../mcp/resources/registry.js';
 import { PinoLoggerAdapter } from '../logger/pino-logger.js';
@@ -169,13 +175,39 @@ export function createApplicationContainer(): Container {
   container.register(ChromeServiceToken, (c) => {
     const config = c.resolve(ChromeConfigToken);
     const logger = c.resolve(LoggerToken);
-    return new ChromeService(config, logger);
+    const consoleBufferService = c.resolve(ConsoleBufferServiceToken);
+    const networkBufferService = c.resolve(NetworkBufferServiceToken);
+    return new ChromeService(config, logger, consoleBufferService, networkBufferService);
   });
 
   container.register(ChromeDiscoveryServiceToken, (c) => {
     const config = c.resolve(ChromeDiscoveryConfigToken);
     const logger = c.resolve(LoggerToken);
     return new ChromeDiscoveryService(config, logger);
+  });
+
+  // Register console buffer service
+  container.register(ConsoleBufferServiceToken, (c) => {
+    const logger = c.resolve(LoggerToken);
+    return new ConsoleBufferService(logger);
+  });
+
+  // Register network buffer service
+  container.register(NetworkBufferServiceToken, (c) => {
+    const logger = c.resolve(LoggerToken);
+    return new NetworkBufferService(logger);
+  });
+
+  // Register MinIO service (if enabled)
+  container.register(MinIOServiceToken, (c) => {
+    const logger = c.resolve(LoggerToken);
+    const config = globalConfig;
+    
+    if (!config || !config.storage?.minio?.enabled) {
+      return null;
+    }
+    
+    return new MinIOService(config.storage.minio, logger);
   });
 
   // Register registries
@@ -191,10 +223,14 @@ export function createApplicationContainer(): Container {
 export function registerToolProviders(container: Container): void {
   const toolRegistry = container.resolve(ToolRegistryToken);
   const chromeService = container.resolve(ChromeServiceToken);
+  const minioService = container.resolve(MinIOServiceToken);
   const providerDeps = {
     chromeService,
     logger: container.resolve(LoggerToken),
-    validator: container.resolve(ValidatorToken)
+    validator: container.resolve(ValidatorToken),
+    consoleBufferService: container.resolve(ConsoleBufferServiceToken),
+    networkBufferService: container.resolve(NetworkBufferServiceToken),
+    minioService
   };
 
   // Special deps for Chrome tools that need discovery service

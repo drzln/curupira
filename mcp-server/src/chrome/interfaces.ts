@@ -129,6 +129,8 @@ export interface IChromeClient {
   // Event handling
   on(event: string, handler: (...args: any[]) => void): void
   off(event: string, handler: (...args: any[]) => void): void
+  onSessionEvent(sessionId: string, event: string, handler: (params: any) => void): void
+  offSessionEvent(sessionId: string, event: string, handler?: (params: any) => void): void
   
   // Status
   getState(): string

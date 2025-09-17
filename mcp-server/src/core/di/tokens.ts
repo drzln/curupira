@@ -13,12 +13,18 @@ import type { ITypedCDPClient } from '../../chrome/interfaces.js';
 import type { IChromeClient } from '../../chrome/interfaces.js';
 import type { ErrorHandler } from '../error-handler.js';
 import type { IChromeDiscoveryService } from '../../chrome/discovery.service.js';
+import type { IConsoleBufferService } from '../../chrome/services/console-buffer.service.js';
+import type { INetworkBufferService } from '../../chrome/services/network-buffer.service.js';
+import type { IMinIOService } from '../../infrastructure/storage/minio.service.js';
 
 // Chrome-related tokens
 export const ChromeServiceToken = createToken<IChromeService>('ChromeService');
 export const ChromeClientToken = createToken<IChromeClient>('ChromeClient');
 export const TypedCDPClientToken = createToken<ITypedCDPClient>('TypedCDPClient');
 export const ChromeDiscoveryServiceToken = createToken<IChromeDiscoveryService>('ChromeDiscoveryService');
+export const ConsoleBufferServiceToken = createToken<IConsoleBufferService>('ConsoleBufferService');
+export const NetworkBufferServiceToken = createToken<INetworkBufferService>('NetworkBufferService');
+export const MinIOServiceToken = createToken<IMinIOService>('MinIOService');
 
 // MCP-related tokens
 export const ToolRegistryToken = createToken<IToolRegistry>('ToolRegistry');

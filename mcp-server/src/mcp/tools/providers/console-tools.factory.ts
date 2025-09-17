@@ -9,7 +9,9 @@ import type { BaseToolProviderConfig } from '../base-tool-provider.js';
 import { BaseToolProvider } from '../base-tool-provider.js';
 import type { Schema } from '../../../core/interfaces/validator.interface.js';
 import type { ToolResult } from '../registry.js';
+import type { IConsoleBufferService, ConsoleMessage } from '../../../chrome/services/console-buffer.service.js';
 import { withCDPCommand } from '../patterns/common-handlers.js';
+import { consoleToolSchemas } from '../schemas/console-schemas.js';
 
 // Schema definitions
 const executeSchema: Schema<{ expression: string; sessionId?: string }> = {
@@ -53,6 +55,19 @@ const getMessagesSchema: Schema<{ limit?: number; sessionId?: string }> = {
 };
 
 class ConsoleToolProvider extends BaseToolProvider {
+  private consoleBufferService?: IConsoleBufferService;
+
+  constructor(
+    chromeService: any,
+    logger: any,
+    validator: any,
+    config: BaseToolProviderConfig,
+    consoleBufferService?: IConsoleBufferService
+  ) {
+    super(chromeService, logger, validator, config);
+    this.consoleBufferService = consoleBufferService;
+  }
+
   protected initializeTools(): void {
     // Register console_clear tool
     this.registerTool({
@@ -62,6 +77,7 @@ class ConsoleToolProvider extends BaseToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
+      jsonSchema: consoleToolSchemas.console_clear,
       handler: async (args, context) => {
         const result = await withCDPCommand(
           'Runtime.evaluate',
@@ -84,12 +100,12 @@ class ConsoleToolProvider extends BaseToolProvider {
     });
 
     // Register console_execute tool
-    this.registerTool(
-      this.createTool(
-        'console_execute',
-        'Execute JavaScript in console context',
-        executeSchema,
-        async (args, context) => {
+    this.registerTool({
+      name: 'console_execute',
+      description: 'Execute JavaScript in console context',
+      argsSchema: executeSchema,
+      jsonSchema: consoleToolSchemas.console_execute,
+      handler: async (args, context) => {
           const result = await withCDPCommand(
             'Runtime.evaluate',
             {
@@ -112,32 +128,52 @@ class ConsoleToolProvider extends BaseToolProvider {
             data: result.unwrap()
           };
         }
-      )
-    );
+    });
 
     // Register console_get_messages tool
-    this.registerTool(
-      this.createTool(
-        'console_get_messages',
-        'Get recent console messages',
-        getMessagesSchema,
-        async (args, context) => {
-          // Enable console API first
-          await withCDPCommand('Runtime.enable', {}, context);
-          await withCDPCommand('Console.enable', {}, context);
+    this.registerTool({
+      name: 'console_get_messages',
+      description: 'Get recent console messages',
+      argsSchema: getMessagesSchema,
+      jsonSchema: consoleToolSchemas.console_get_messages,
+      handler: async (args, context) => {
+          if (!this.consoleBufferService) {
+            this.logger.warn('Console buffer service not available');
+            return {
+              success: true,
+              data: {
+                messages: [],
+                totalCount: 0
+              }
+            };
+          }
 
-          // Get messages - this would need to be implemented with proper message collection
-          // For now, return empty array
+          // Get messages from buffer
+          const messages = this.consoleBufferService.getMessages({
+            sessionId: args.sessionId || context.sessionId,
+            limit: args.limit || 100
+          });
+
+          // Format messages for output
+          const formattedMessages = messages.map((msg: ConsoleMessage) => ({
+            level: msg.level,
+            text: msg.text,
+            timestamp: new Date(msg.timestamp).toISOString(),
+            source: msg.source,
+            url: msg.url,
+            line: msg.lineNumber,
+            column: msg.columnNumber
+          }));
+
           return {
             success: true,
             data: {
-              messages: [],
-              totalCount: 0
+              messages: formattedMessages,
+              totalCount: formattedMessages.length
             }
           };
         }
-      )
-    );
+    });
 
     // Register console_monitor tool
     this.registerTool({
@@ -165,10 +201,19 @@ class ConsoleToolProvider extends BaseToolProvider {
           }
         }
       },
+      jsonSchema: consoleToolSchemas.console_monitor,
       handler: async (args, context) => {
         if (args.enabled) {
           // Enable console monitoring
+          await withCDPCommand('Runtime.enable', {}, context);
           await withCDPCommand('Console.enable', {}, context);
+          
+          // Enable buffer service for this session
+          if (this.consoleBufferService && context.sessionId) {
+            this.consoleBufferService.enableSession(context.sessionId as any);
+            this.logger.info({ sessionId: context.sessionId }, 'Console buffer enabled for session');
+          }
+          
           return {
             success: true,
             data: { message: 'Console monitoring enabled' }
@@ -176,6 +221,13 @@ class ConsoleToolProvider extends BaseToolProvider {
         } else {
           // Disable console monitoring
           await withCDPCommand('Console.disable', {}, context);
+          
+          // Disable buffer service for this session
+          if (this.consoleBufferService && context.sessionId) {
+            this.consoleBufferService.disableSession(context.sessionId as any);
+            this.logger.info({ sessionId: context.sessionId }, 'Console buffer disabled for session');
+          }
+          
           return {
             success: true,
             data: { message: 'Console monitoring disabled' }
@@ -197,7 +249,8 @@ export class ConsoleToolProviderFactory extends BaseProviderFactory<ConsoleToolP
       deps.chromeService,
       this.createProviderLogger(deps, config.name),
       deps.validator,
-      config
+      config,
+      deps.consoleBufferService
     );
   }
 }

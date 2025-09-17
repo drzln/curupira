@@ -98,6 +98,20 @@ const ConfigSchema = z.object({
     maxNetworkRequests: z.number().default(500),
     cacheSize: z.number().default(100),
   }),
+  
+  storage: z.object({
+    minio: z.object({
+      enabled: z.boolean().default(false),
+      endPoint: z.string().default('localhost'),
+      port: z.number().default(9000),
+      useSSL: z.boolean().default(false),
+      accessKey: z.string().default('minioadmin'),
+      secretKey: z.string().default('minioadmin'),
+      bucket: z.string().default('curupira-screenshots'),
+      region: z.string().default('us-east-1'),
+      signedUrlExpiry: z.number().default(3600),
+    }),
+  }),
 });
 
 export type CurupiraConfig = z.infer<typeof ConfigSchema>;
@@ -252,6 +266,16 @@ export class NexusConfigLoader {
       
       // Performance
       { env: 'PERFORMANCE_MAX_MESSAGE_SIZE', path: 'performance.maxMessageSize', type: 'number' },
+      
+      // MinIO Storage
+      { env: 'STORAGE_MINIO_ENABLED', path: 'storage.minio.enabled', type: 'boolean' },
+      { env: 'STORAGE_MINIO_ENDPOINT', path: 'storage.minio.endPoint' },
+      { env: 'STORAGE_MINIO_PORT', path: 'storage.minio.port', type: 'number' },
+      { env: 'STORAGE_MINIO_USE_SSL', path: 'storage.minio.useSSL', type: 'boolean' },
+      { env: 'STORAGE_MINIO_ACCESS_KEY', path: 'storage.minio.accessKey' },
+      { env: 'STORAGE_MINIO_SECRET_KEY', path: 'storage.minio.secretKey' },
+      { env: 'STORAGE_MINIO_BUCKET', path: 'storage.minio.bucket' },
+      { env: 'STORAGE_MINIO_REGION', path: 'storage.minio.region' },
     ];
     
     for (const mapping of envMappings) {

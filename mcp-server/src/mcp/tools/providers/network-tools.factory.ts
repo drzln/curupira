@@ -9,7 +9,9 @@ import type { BaseToolProviderConfig } from '../base-tool-provider.js';
 import { BaseToolProvider } from '../base-tool-provider.js';
 import type { Schema } from '../../../core/interfaces/validator.interface.js';
 import type { ToolResult } from '../registry.js';
+import type { INetworkBufferService } from '../../../chrome/services/network-buffer.service.js';
 import { withCDPCommand, withScriptExecution } from '../patterns/common-handlers.js';
+import { networkToolSchemas } from '../schemas/network-schemas.js';
 
 // Schema definitions
 const mockRequestSchema: Schema<{ url: string; response: any; status?: number; sessionId?: string }> = {
@@ -60,6 +62,19 @@ const throttleSchema: Schema<{ downloadThroughput?: number; uploadThroughput?: n
 };
 
 class NetworkToolProvider extends BaseToolProvider {
+  private networkBufferService?: INetworkBufferService;
+
+  constructor(
+    chromeService: any,
+    logger: any,
+    validator: any,
+    config: BaseToolProviderConfig,
+    networkBufferService?: INetworkBufferService
+  ) {
+    super(chromeService, logger, validator, config);
+    this.networkBufferService = networkBufferService;
+  }
+
   protected initializeTools(): void {
     // Register network_enable tool
     this.registerTool({
@@ -69,6 +84,7 @@ class NetworkToolProvider extends BaseToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
+      jsonSchema: networkToolSchemas.network_enable,
       handler: async (args, context) => {
         const result = await withCDPCommand(
           'Network.enable',
@@ -86,6 +102,12 @@ class NetworkToolProvider extends BaseToolProvider {
           };
         }
 
+        // Enable buffer service for this session
+        if (this.networkBufferService && context.sessionId) {
+          this.networkBufferService.enableSession(context.sessionId as any);
+          this.logger.info({ sessionId: context.sessionId }, 'Network buffer enabled for session');
+        }
+
         return {
           success: true,
           data: { message: 'Network monitoring enabled' }
@@ -101,6 +123,7 @@ class NetworkToolProvider extends BaseToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
+      jsonSchema: networkToolSchemas.network_disable,
       handler: async (args, context) => {
         const result = await withCDPCommand(
           'Network.disable',
@@ -115,6 +138,12 @@ class NetworkToolProvider extends BaseToolProvider {
           };
         }
 
+        // Disable buffer service for this session
+        if (this.networkBufferService && context.sessionId) {
+          this.networkBufferService.disableSession(context.sessionId as any);
+          this.logger.info({ sessionId: context.sessionId }, 'Network buffer disabled for session');
+        }
+
         return {
           success: true,
           data: { message: 'Network monitoring disabled' }
@@ -126,6 +155,7 @@ class NetworkToolProvider extends BaseToolProvider {
     this.registerTool({
       name: 'network_get_requests',
       description: 'Get recent network requests',
+      jsonSchema: networkToolSchemas.network_get_requests,
       argsSchema: {
         parse: (value) => {
           const obj = (value || {}) as any;
@@ -152,25 +182,58 @@ class NetworkToolProvider extends BaseToolProvider {
         }
       },
       handler: async (args, context) => {
-        // For now, return empty array as we'd need to implement request tracking
+        if (!this.networkBufferService) {
+          this.logger.warn('Network buffer service not available');
+          return {
+            success: true,
+            data: {
+              requests: [],
+              totalCount: 0,
+              message: 'Network buffer service not available'
+            }
+          };
+        }
+
+        // Get requests from buffer
+        const requests = this.networkBufferService.getRequests({
+          sessionId: args.sessionId || context.sessionId,
+          limit: args.limit || 100,
+          includeResponses: true
+        });
+
+        // Format requests for output
+        const formattedRequests = requests.map(req => ({
+          requestId: req.requestId,
+          timestamp: new Date(req.timestamp).toISOString(),
+          method: req.method,
+          url: req.url,
+          resourceType: req.resourceType,
+          status: req.response?.status,
+          statusText: req.response?.statusText,
+          mimeType: req.response?.mimeType,
+          size: req.response?.encodedDataLength,
+          duration: req.response ? req.response.timestamp - req.timestamp : undefined,
+          failed: !!req.failure,
+          errorText: req.failure?.errorText
+        }));
+
         return {
           success: true,
           data: {
-            requests: [],
-            totalCount: 0,
-            message: 'Request tracking requires network_enable to be called first'
+            requests: formattedRequests,
+            totalCount: formattedRequests.length
           }
         };
       }
     });
 
     // Register network_mock_request tool
-    this.registerTool(
-      this.createTool(
-        'network_mock_request',
-        'Mock a network request',
-        mockRequestSchema,
-        async (args, context) => {
+    this.registerTool({
+      name: 'network_mock_request',
+      description: 'Mock a network request',
+      argsSchema: mockRequestSchema,
+      jsonSchema: networkToolSchemas.network_mock_request,
+      handler: async (args, context) => {
           // Enable request interception
           await withCDPCommand(
             'Fetch.enable',
@@ -191,8 +254,7 @@ class NetworkToolProvider extends BaseToolProvider {
             }
           };
         }
-      )
-    );
+    });
 
     // Register network_clear_cache tool
     this.registerTool({
@@ -202,6 +264,7 @@ class NetworkToolProvider extends BaseToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
+      jsonSchema: networkToolSchemas.network_clear_cache,
       handler: async (args, context) => {
         const result = await withCDPCommand(
           'Network.clearBrowserCache',
@@ -231,6 +294,7 @@ class NetworkToolProvider extends BaseToolProvider {
         parse: (value) => value || {},
         safeParse: (value) => ({ success: true, data: value || {} })
       },
+      jsonSchema: networkToolSchemas.network_clear_cookies,
       handler: async (args, context) => {
         const result = await withCDPCommand(
           'Network.clearBrowserCookies',
@@ -253,12 +317,12 @@ class NetworkToolProvider extends BaseToolProvider {
     });
 
     // Register network_throttle tool
-    this.registerTool(
-      this.createTool(
-        'network_throttle',
-        'Throttle network speed',
-        throttleSchema,
-        async (args, context) => {
+    this.registerTool({
+      name: 'network_throttle',
+      description: 'Throttle network speed',
+      argsSchema: throttleSchema,
+      jsonSchema: networkToolSchemas.network_throttle,
+      handler: async (args, context) => {
           const result = await withCDPCommand(
             'Network.emulateNetworkConditions',
             {
@@ -289,13 +353,13 @@ class NetworkToolProvider extends BaseToolProvider {
             }
           };
         }
-      )
-    );
+    });
 
     // Register network_get_cookies tool
     this.registerTool({
       name: 'network_get_cookies',
       description: 'Get browser cookies',
+      jsonSchema: networkToolSchemas.network_get_cookies,
       argsSchema: {
         parse: (value) => {
           const obj = (value || {}) as any;
@@ -347,7 +411,8 @@ export class NetworkToolProviderFactory extends BaseProviderFactory<NetworkToolP
       deps.chromeService,
       this.createProviderLogger(deps, config.name),
       deps.validator,
-      config
+      config,
+      deps.networkBufferService
     );
   }
 }

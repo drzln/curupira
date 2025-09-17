@@ -9,6 +9,8 @@ import type { BaseToolProviderConfig } from '../base-tool-provider.js';
 import { BaseToolProvider } from '../base-tool-provider.js';
 import type { Schema } from '../../../core/interfaces/validator.interface.js';
 import { withCDPCommand } from '../patterns/common-handlers.js';
+import { MinIOServiceToken } from '../../../core/di/tokens.js';
+import type { IMinIOService } from '../../../infrastructure/storage/minio.service.js';
 
 // Schema definitions
 const screenshotSchema: Schema<{ 
@@ -68,6 +70,60 @@ const elementScreenshotSchema: Schema<{
 };
 
 class ScreenshotToolProvider extends BaseToolProvider {
+  private readonly minioService: IMinIOService | null;
+
+  constructor(
+    chromeService: any,
+    logger: any,
+    validator: any,
+    config: BaseToolProviderConfig,
+    minioService: IMinIOService | null
+  ) {
+    super(chromeService, logger, validator, config);
+    this.minioService = minioService;
+  }
+
+  /**
+   * Store screenshot in MinIO and return URL
+   */
+  private async storeScreenshot(
+    data: string,
+    metadata: Record<string, string>
+  ): Promise<{ stored: boolean; url?: string; error?: string }> {
+    if (!this.minioService) {
+      return { stored: false };
+    }
+
+    try {
+      // Generate unique key
+      const timestamp = Date.now();
+      const format = metadata.format || 'png';
+      const key = `screenshots/${timestamp}-${Math.random().toString(36).substring(7)}.${format}`;
+
+      // Convert base64 to buffer
+      const buffer = Buffer.from(data, 'base64');
+
+      // Store in MinIO
+      const result = await this.minioService.store(key, buffer, {
+        'Content-Type': `image/${format}`,
+        ...metadata
+      });
+
+      if (result.isOk()) {
+        // Get signed URL
+        const urlResult = await this.minioService.getSignedUrl(key);
+        if (urlResult.isOk()) {
+          return { stored: true, url: urlResult.unwrap() };
+        }
+      }
+
+      return { stored: false, error: result.isErr() ? result.unwrapErr().message : 'Unknown error' };
+    } catch (error) {
+      this.logger.error({ error }, 'Failed to store screenshot in MinIO');
+      return { stored: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   protected initializeTools(): void {
     // Register capture_screenshot tool
     this.registerTool(
@@ -99,7 +155,34 @@ class ScreenshotToolProvider extends BaseToolProvider {
           }
 
           const screenshot = result.unwrap() as any;
-          
+          const timestamp = new Date().toISOString();
+
+          // Try to store in MinIO
+          const storeResult = await this.storeScreenshot(screenshot.data, {
+            format: args.format || 'png',
+            fullPage: String(args.fullPage),
+            quality: String(args.quality),
+            timestamp,
+            type: 'full-page-screenshot'
+          });
+
+          if (storeResult.stored && storeResult.url) {
+            // Return MinIO URL instead of base64 data
+            return {
+              success: true,
+              data: {
+                url: storeResult.url,
+                format: args.format,
+                fullPage: args.fullPage,
+                quality: args.quality,
+                timestamp,
+                size: Buffer.from(screenshot.data, 'base64').length,
+                stored: true
+              }
+            };
+          }
+
+          // Fallback to returning base64 data if MinIO is not available
           return {
             success: true,
             data: {
@@ -107,7 +190,9 @@ class ScreenshotToolProvider extends BaseToolProvider {
               format: args.format,
               fullPage: args.fullPage,
               quality: args.quality,
-              timestamp: new Date().toISOString()
+              timestamp,
+              stored: false,
+              storageError: storeResult.error
             }
           };
         }
@@ -201,7 +286,36 @@ class ScreenshotToolProvider extends BaseToolProvider {
           }
 
           const screenshot = result.unwrap() as any;
-          
+          const timestamp = new Date().toISOString();
+
+          // Try to store in MinIO
+          const storeResult = await this.storeScreenshot(screenshot.data, {
+            format: args.format || 'png',
+            selector: args.selector,
+            quality: String(args.quality),
+            timestamp,
+            bounds: JSON.stringify(clip),
+            type: 'element-screenshot'
+          });
+
+          if (storeResult.stored && storeResult.url) {
+            // Return MinIO URL instead of base64 data
+            return {
+              success: true,
+              data: {
+                url: storeResult.url,
+                format: args.format,
+                selector: args.selector,
+                bounds: clip,
+                quality: args.quality,
+                timestamp,
+                size: Buffer.from(screenshot.data, 'base64').length,
+                stored: true
+              }
+            };
+          }
+
+          // Fallback to returning base64 data if MinIO is not available
           return {
             success: true,
             data: {
@@ -210,7 +324,9 @@ class ScreenshotToolProvider extends BaseToolProvider {
               selector: args.selector,
               bounds: clip,
               quality: args.quality,
-              timestamp: new Date().toISOString()
+              timestamp,
+              stored: false,
+              storageError: storeResult.error
             }
           };
         }
@@ -270,7 +386,34 @@ class ScreenshotToolProvider extends BaseToolProvider {
         }
 
         const screenshot = result.unwrap() as any;
-        
+        const timestamp = new Date().toISOString();
+
+        // Try to store in MinIO
+        const storeResult = await this.storeScreenshot(screenshot.data, {
+          format: args.format || 'png',
+          viewport: 'true',
+          quality: String(args.quality),
+          timestamp,
+          type: 'viewport-screenshot'
+        });
+
+        if (storeResult.stored && storeResult.url) {
+          // Return MinIO URL instead of base64 data
+          return {
+            success: true,
+            data: {
+              url: storeResult.url,
+              format: args.format,
+              viewport: true,
+              quality: args.quality,
+              timestamp,
+              size: Buffer.from(screenshot.data, 'base64').length,
+              stored: true
+            }
+          };
+        }
+
+        // Fallback to returning base64 data if MinIO is not available
         return {
           success: true,
           data: {
@@ -278,7 +421,9 @@ class ScreenshotToolProvider extends BaseToolProvider {
             format: args.format,
             viewport: true,
             quality: args.quality,
-            timestamp: new Date().toISOString()
+            timestamp,
+            stored: false,
+            storageError: storeResult.error
           }
         };
       }
@@ -454,14 +599,52 @@ class ScreenshotToolProvider extends BaseToolProvider {
         }
 
         const pdf = result.unwrap() as any;
-        
+        const timestamp = new Date().toISOString();
+
+        // Try to store in MinIO
+        if (this.minioService) {
+          try {
+            const key = `pdfs/${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`;
+            const buffer = Buffer.from(pdf.data, 'base64');
+            
+            const storeResult = await this.minioService.store(key, buffer, {
+              'Content-Type': 'application/pdf',
+              landscape: String(args.landscape),
+              scale: String(args.scale),
+              timestamp,
+              type: 'page-pdf'
+            });
+
+            if (storeResult.isOk()) {
+              const urlResult = await this.minioService.getSignedUrl(key);
+              if (urlResult.isOk()) {
+                return {
+                  success: true,
+                  data: {
+                    url: urlResult.unwrap(),
+                    landscape: args.landscape,
+                    scale: args.scale,
+                    timestamp,
+                    size: buffer.length,
+                    stored: true
+                  }
+                };
+              }
+            }
+          } catch (error) {
+            this.logger.error({ error }, 'Failed to store PDF in MinIO');
+          }
+        }
+
+        // Fallback to returning base64 data
         return {
           success: true,
           data: {
             pdf: pdf.data,
             landscape: args.landscape,
             scale: args.scale,
-            timestamp: new Date().toISOString()
+            timestamp,
+            stored: false
           }
         };
       }
@@ -470,7 +653,7 @@ class ScreenshotToolProvider extends BaseToolProvider {
 }
 
 export class ScreenshotToolProviderFactory extends BaseProviderFactory<ScreenshotToolProvider> {
-  create(deps: ProviderDependencies): ScreenshotToolProvider {
+  create(deps: ProviderDependencies & { minioService?: IMinIOService | null }): ScreenshotToolProvider {
     const config: BaseToolProviderConfig = {
       name: 'screenshot',
       description: 'Screenshot capture and visual debugging tools'
@@ -480,7 +663,8 @@ export class ScreenshotToolProviderFactory extends BaseProviderFactory<Screensho
       deps.chromeService,
       this.createProviderLogger(deps, config.name),
       deps.validator,
-      config
+      config,
+      deps.minioService || null
     );
   }
 }

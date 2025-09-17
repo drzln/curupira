@@ -18,6 +18,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   argsSchema: Schema<any>;
+  jsonSchema?: any; // JSON Schema representation for MCP
   handler: (args: any, context: ExecutionContext) => Promise<ToolResult>;
 }
 
@@ -71,6 +72,15 @@ export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = 
    */
   listTools(): Tool[] {
     return Array.from(this.tools.values()).map(def => {
+      // Use provided jsonSchema if available
+      if (def.jsonSchema) {
+        return {
+          name: def.name,
+          description: def.description,
+          inputSchema: def.jsonSchema
+        };
+      }
+      
       // For chrome_connect, we need the proper schema
       if (def.name === 'chrome_connect') {
         return {
@@ -117,14 +127,16 @@ export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = 
         };
       }
       
-      // Default for other tools
+      // Default for other tools - empty schema causes validation issues
+      this.logger.warn({ tool: def.name }, 'No JSON schema defined for tool');
       return {
         name: def.name,
         description: def.description,
         inputSchema: {
           type: 'object',
           properties: {},
-          required: []
+          required: [],
+          additionalProperties: true // Allow any properties
         }
       };
     });
@@ -242,12 +254,14 @@ export abstract class BaseToolProvider<TConfig extends BaseToolProviderConfig = 
     name: string,
     description: string,
     argsSchema: Schema<TArgs>,
-    handler: (args: TArgs, context: ExecutionContext) => Promise<ToolResult>
+    handler: (args: TArgs, context: ExecutionContext) => Promise<ToolResult>,
+    jsonSchema?: any
   ): ToolDefinition {
     return {
       name,
       description,
       argsSchema,
+      jsonSchema,
       handler: handler as any
     };
   }

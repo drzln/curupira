@@ -10,6 +10,7 @@ import { BaseToolProvider } from '../base-tool-provider.js';
 import type { Schema } from '../../../core/interfaces/validator.interface.js';
 import type { ToolResult } from '../registry.js';
 import { withCDPCommand, withScriptExecution } from '../patterns/common-handlers.js';
+import { domToolSchemas } from '../schemas/dom-schemas.js';
 
 // Schema definitions
 const querySelectorSchema: Schema<{ selector: string; sessionId?: string }> = {
@@ -127,7 +128,8 @@ class DOMToolProvider extends BaseToolProvider {
               count: (result.unwrap() as any[]).length
             }
           };
-        }
+        },
+        domToolSchemas.dom_query_selector
       )
     );
 
@@ -185,7 +187,8 @@ class DOMToolProvider extends BaseToolProvider {
             success: true,
             data: data
           };
-        }
+        },
+        domToolSchemas.dom_click
       )
     );
 
@@ -248,7 +251,8 @@ class DOMToolProvider extends BaseToolProvider {
             success: true,
             data: data
           };
-        }
+        },
+        domToolSchemas.dom_set_value
       )
     );
 
@@ -283,7 +287,8 @@ class DOMToolProvider extends BaseToolProvider {
             success: true,
             data: result.unwrap()
           };
-        }
+        },
+        domToolSchemas.dom_get_text
       )
     );
 
@@ -320,7 +325,8 @@ class DOMToolProvider extends BaseToolProvider {
             success: true,
             data: result.unwrap()
           };
-        }
+        },
+        domToolSchemas.dom_get_attributes
       )
     );
 
@@ -355,7 +361,8 @@ class DOMToolProvider extends BaseToolProvider {
             success: true,
             data: result.unwrap()
           };
-        }
+        },
+        domToolSchemas.dom_wait_for_selector
       )
     );
   }

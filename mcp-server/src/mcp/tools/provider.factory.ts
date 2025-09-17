@@ -6,12 +6,16 @@
 import type { IChromeService } from '../../core/interfaces/chrome-service.interface.js';
 import type { ILogger } from '../../core/interfaces/logger.interface.js';
 import type { IValidator } from '../../core/interfaces/validator.interface.js';
+import type { IConsoleBufferService } from '../../chrome/services/console-buffer.service.js';
+import type { INetworkBufferService } from '../../chrome/services/network-buffer.service.js';
 import type { ToolProvider } from './registry.js';
 
 export interface ProviderDependencies {
   chromeService: IChromeService;
   logger: ILogger;
   validator: IValidator;
+  consoleBufferService?: IConsoleBufferService;
+  networkBufferService?: INetworkBufferService;
 }
 
 export interface IToolProviderFactory {

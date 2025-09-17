@@ -342,12 +342,17 @@ export class ChromeClient implements IChromeClient {
         await this.send('Page.enable', {}, result.sessionId);
         this.logger.info({ sessionId: result.sessionId }, 'Session fully initialized');
         
-        return {
+        const sessionObj = {
           id: result.sessionId,
           sessionId: result.sessionId,
           targetId: target.targetId,
           targetType: target.type as any
         };
+        
+        // Emit sessionCreated event
+        this.eventEmitter.emit('sessionCreated', sessionObj);
+        
+        return sessionObj;
       } catch (error) {
         this.logger.error({ error, targetId: target.targetId }, 'Failed to attach to target');
         throw error;
@@ -381,12 +386,17 @@ export class ChromeClient implements IChromeClient {
       targetType: target.type 
     }, 'Standard Chrome session created');
     
-    return {
+    const sessionObj = {
       id: target.targetId,
       sessionId: target.targetId,
       targetId: target.targetId,
       targetType: target.type as any
     };
+    
+    // Emit sessionCreated event
+    this.eventEmitter.emit('sessionCreated', sessionObj);
+    
+    return sessionObj;
   }
 
   private async sendBrowserCommand<T>(method: string, params?: any): Promise<T> {
