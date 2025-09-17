@@ -149,10 +149,27 @@ class ConsoleToolProvider extends BaseToolProvider {
           }
 
           // Get messages from buffer
-          const messages = this.consoleBufferService.getMessages({
-            sessionId: args.sessionId || context.sessionId,
+          // Try both the provided session ID and the default session
+          const sessionId = args.sessionId || context.sessionId || 'default';
+          let messages = this.consoleBufferService.getMessages({
+            sessionId: sessionId as any,
             limit: args.limit || 100
           });
+          
+          // If no messages found with session ID, try default session
+          if (messages.length === 0 && sessionId !== 'default') {
+            messages = this.consoleBufferService.getMessages({
+              sessionId: 'default' as any,
+              limit: args.limit || 100
+            });
+          }
+          
+          // If still no messages, get all messages regardless of session
+          if (messages.length === 0) {
+            messages = this.consoleBufferService.getMessages({
+              limit: args.limit || 100
+            });
+          }
 
           // Format messages for output
           const formattedMessages = messages.map((msg: ConsoleMessage) => ({

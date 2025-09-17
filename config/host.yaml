@@ -91,3 +91,16 @@ resources:
   maxConsoleLogEntries: 1000
   maxNetworkRequests: 500
   cacheSize: 100
+
+# Storage configuration - Using PLO cluster MinIO via Istio
+storage:
+  minio:
+    enabled: true
+    endPoint: "minio.infrastructure.plo.quero.local"
+    port: 80  # Istio Gateway HTTP port
+    useSSL: false
+    accessKey: "minioadmin"
+    secretKey: "minioadmin"
+    bucket: "curupira-screenshots"
+    region: "us-east-1"
+    signedUrlExpiry: 3600  # 1 hour

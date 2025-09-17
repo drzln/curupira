@@ -244,7 +244,10 @@ export class ChromeClient implements IChromeClient {
               params: message.params 
             });
             
-            // Emit event
+            // Emit event with both formats for compatibility
+            // 1. Session-specific event (for onSessionEvent listeners)
+            this.eventEmitter.emit(`${message.method}:${message.sessionId}`, message.params);
+            // 2. General event with sessionId in params (for general listeners)
             this.eventEmitter.emit(message.method, { 
               sessionId: message.sessionId, 
               ...message.params 
@@ -586,8 +589,13 @@ export class ChromeClient implements IChromeClient {
       
       // Handle events
       if ('method' in message) {
+        // Emit event with both formats for compatibility
+        // 1. Session-specific event (targetId is the sessionId for standard Chrome)
+        this.eventEmitter.emit(`${message.method}:${targetId}`, message.params);
+        // 2. General event with targetId in params
         this.eventEmitter.emit(message.method, { 
           targetId, 
+          sessionId: targetId, // Add sessionId for compatibility
           ...message.params 
         });
       }

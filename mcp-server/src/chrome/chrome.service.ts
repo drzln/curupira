@@ -93,12 +93,62 @@ export class ChromeService extends EventEmitter implements IChromeService {
       this.setupConsoleMonitoring(sessionInfo.sessionId);
       this.setupNetworkMonitoring(sessionInfo.sessionId);
     });
+    
+    // Also set up network monitoring for default target
+    this.setupDefaultTargetNetworkMonitoring();
 
     // Set up console monitoring for existing sessions
     const sessions = this.client.getSessions();
+    this.logger.info({ sessionCount: sessions.length }, 'Setting up monitoring for existing sessions');
     for (const session of sessions) {
+      this.logger.debug({ sessionId: session.sessionId, targetType: session.targetType }, 'Setting up monitoring for session');
       this.setupConsoleMonitoring(session.sessionId);
       this.setupNetworkMonitoring(session.sessionId);
+    }
+    
+    // Also set up monitoring for the default target (page)
+    // This handles cases where commands are executed on the default target
+    this.setupDefaultTargetConsoleMonitoring();
+  }
+
+  private async setupDefaultTargetConsoleMonitoring(): Promise<void> {
+    if (!this.client) return;
+
+    try {
+      // Create a session for the main page target to ensure WebSocket connection
+      const targets = await this.client.getTargets();
+      const mainPageTarget = targets.find((t: any) => t.type === 'page');
+      
+      if (mainPageTarget) {
+        this.logger.info({ targetId: mainPageTarget.targetId }, 'Setting up console monitoring for main page target');
+        
+        // Check if we already have a session for this target
+        const existingSessions = this.client.getSessions();
+        const existingSession = existingSessions.find((s: any) => s.targetId === mainPageTarget.targetId);
+        
+        if (existingSession) {
+          this.logger.info({ sessionId: existingSession.sessionId }, 'Using existing session for console monitoring');
+          // Set up console monitoring for existing session
+          await this.setupConsoleMonitoring(existingSession.sessionId);
+        } else {
+          // Create session which will establish WebSocket connection for standard Chrome
+          const session = await this.client.createSession(mainPageTarget.targetId);
+          
+          // Set up console monitoring for this session
+          await this.setupConsoleMonitoring(session.sessionId);
+          
+          this.logger.info({ sessionId: session.sessionId }, 'Console monitoring enabled for new main page session');
+        }
+        
+        // Also enable console buffer for 'default' sessionId for backward compatibility
+        if (this.consoleBufferService) {
+          this.consoleBufferService.enableSession('default' as any);
+        }
+      } else {
+        this.logger.warn('No page target found for console monitoring setup');
+      }
+    } catch (error) {
+      this.logger.error({ error }, 'Failed to set up console monitoring for default target');
     }
   }
 
@@ -128,6 +178,47 @@ export class ChromeService extends EventEmitter implements IChromeService {
       for (const session of sessions) {
         this.networkBufferService.disableSession(session.sessionId as any);  // Session ID type conversion
       }
+    }
+  }
+  
+  private async setupDefaultTargetNetworkMonitoring(): Promise<void> {
+    if (!this.client || !this.networkBufferService) return;
+    
+    try {
+      // Create a session for the main page target to ensure WebSocket connection
+      const targets = await this.client.getTargets();
+      const mainPageTarget = targets.find((t: any) => t.type === 'page');
+      
+      if (mainPageTarget) {
+        this.logger.info({ targetId: mainPageTarget.targetId }, 'Setting up network monitoring for main page target');
+        
+        // Check if we already have a session for this target
+        const existingSessions = this.client.getSessions();
+        const existingSession = existingSessions.find((s: any) => s.targetId === mainPageTarget.targetId);
+        
+        if (existingSession) {
+          this.logger.info({ sessionId: existingSession.sessionId }, 'Using existing session for network monitoring');
+          // Set up network monitoring for existing session
+          await this.setupNetworkMonitoring(existingSession.sessionId);
+        } else {
+          // Create session which will establish WebSocket connection for standard Chrome
+          const session = await this.client.createSession(mainPageTarget.targetId);
+          
+          // Set up network monitoring for this session
+          await this.setupNetworkMonitoring(session.sessionId);
+          
+          this.logger.info({ sessionId: session.sessionId }, 'Network monitoring enabled for new main page session');
+        }
+        
+        // Also enable network buffer for 'default' sessionId for backward compatibility
+        if (this.networkBufferService) {
+          this.networkBufferService.enableSession('default' as any);
+        }
+      } else {
+        this.logger.warn('No page target found for network monitoring setup');
+      }
+    } catch (error) {
+      this.logger.error({ error }, 'Failed to set up network monitoring for default target');
     }
   }
 
