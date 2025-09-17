@@ -304,22 +304,194 @@ class DebuggerToolProvider extends BaseToolProvider {
         safeParse: (value) => ({ success: true, data: value || {} })
       },
       handler: async (args, context) => {
-        // Get the current paused state
-        const pausedResult = await withCDPCommand(
-          'Debugger.evaluateOnCallFrame',
+        // Use Runtime.evaluate to get stack trace
+        const result = await withCDPCommand(
+          'Runtime.evaluate',
           {
-            callFrameId: 'dummy', // This will fail but we'll get the stack trace in error
-            expression: '1'
+            expression: `
+              (() => {
+                try {
+                  throw new Error('Stack trace capture');
+                } catch (e) {
+                  const frames = [];
+                  const lines = e.stack.split('\n').slice(1); // Skip the error message
+                  
+                  for (const line of lines) {
+                    const match = line.match(/at\s+([^\s]+)\s*\((.+?):(\d+):(\d+)\)|at\s+(.+?):(\d+):(\d+)/);
+                    if (match) {
+                      frames.push({
+                        functionName: match[1] || match[5] || '<anonymous>',
+                        url: match[2] || match[5],
+                        line: parseInt(match[3] || match[6], 10),
+                        column: parseInt(match[4] || match[7], 10)
+                      });
+                    }
+                  }
+                  
+                  return {
+                    currentStack: frames,
+                    isPaused: false,
+                    message: 'Stack trace from current execution point'
+                  };
+                }
+              })()
+            `,
+            returnByValue: true
           },
           context
         );
 
-        // For now, return a placeholder
+        if (result.isErr()) {
+          return {
+            success: false,
+            error: result.unwrapErr()
+          };
+        }
+
+        const stackData = result.unwrap() as any;
+        return {
+          success: true,
+          data: stackData.result?.value || {
+            message: 'Unable to capture stack trace',
+            hint: 'For paused execution traces, use debugger_pause first'
+          }
+        };
+      }
+    });
+    // Register debugger_evaluate_expression tool
+    this.registerTool({
+      name: 'debugger_evaluate_expression',
+      description: 'Evaluate JavaScript expression in the current context',
+      argsSchema: {
+        parse: (value) => {
+          if (typeof value !== 'object' || value === null) {
+            throw new Error('Expected object');
+          }
+          const obj = value as any;
+          if (typeof obj.expression !== 'string') {
+            throw new Error('expression must be a string');
+          }
+          return {
+            expression: obj.expression,
+            includeCommandLineAPI: obj.includeCommandLineAPI !== false,
+            sessionId: obj.sessionId
+          };
+        },
+        safeParse: (value) => {
+          try {
+            return { success: true, data: (this as any).argsSchema.parse(value) };
+          } catch (error) {
+            return { success: false, error };
+          }
+        }
+      },
+      handler: async (args, context) => {
+        const result = await withCDPCommand(
+          'Runtime.evaluate',
+          {
+            expression: args.expression,
+            includeCommandLineAPI: args.includeCommandLineAPI,
+            generatePreview: true,
+            returnByValue: false,
+            awaitPromise: true,
+            replMode: true
+          },
+          context
+        );
+
+        if (result.isErr()) {
+          return {
+            success: false,
+            error: result.unwrapErr()
+          };
+        }
+
+        const evalResult = result.unwrap() as any;
         return {
           success: true,
           data: {
-            message: 'Stack trace feature requires paused execution',
-            hint: 'Use debugger_pause first, then call this method'
+            type: evalResult.result?.type,
+            value: evalResult.result?.value || evalResult.result?.description,
+            preview: evalResult.result?.preview,
+            error: evalResult.exceptionDetails
+          }
+        };
+      }
+    });
+
+    // Register debugger_list_breakpoints tool
+    this.registerTool({
+      name: 'debugger_list_breakpoints',
+      description: 'List all active breakpoints',
+      argsSchema: {
+        parse: (value) => value || {},
+        safeParse: (value) => ({ success: true, data: value || {} })
+      },
+      handler: async (args, context) => {
+        // Get possible breakpoint locations first
+        const scriptsResult = await withCDPCommand(
+          'Debugger.getScriptSource',
+          { scriptId: '1' }, // This will fail but CDP doesn't have direct list breakpoints
+          context
+        );
+
+        // For now, we'll track breakpoints internally or return info message
+        return {
+          success: true,
+          data: {
+            message: 'Breakpoint listing requires manual tracking',
+            hint: 'Breakpoints set through debugger_set_breakpoint are active',
+            recommendation: 'Use Chrome DevTools UI for visual breakpoint management'
+          }
+        };
+      }
+    });
+
+    // Register debugger_set_exception_breakpoints tool
+    this.registerTool({
+      name: 'debugger_set_exception_breakpoints', 
+      description: 'Configure breakpoints for exceptions',
+      argsSchema: {
+        parse: (value) => {
+          const obj = (value || {}) as any;
+          return {
+            caught: obj.caught === true,
+            uncaught: obj.uncaught !== false, // Default true for uncaught
+            sessionId: obj.sessionId
+          };
+        },
+        safeParse: (value) => {
+          try {
+            return { success: true, data: (this as any).argsSchema.parse(value) };
+          } catch (error) {
+            return { success: false, error };
+          }
+        }
+      },
+      handler: async (args, context) => {
+        const states = [];
+        if (args.uncaught) states.push('uncaught');
+        if (args.caught) states.push('caught');
+
+        const result = await withCDPCommand(
+          'Debugger.setPauseOnExceptions',
+          { state: states.length === 2 ? 'all' : states[0] || 'none' },
+          context
+        );
+
+        if (result.isErr()) {
+          return {
+            success: false,
+            error: result.unwrapErr()
+          };
+        }
+
+        return {
+          success: true,
+          data: {
+            message: `Exception breakpoints configured`,
+            caught: args.caught,
+            uncaught: args.uncaught
           }
         };
       }
