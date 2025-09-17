@@ -1,126 +1,115 @@
 /**
- * Chrome DevTools Protocol Client
- * Manages connection to browserless Chrome instance
+ * Chrome Client with proper CDP session management - Level 1 (Chrome Core)
+ * Implements browser-level WebSocket for Browserless compatibility
  */
 
-import { WebSocket } from 'ws';
+import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import type { ILogger } from '../core/interfaces/logger.interface.js';
-import type {
-  CDPClient,
-  CDPConnectionOptions,
-  CDPConnectionState,
-  CDPSession,
-  CDPTarget
+import type { 
+  SessionId,
+  TargetId,
+  CDPConnectionOptions
 } from '@curupira/shared/types';
-import type { IChromeClient, SessionInfo } from './interfaces.js';
-import { LRUCache, ExpiringCache } from '@curupira/shared/utils';
-import { waitForCondition, retryWithBackoff } from '@curupira/shared/utils';
-import { BrowserlessDetector, type BrowserInfo } from './browserless-detector.js';
+import type { IChromeClient } from './interfaces.js';
+import type { ILogger } from '../core/interfaces/logger.interface.js';
+import type { IBrowserlessDetector, BrowserInfo } from './browserless-detector.js';
+import { LRUCache } from '../core/utils/lru-cache.js';
+import { retryWithBackoff } from '../core/utils/retry.js';
 
-// Local event map type
-type CDPEventMap = {
-  stateChange: CDPConnectionState;
-  connected: any;
-  disconnected: void;
-  targetsUpdated: CDPTarget[];
-  sessionError: { sessionId: string; error: Error };
-  sessionClosed: { sessionId: string };
-  [key: string]: any;
-};
+// CDP Types inline for now
+type CDPConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-interface InternalSession extends CDPSession {
-  ws: WebSocket;
-  messageHandlers: Map<number, {
-    resolve: (result: any) => void;
-    reject: (error: Error) => void;
-    timeout: NodeJS.Timeout;
-  }>;
-  eventHandlers: Map<string, Set<(...args: any[]) => void>>;
+interface CDPSession {
+  id: string;
+  sessionId: string;
+  targetId: string;
+  targetType: 'page' | 'iframe' | 'worker' | 'service_worker' | 'other';
 }
 
-export class ChromeClient implements CDPClient, IChromeClient {
-  private config: CDPConnectionOptions = { 
-    host: 'localhost',
-    port: 3000,
-    timeout: 30000
-  };
-  private sessions: Map<string, InternalSession> = new Map();
+interface CDPTarget {
+  targetId: string;
+  type: string;
+  title: string;
+  url: string;
+  attached: boolean;
+  canAccessOpener: boolean;
+  webSocketDebuggerUrl?: string;
+  devtoolsFrontendUrl?: string;
+}
+
+interface MessageHandler {
+  resolve: (result: any) => void;
+  reject: (error: Error) => void;
+  timeout: NodeJS.Timeout;
+}
+
+interface SessionInfo {
+  sessionId: string;
+  targetId: string;
+  targetType: string;
+}
+
+export class ChromeClient implements IChromeClient {
+  private config: CDPConnectionOptions;
+  
+  // Browser-level WebSocket for Browserless
+  private browserWs: WebSocket | null = null;
+  private browserMessageId: number = 1;
+  private browserMessageHandlers: Map<number, MessageHandler> = new Map();
+  
+  // Session management
+  private sessions: Map<string, SessionInfo> = new Map();
   private state: CDPConnectionState = 'disconnected';
-  private messageId: number = 1;
   private targets: Map<string, CDPTarget> = new Map();
+  
+  // Caching
   private responseCache: LRUCache<string, any> = new LRUCache(100);
-  private eventCache: ExpiringCache<string, any[]> = new ExpiringCache(60000); // 1 minute
+  private eventCache: Map<string, any[]> = new Map();
   
   private browserInfo: BrowserInfo | null = null;
-  private browserlessDetector: BrowserlessDetector;
   private eventEmitter = new EventEmitter();
 
-  constructor(private readonly logger: ILogger) {
-    this.browserlessDetector = new BrowserlessDetector(logger);
+  constructor(
+    private readonly logger: ILogger,
+    private readonly browserlessDetector: IBrowserlessDetector,
+    config?: CDPConnectionOptions
+  ) {
+    this.config = config || { host: 'localhost', port: 3000, timeout: 30000 };
   }
 
-  async connect(options?: CDPConnectionOptions): Promise<void> {
+  async connect(): Promise<void> {
     if (this.state === 'connected') {
       this.logger.warn('Already connected to Chrome');
       return;
-    }
-
-    if (options) {
-      this.config = { ...this.config, ...options };
     }
 
     this.state = 'connecting';
     this.eventEmitter.emit('stateChange', this.state);
 
     try {
-      // Detect browser type (Browserless vs standard Chrome)
+      // Detect browser type
       this.browserInfo = await this.browserlessDetector.detect(this.config.host, this.config.port);
-      
-      const protocol = this.config.secure ? 'https' : 'http';
-      const baseUrl = `${protocol}://${this.config.host}:${this.config.port}`;
-      
-      // Test HTTP endpoint first
-      const versionUrl = `${baseUrl}/json/version`;
-      const response = await retryWithBackoff(
-        () => fetch(versionUrl),
-        3,
-        1000
-      );
-      
-      if (!response.ok) {
-        throw new Error(`Failed to connect to Chrome: ${response.statusText}`);
+      this.logger.info({ browserInfo: this.browserInfo }, 'Browser detected');
+
+      // Connect browser-level WebSocket for Browserless
+      if (this.browserInfo?.isBrowserless) {
+        await this.connectBrowserWebSocket();
       }
-      
-      const versionInfo = await response.json();
-      this.logger.info({ 
-        versionInfo,
-        browserInfo: this.browserInfo 
-      }, 'Connected to browser');
-      
+
       // Discover available targets
       await this.updateTargets();
-      
+
       this.state = 'connected';
       this.eventEmitter.emit('stateChange', this.state);
       this.eventEmitter.emit('connected', { 
-        versionInfo,
         browserInfo: this.browserInfo 
       });
     } catch (error) {
       this.state = 'error';
       this.eventEmitter.emit('stateChange', this.state);
       
-      // Enhanced error logging for debugging
-      const errorDetails = {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        type: error instanceof Error ? error.constructor.name : typeof error,
-        stringified: String(error)
-      };
-      
       this.logger.error({ 
-        error: errorDetails,
+        error,
         config: this.config,
         state: this.state 
       }, 'Failed to connect to Chrome');
@@ -129,142 +118,255 @@ export class ChromeClient implements CDPClient, IChromeClient {
     }
   }
 
+  private async connectBrowserWebSocket(): Promise<void> {
+    const protocol = this.config.secure ? 'wss' : 'ws';
+    const wsUrl = `${protocol}://${this.config.host}:${this.config.port}/`;
+    
+    this.logger.info({ wsUrl }, 'Connecting to Browserless WebSocket');
+    
+    return new Promise((resolve, reject) => {
+      this.browserWs = new WebSocket(wsUrl);
+      
+      const timeout = setTimeout(() => {
+        if (this.browserWs) {
+          this.browserWs.close();
+        }
+        reject(new Error('Browser WebSocket connection timeout'));
+      }, this.config.timeout || 30000);
+      
+      this.browserWs.on('open', () => {
+        clearTimeout(timeout);
+        this.logger.info('Browser WebSocket connected');
+        resolve();
+      });
+      
+      this.browserWs.on('message', (data) => {
+        this.handleBrowserMessage(data.toString());
+      });
+      
+      this.browserWs.on('error', (error) => {
+        clearTimeout(timeout);
+        this.logger.error({ error }, 'Browser WebSocket error');
+        reject(error);
+      });
+      
+      this.browserWs.on('close', () => {
+        this.logger.info('Browser WebSocket closed');
+        this.browserWs = null;
+        // Clean up all sessions if browser connection lost
+        this.sessions.clear();
+      });
+    });
+  }
+
+  private handleBrowserMessage(data: string): void {
+    try {
+      const message = JSON.parse(data);
+      
+      // Handle responses to commands
+      if ('id' in message) {
+        const handler = this.browserMessageHandlers.get(message.id);
+        if (handler) {
+          clearTimeout(handler.timeout);
+          if (message.error) {
+            handler.reject(new Error(message.error.message));
+          } else {
+            handler.resolve(message.result);
+          }
+          this.browserMessageHandlers.delete(message.id);
+        }
+        return;
+      }
+      
+      // Handle events
+      if ('method' in message) {
+        // Session-specific event
+        if (message.sessionId) {
+          const session = this.sessions.get(message.sessionId);
+          if (session) {
+            // Cache event data
+            const cacheKey = `session:${message.sessionId}:${message.method}`;
+            if (!this.eventCache.has(cacheKey)) {
+              this.eventCache.set(cacheKey, []);
+            }
+            this.eventCache.get(cacheKey)!.push({ 
+              timestamp: Date.now(), 
+              params: message.params 
+            });
+            
+            // Emit event
+            this.eventEmitter.emit(message.method, { 
+              sessionId: message.sessionId, 
+              ...message.params 
+            });
+          }
+        } else {
+          // Browser-level event
+          this.eventEmitter.emit(message.method, message.params);
+        }
+      }
+    } catch (error) {
+      this.logger.error({ error }, 'Failed to parse browser message');
+    }
+  }
+
   async createSession(targetId?: string): Promise<CDPSession> {
     if (this.state !== 'connected') {
       throw new Error('Not connected to Chrome');
     }
 
+    // Find target
     let target: CDPTarget | undefined;
-    let actualTargetId: string;
-    
     if (targetId) {
       target = this.targets.get(targetId);
       if (!target) {
         throw new Error(`Target ${targetId} not found`);
       }
-      actualTargetId = targetId;
     } else {
       // Find first available page target
       const targets = Array.from(this.targets.values());
       target = targets.find(t => t.type === 'page');
       
       if (!target) {
-        // For Browserless, we need to navigate an existing target to a new page
-        // rather than trying to create a new target
         if (this.browserInfo?.isBrowserless && targets.length > 0) {
-          // Use the first available target
+          // Use first available target for Browserless
           target = targets[0];
-          actualTargetId = target.targetId;
-          
-          // We'll navigate to about:blank later if needed
-          this.logger.info({ targetId: actualTargetId }, 'Using existing Browserless target');
+          this.logger.info({ targetId: target.targetId }, 'Using existing Browserless target');
         } else {
           throw new Error('No page target available');
         }
-      } else {
-        actualTargetId = target.targetId;
       }
     }
 
-    try {
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      const wsUrl = target.webSocketDebuggerUrl;
-      
-      if (!wsUrl) {
-        throw new Error('Target does not have a WebSocket debugger URL');
+    // For Browserless, use Target.attachToTarget
+    if (this.browserInfo?.isBrowserless && this.browserWs) {
+      try {
+        this.logger.info({ targetId: target.targetId }, 'Attaching to Browserless target');
+        
+        const result = await this.sendBrowserCommand<{ sessionId: string }>('Target.attachToTarget', {
+          targetId: target.targetId,
+          flatten: true // Important for Browserless
+        });
+        
+        const sessionInfo: SessionInfo = {
+          sessionId: result.sessionId,
+          targetId: target.targetId,
+          targetType: target.type
+        };
+        
+        this.sessions.set(result.sessionId, sessionInfo);
+        
+        // Enable necessary domains
+        await this.send('Runtime.enable', {}, result.sessionId);
+        await this.send('Page.enable', {}, result.sessionId);
+        
+        return {
+          id: result.sessionId,
+          sessionId: result.sessionId,
+          targetId: target.targetId,
+          targetType: target.type as any
+        };
+      } catch (error) {
+        this.logger.error({ error, targetId: target.targetId }, 'Failed to attach to target');
+        throw error;
       }
-
-      const ws = new WebSocket(wsUrl);
-      
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          ws.close();
-          reject(new Error('WebSocket connection timeout'));
-        }, this.config.timeout || 30000);
-
-        ws.on('open', () => {
-          clearTimeout(timeout);
-          
-          const session: InternalSession = {
-            id: sessionId,
-            sessionId: sessionId,
-            targetId: actualTargetId,
-            targetType: target.type as 'page' | 'iframe' | 'worker' | 'service_worker' | 'other',
-            ws,
-            messageHandlers: new Map(),
-            eventHandlers: new Map()
-          };
-          
-          this.sessions.set(sessionId, session);
-
-          ws.on('message', (data) => {
-            this.handleMessage(sessionId, data.toString());
-          });
-
-          ws.on('close', () => {
-            this.cleanupSession(sessionId);
-          });
-
-          ws.on('error', (error) => {
-            this.logger.error({ sessionId, error }, 'WebSocket error');
-            this.eventEmitter.emit('sessionError', { sessionId, error });
-          });
-
-          // Enable necessary domains
-          this.send('Runtime.enable', {}, sessionId);
-          this.send('Page.enable', {}, sessionId);
-
-          const sessionInfo = {
-            id: sessionId,
-            sessionId: sessionId,
-            targetId: actualTargetId,
-            targetType: target.type as 'page' | 'iframe' | 'worker' | 'service_worker' | 'other'
-          };
-          
-          // Always return CDPSession for compatibility
-          resolve(sessionInfo);
-        });
-
-        ws.on('error', (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-      });
-    } catch (error) {
-      this.logger.error({ error }, 'Failed to create session');
-      throw error;
     }
+    
+    // For standard Chrome, fall back to direct WebSocket (not implemented in this version)
+    throw new Error('Standard Chrome direct WebSocket not implemented - use Browserless');
   }
 
-  async closeSession(sessionId: string): Promise<void> {
+  private async sendBrowserCommand<T>(method: string, params?: any): Promise<T> {
+    if (!this.browserWs || this.browserWs.readyState !== WebSocket.OPEN) {
+      throw new Error('Browser WebSocket not connected');
+    }
+    
+    const id = this.browserMessageId++;
+    const message = { id, method, params: params || {} };
+    
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.browserMessageHandlers.delete(id);
+        reject(new Error(`Browser command timeout: ${method}`));
+      }, this.config.timeout || 30000);
+      
+      this.browserMessageHandlers.set(id, {
+        resolve: (result: T) => {
+          resolve(result);
+        },
+        reject: (error: Error) => {
+          reject(error);
+        },
+        timeout
+      });
+      
+      this.browserWs!.send(JSON.stringify(message));
+    });
+  }
+
+  async send<T = unknown>(
+    method: string,
+    params?: Record<string, unknown>,
+    sessionId?: string
+  ): Promise<T> {
+    if (!sessionId) {
+      // Browser-level command via HTTP
+      return this.sendHttpCommand<T>(method, params);
+    }
+
+    // Session-level command via WebSocket
+    if (!this.browserWs || this.browserWs.readyState !== WebSocket.OPEN) {
+      throw new Error('Browser WebSocket not connected');
+    }
+
     const session = this.sessions.get(sessionId);
     if (!session) {
-      return; // Already closed
+      throw new Error(`Session ${sessionId} not found`);
     }
 
-    try {
-      session.ws.close();
-      this.cleanupSession(sessionId);
-    } catch (error) {
-      this.logger.error({ sessionId, error }, 'Failed to close session');
-    }
+    const id = this.browserMessageId++;
+    const message = { 
+      id, 
+      method, 
+      params: params || {},
+      sessionId // Include sessionId for target-specific commands
+    };
+    
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.browserMessageHandlers.delete(id);
+        reject(new Error(`Command timeout: ${method}`));
+      }, this.config.timeout || 30000);
+      
+      this.browserMessageHandlers.set(id, {
+        resolve: (result: T) => {
+          resolve(result);
+        },
+        reject: (error: Error) => {
+          reject(error);
+        },
+        timeout
+      });
+      
+      this.browserWs!.send(JSON.stringify(message));
+    });
   }
 
-  private cleanupSession(sessionId: string): void {
-    const session = this.sessions.get(sessionId);
-    if (!session) return;
+  private async sendHttpCommand<T>(method: string, params?: any): Promise<T> {
+    const protocol = this.config.secure ? 'https' : 'http';
+    const baseUrl = `${protocol}://${this.config.host}:${this.config.port}`;
+    
+    const response = await fetch(`${baseUrl}/json/runtime/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params || {})
+    });
 
-    // Clear all pending handlers
-    for (const [, handler] of session.messageHandlers) {
-      clearTimeout(handler.timeout);
-      handler.reject(new Error('Session closed'));
+    if (!response.ok) {
+      throw new Error(`HTTP command failed: ${response.statusText}`);
     }
-    session.messageHandlers.clear();
-    session.eventHandlers.clear();
 
-    this.sessions.delete(sessionId);
-    this.eventCache.delete(`session:${sessionId}`);
-    this.eventEmitter.emit('sessionClosed', { sessionId });
+    return response.json() as Promise<T>;
   }
 
   async updateTargets(): Promise<void> {
@@ -295,13 +397,10 @@ export class ChromeClient implements CDPClient, IChromeClient {
       // Update targets map
       this.targets.clear();
       for (const target of targets) {
-        // Handle different target ID formats
-        // Browserless: targetId = "/devtools/page/BROWSERLESSUIGHA3G57FGLHJOOS0JR1"
-        // Standard Chrome: id = "page_1234"
         let targetId: string;
         
         if (target.targetId) {
-          // Extract the actual ID from Browserless path format
+          // Extract ID from Browserless path format
           if (target.targetId.startsWith('/devtools/')) {
             targetId = target.targetId.split('/').pop() || target.targetId;
           } else {
@@ -327,63 +426,129 @@ export class ChromeClient implements CDPClient, IChromeClient {
 
       this.eventEmitter.emit('targetsUpdated', Array.from(this.targets.values()));
     } catch (error) {
-      const errorDetails = {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        type: error instanceof Error ? error.constructor.name : typeof error,
-        stringified: String(error),
-        config: this.config,
-        targetsUrl: `${this.config.secure ? 'https' : 'http'}://${this.config.host}:${this.config.port}/json`
-      };
-      
-      this.logger.error({ error: errorDetails }, 'Failed to update targets');
+      this.logger.error({ error }, 'Failed to update targets');
       throw error;
     }
   }
 
-  async send<T = unknown>(
-    method: string,
-    params?: Record<string, unknown>,
-    sessionId?: string
-  ): Promise<T> {
-    if (!sessionId) {
-      // Browser-level command
-      return this.sendBrowserCommand<T>(method, params);
-    }
-
-    // Session-level command
+  async closeSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
+      return;
     }
 
-    const cacheKey = `${method}:${JSON.stringify(params || {})}`;
-    const cached = this.responseCache.get(cacheKey);
-    if (cached && this.isCacheable(method)) {
-      return cached as T;
+    try {
+      // Detach from target
+      if (this.browserWs) {
+        await this.sendBrowserCommand('Target.detachFromTarget', { 
+          sessionId 
+        });
+      }
+      
+      this.sessions.delete(sessionId);
+      this.eventEmitter.emit('sessionClosed', { sessionId });
+    } catch (error) {
+      this.logger.error({ sessionId, error }, 'Failed to close session');
     }
-
-    const result = await this.sendCommand<T>(sessionId, method, params);
-    
-    if (this.isCacheable(method)) {
-      this.responseCache.set(cacheKey, result);
-    }
-
-    return result;
   }
 
-  on<K extends keyof CDPEventMap>(
-    event: K,
-    handler: (params: CDPEventMap[K]) => void
-  ): void;
+  async disconnect(): Promise<void> {
+    if (this.state === 'disconnected') {
+      return;
+    }
+
+    this.state = 'disconnected';
+    this.eventEmitter.emit('stateChange', this.state);
+
+    // Close all sessions
+    const sessionIds = Array.from(this.sessions.keys());
+    await Promise.all(sessionIds.map(id => this.closeSession(id)));
+
+    // Close browser WebSocket
+    if (this.browserWs) {
+      this.browserWs.close();
+      this.browserWs = null;
+    }
+
+    // Clear all state
+    this.targets.clear();
+    this.responseCache.clear();
+    this.eventCache.clear();
+    this.browserMessageHandlers.clear();
+    this.browserMessageId = 1;
+
+    this.eventEmitter.emit('disconnected');
+  }
+
+  // Navigation helpers
+  async navigate(sessionId: string, url: string): Promise<void> {
+    await this.send('Page.navigate', { url }, sessionId);
+  }
+
+  async evaluate<T = unknown>(
+    sessionId: string,
+    expression: string,
+    awaitPromise = true
+  ): Promise<T> {
+    const result = await this.send<{
+      result: { value?: T; unserializableValue?: string };
+      exceptionDetails?: any;
+    }>('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise
+    }, sessionId);
+
+    if (result.exceptionDetails) {
+      throw new Error(`Evaluation failed: ${result.exceptionDetails.text}`);
+    }
+
+    return result.result.value as T;
+  }
+
+  // State and info getters
+  isConnected(): boolean {
+    return this.state === 'connected';
+  }
+
+  getState(): CDPConnectionState {
+    return this.state;
+  }
+
+  getTargets(): any {
+    return Array.from(this.targets.values());
+  }
+
+  getTarget(targetId: string): CDPTarget | undefined {
+    return this.targets.get(targetId);
+  }
+
+  getSessions(): any[] {
+    return Array.from(this.sessions.entries()).map(([sessionId, info]) => ({
+      id: sessionId,
+      sessionId: sessionId,
+      targetId: info.targetId,
+      targetType: info.targetType as any
+    }));
+  }
+
+  getSession(sessionId: string): any {
+    const info = this.sessions.get(sessionId);
+    if (!info) return undefined;
+    
+    return {
+      id: sessionId,
+      sessionId: sessionId,
+      targetId: info.targetId,
+      targetType: info.targetType as any
+    };
+  }
+
+  // Event handling
   on(event: string, handler: (params: any) => void): void {
     this.eventEmitter.on(event, handler);
   }
 
-  off<K extends keyof CDPEventMap>(
-    event: K,
-    handler?: (params: CDPEventMap[K]) => void
-  ): void;
   off(event: string, handler?: (params: any) => void): void {
     if (handler) {
       this.eventEmitter.removeListener(event, handler);
@@ -392,56 +557,31 @@ export class ChromeClient implements CDPClient, IChromeClient {
     }
   }
 
-  async getTargets(): Promise<CDPTarget[]> {
-    return Array.from(this.targets.values());
-  }
-  
-
-  getTarget(targetId: string): CDPTarget | undefined {
-    return this.targets.get(targetId);
+  once<T = unknown>(event: string, handler: (params: T) => void): void {
+    this.eventEmitter.once(event, handler);
   }
 
-  getSessions(): CDPSession[] {
-    return Array.from(this.sessions.values()).map(session => ({
-      id: session.id,
-      sessionId: session.sessionId,
-      targetId: session.targetId,
-      targetType: session.targetType
-    }));
-  }
-  
-
-  getSession(sessionId: string): CDPSession | undefined {
-    const session = this.sessions.get(sessionId);
-    if (!session) return undefined;
-    
-    return {
-      id: session.id,
-      sessionId: session.sessionId,
-      targetId: session.targetId,
-      targetType: session.targetType
-    };
+  // Compatibility methods
+  emit(event: string, ...args: any[]): boolean {
+    return this.eventEmitter.emit(event, ...args);
   }
 
-  getState(): CDPConnectionState {
-    return this.state;
+  removeListener(event: string, listener: (...args: any[]) => void): this {
+    this.eventEmitter.removeListener(event, listener);
+    return this;
   }
 
-  getConnectionState(): CDPConnectionState {
-    return this.state;
+  removeAllListeners(event?: string): this {
+    this.eventEmitter.removeAllListeners(event);
+    return this;
   }
 
   async attachToTarget(targetId: string): Promise<void> {
-    // For browserless, creating a session is the same as attaching
     await this.createSession(targetId);
   }
 
   async detachFromTarget(sessionId: string): Promise<void> {
     await this.closeSession(sessionId);
-  }
-
-  once<T = unknown>(event: string, handler: (params: T) => void): void {
-    this.eventEmitter.once(event, handler);
   }
 
   async waitForTarget(
@@ -472,199 +612,22 @@ export class ChromeClient implements CDPClient, IChromeClient {
     });
   }
 
-  private async sendBrowserCommand<T>(
-    method: string,
-    params?: Record<string, unknown>
-  ): Promise<T> {
-    const protocol = this.config.secure ? 'https' : 'http';
-    const baseUrl = `${protocol}://${this.config.host}:${this.config.port}`;
-    
-    // Browser-level commands via HTTP
-    const response = await fetch(`${baseUrl}/json/runtime/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params || {})
-    });
-
-    if (!response.ok) {
-      throw new Error(`Browser command failed: ${response.statusText}`);
-    }
-
-    return response.json() as Promise<T>;
-  }
-
-  private isCacheable(method: string): boolean {
-    // Cache read-only methods
-    const cacheableMethods = [
-      'DOM.getDocument',
-      'DOM.describeNode',
-      'CSS.getComputedStyleForNode',
-      'CSS.getMatchedStylesForNode',
-      'Runtime.getProperties'
-    ];
-    return cacheableMethods.includes(method);
-  }
-
-  private async sendCommand<T>(
-    sessionId: string,
-    method: string,
-    params?: Record<string, unknown>
-  ): Promise<T> {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    const id = this.messageId++;
-    const message = {
-      id,
-      method,
-      params: params || {}
-    };
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        session.messageHandlers.delete(id);
-        reject(new Error(`Command timeout: ${method}`));
-      }, this.config.timeout || 30000);
-
-      session.messageHandlers.set(id, {
-        resolve: (result: T) => {
-          clearTimeout(timeout);
-          session.messageHandlers.delete(id);
-          resolve(result);
-        },
-        reject: (error: Error) => {
-          clearTimeout(timeout);
-          session.messageHandlers.delete(id);
-          reject(error);
-        },
-        timeout
-      });
-
-      try {
-        session.ws.send(JSON.stringify(message));
-      } catch (error) {
-        session.messageHandlers.delete(id);
-        clearTimeout(timeout);
-        reject(error);
-      }
-    });
-  }
-
-  private handleMessage(sessionId: string, data: string): void {
-    const session = this.sessions.get(sessionId);
-    if (!session) return;
-
-    try {
-      const message = JSON.parse(data);
-      
-      // Handle responses to commands
-      if ('id' in message) {
-        const handler = session.messageHandlers.get(message.id);
-        if (handler) {
-          if (message.error) {
-            handler.reject(new Error(message.error.message));
-          } else {
-            handler.resolve(message.result);
-          }
-        }
-        return;
-      }
-
-      // Handle events
-      if ('method' in message) {
-        const event = message.method;
-        const params = message.params || {};
-
-        // Cache event data
-        const cacheKey = `session:${sessionId}:${event}`;
-        let eventHistory = this.eventCache.get(cacheKey) || [];
-        eventHistory.push({ timestamp: Date.now(), params });
-        if (eventHistory.length > 100) {
-          eventHistory = eventHistory.slice(-100); // Keep last 100
-        }
-        this.eventCache.set(cacheKey, eventHistory);
-
-        // Emit to session-specific handlers
-        const handlers = session.eventHandlers.get(event);
-        if (handlers) {
-          for (const handler of handlers) {
-            try {
-              handler(params);
-            } catch (error) {
-              this.logger.error({ sessionId, event, error }, 'Event handler error');
-            }
-          }
-        }
-
-        // Emit global event
-        this.eventEmitter.emit(event, { sessionId, ...params });
-      }
-    } catch (error) {
-      this.logger.error({ sessionId, error }, 'Failed to parse CDP message');
-    }
-  }
-
-  async disconnect(): Promise<void> {
-    if (this.state === 'disconnected') {
-      return;
-    }
-
-    this.state = 'disconnected';
-    this.eventEmitter.emit('stateChange', this.state);
-
-    // Close all sessions
-    const sessionIds = Array.from(this.sessions.keys());
-    await Promise.all(sessionIds.map(id => this.closeSession(id)));
-
-    // Clear all state
-    this.targets.clear();
-    this.responseCache.clear();
-    this.eventCache.clear();
-    this.messageId = 1;
-
-    this.eventEmitter.emit('disconnected');
-  }
-
-  isConnected(): boolean {
-    return this.state === 'connected';
+  getConnectionState(): CDPConnectionState {
+    return this.state;
   }
 
   getSessionCount(): number {
     return this.sessions.size;
   }
 
-  // EventEmitter interface implementation
-  emit(event: string, ...args: any[]): boolean {
-    return this.eventEmitter.emit(event, ...args);
-  }
-
-  removeListener(event: string, listener: (...args: any[]) => void): this {
-    this.eventEmitter.removeListener(event, listener);
-    return this;
-  }
-
-  removeAllListeners(event?: string): this {
-    this.eventEmitter.removeAllListeners(event);
-    return this;
-  }
-
-  // Session-specific event handling
   onSessionEvent(
     sessionId: string,
     event: string,
     handler: (params: any) => void
   ): void {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    if (!session.eventHandlers.has(event)) {
-      session.eventHandlers.set(event, new Set());
-    }
-    session.eventHandlers.get(event)!.add(handler);
+    // For Browserless, all events come through the main WebSocket
+    const eventKey = `${event}:${sessionId}`;
+    this.eventEmitter.on(eventKey, handler);
   }
 
   offSessionEvent(
@@ -672,63 +635,16 @@ export class ChromeClient implements CDPClient, IChromeClient {
     event: string,
     handler?: (params: any) => void
   ): void {
-    const session = this.sessions.get(sessionId);
-    if (!session) return;
-
+    const eventKey = `${event}:${sessionId}`;
     if (handler) {
-      session.eventHandlers.get(event)?.delete(handler);
+      this.eventEmitter.removeListener(eventKey, handler);
     } else {
-      session.eventHandlers.delete(event);
+      this.eventEmitter.removeAllListeners(eventKey);
     }
   }
 
-  // Get cached events for a session
   getSessionEvents(sessionId: string, event: string): any[] {
     const cacheKey = `session:${sessionId}:${event}`;
     return this.eventCache.get(cacheKey) || [];
-  }
-
-  // Utility methods for common CDP operations
-  async navigate(sessionId: string, url: string): Promise<void> {
-    await this.send('Page.navigate', { url }, sessionId);
-  }
-
-  async evaluate<T = unknown>(
-    sessionId: string,
-    expression: string,
-    awaitPromise = true
-  ): Promise<T> {
-    const result = await this.send<{
-      result: { value?: T; unserializableValue?: string };
-      exceptionDetails?: any;
-    }>('Runtime.evaluate', {
-      expression,
-      returnByValue: true,
-      awaitPromise
-    }, sessionId);
-
-    if (result.exceptionDetails) {
-      throw new Error(`Evaluation failed: ${result.exceptionDetails.text}`);
-    }
-
-    return result.result.value as T;
-  }
-
-
-  async screenshot(
-    sessionId: string,
-    options: { fullPage?: boolean; quality?: number } = {}
-  ): Promise<{ data: string; width?: number; height?: number }> {
-    const result = await this.send<{
-      data: string;
-    }>('Page.captureScreenshot', {
-      format: 'png',
-      quality: options.quality,
-      captureBeyondViewport: options.fullPage
-    }, sessionId);
-
-    return {
-      data: result.data
-    };
   }
 }

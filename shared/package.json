@@ -1,6 +1,6 @@
 {
   "name": "@curupira/shared",
-  "version": "2.4.12",
+  "version": "2.4.14",
   "description": "Shared types and utilities for Curupira",
   "type": "module",
   "main": "./dist/index.js",

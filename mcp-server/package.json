@@ -1,6 +1,6 @@
 {
   "name": "curupira-mcp-server",
-  "version": "2.4.12",
+  "version": "2.4.14",
   "description": "Curupira MCP Server - AI debugging for React apps",
   "type": "module",
   "main": "./dist/index.js",

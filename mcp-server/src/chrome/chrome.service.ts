@@ -8,16 +8,19 @@ import type { IChromeClient, ConnectionOptions } from './interfaces.js';
 import type { ILogger } from '../core/interfaces/logger.interface.js';
 import type { ChromeConfig } from '../core/di/tokens.js';
 import { ChromeClient } from './client.js';
+import { BrowserlessDetector } from './browserless-detector.js';
 import { EventEmitter } from 'events';
 
 export class ChromeService extends EventEmitter implements IChromeService {
   private client: IChromeClient | null = null;
+  private browserlessDetector: BrowserlessDetector;
 
   constructor(
     private readonly config: ChromeConfig,
     private readonly logger: ILogger
   ) {
     super();
+    this.browserlessDetector = new BrowserlessDetector(this.logger);
   }
 
   async connect(options: ConnectionOptions): Promise<IChromeClient> {
@@ -27,16 +30,15 @@ export class ChromeService extends EventEmitter implements IChromeService {
     }
 
     // Create new client with injected dependencies
-    const client = new ChromeClient(this.logger);
-    
-    // Merge options with config defaults
     const connectionOptions: ConnectionOptions = {
       host: options.host ?? this.config.host,
       port: options.port ?? this.config.port,
       secure: options.secure ?? this.config.secure
     };
-
-    await client.connect(connectionOptions);
+    
+    const client = new ChromeClient(this.logger, this.browserlessDetector, connectionOptions);
+    
+    await client.connect();
     this.client = client;
 
     this.logger.info(
