@@ -12,15 +12,16 @@
 
 ## Overview
 
-Curupira is a Model Context Protocol (MCP) debugging tool that provides AI assistants with direct access to browser DevTools, React state, and runtime debugging capabilities. It bridges the gap between AI assistants and complex frontend applications, enabling autonomous debugging and issue resolution.
+Curupira is a Model Context Protocol (MCP) debugging tool that provides AI assistants with direct access to browser DevTools, React state, and runtime debugging capabilities. It bridges the gap between AI assistants and complex frontend applications through Chrome DevTools Protocol.
 
 ### Key Features
 
-- 🔍 **Browser DevTools Integration**: Console logs, network monitoring, DOM inspection
-- ⚛️ **React DevTools Access**: Component state, props, render tracking  
-- 🎯 **State Management**: XState machines, Zustand stores, Apollo cache
-- 🐛 **Runtime Debugging**: Breakpoints, expression evaluation, time travel
-- 🚀 **Real-time Communication**: WebSocket-based bidirectional data flow
+- 🔍 **Chrome DevTools Protocol Integration**: Full access to CDP domains (Runtime, Debugger, Network, DOM, etc.)
+- ⚛️ **React Application Debugging**: Component inspection, props/state analysis, hooks debugging
+- 🎯 **State Management**: Apollo GraphQL, Zustand stores, XState machines, TanStack Query
+- 🛠️ **Framework Support**: React Router, Framer Motion, React Hook Form, Vite, Panda CSS
+- 🚀 **Multiple Transports**: WebSocket, HTTP/SSE, and stdio for different deployment scenarios
+- 📦 **Dependency Injection**: Clean architecture with comprehensive DI container
 - 🤖 **AI-Optimized**: Built specifically for AI assistant interaction via MCP
 
 ## 📚 Documentation
@@ -32,10 +33,14 @@ Curupira is a Model Context Protocol (MCP) debugging tool that provides AI assis
 
 ## Quick Start
 
-### Using Docker
+### Using Docker with Browserless
 
 ```bash
-docker run -p 8080:8080 drzln/curupira:latest
+# Start Browserless Chrome service
+docker run -d -p 3000:3000 --name browserless browserless/chrome
+
+# Start Curupira MCP server
+docker run -p 8080:8080 -e CHROME_SERVICE_URL=http://host.docker.internal:3000 drzln/curupira:latest
 ```
 
 ### Using npm
@@ -44,44 +49,82 @@ docker run -p 8080:8080 drzln/curupira:latest
 # Install globally
 npm install -g curupira
 
-# Start the server
+# Start with default configuration
 curupira start
+
+# Or specify a custom config
+curupira start --config ./config/production.yaml
 ```
 
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/drzln/curupira.git
-cd curupira
+git clone https://github.com/pleme-io/nexus.git
+cd nexus/pkgs/services/typescript/curupira
 
 # Install dependencies
 npm install
 
-# Start development servers
-npm run dev
+# Build the project
+npm run build
 
-# Load Chrome extension
-# Chrome > Extensions > Load unpacked > Select: chrome-extension/dist
+# Start the MCP server
+npm run start
+
+# Or run in development mode with hot reload
+npm run dev
+```
+
+### Claude Code Integration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "curupira": {
+      "command": "node",
+      "args": ["/path/to/curupira/mcp-server/dist/main.js"],
+      "env": {
+        "CHROME_SERVICE_URL": "http://localhost:3000",
+        "LOGGING_LEVEL": "info"
+      }
+    }
+  }
+}
 ```
 
 ## Architecture
 
-Curupira consists of three main components:
+Curupira follows a clean architecture with dependency injection:
 
 ```mermaid
-graph LR
-    A[Web Page] -->|Injects| B[Chrome Extension]
-    B -->|WebSocket| C[MCP Server]
-    C -->|MCP Protocol| D[AI Assistant]
-    D -->|Commands| C
-    C -->|Actions| B
-    B -->|Manipulates| A
+graph TD
+    A[Chrome Browser] -->|CDP WebSocket| B[Browserless Service]
+    B -->|CDP Protocol| C[Chrome Service Layer]
+    C -->|Events| D[Tool/Resource Providers]
+    D -->|MCP Protocol| E[MCP Server]
+    E -->|stdio/HTTP/WS| F[Claude/AI Assistant]
+    
+    G[DI Container] -.->|Injects| C
+    G -.->|Injects| D
+    G -.->|Injects| E
 ```
 
-1. **Chrome Extension** - Injects debugging hooks into web applications
-2. **MCP Server** - Implements the Model Context Protocol specification
-3. **Shared Libraries** - Common types and utilities
+### Architectural Layers
+
+1. **Foundation Layer** - Branded types, interfaces, error definitions
+2. **Core Services** - Chrome service, buffer services, validators
+3. **MCP Layer** - Tool/resource providers, protocol handlers
+4. **Application Layer** - Server bootstrap, DI container, transport management
+
+### Key Components
+
+- **Chrome Service**: Manages CDP connections with event-driven architecture
+- **Tool Registry**: Dynamic tool registration with factory pattern
+- **Resource Registry**: Provides browser state as MCP resources
+- **DI Container**: Manages dependencies and service lifecycle
 
 ## Installation
 

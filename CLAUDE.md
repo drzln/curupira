@@ -9,17 +9,16 @@ Curupira is an MCP debugging server that bridges Chrome DevTools Protocol with M
 ### Architecture Overview
 
 ```
-Chrome DevTools ↔ CDP WebSocket ↔ Curupira Server ↔ MCP Protocol ↔ Claude
+Chrome Browser ↔ CDP WebSocket ↔ Curupira Server ↔ MCP Protocol ↔ Claude
 ```
 
-### Curupira-Specific Hierarchy
+### Curupira-Specific Hierarchy (Following Nexus Standards)
 
 ```
-Level 0: CDP/MCP Types     → SessionId, TargetId, CDP events, MCP schemas
-Level 1: Chrome Core       → CDP client, connection management, session handling  
-Level 2: MCP Bridge        → resource providers, tool handlers, protocol translation
-Level 3: React Detection   → component tree analysis, state inspection
-Level 4: MCP Server        → transport, routing, Claude integration
+Level 0: Foundation        → Branded types, interfaces, configuration, errors
+Level 1: Core Services     → Chrome service, repositories, buffer services  
+Level 2: API Layer         → MCP handlers, resource/tool providers, transport
+Level 3: Application       → Server bootstrap, dependency injection container
 ```
 
 ## 🔧 **Chrome DevTools Protocol Integration**
@@ -27,269 +26,403 @@ Level 4: MCP Server        → transport, routing, Claude integration
 ### CDP Connection Management
 
 ```typescript
-// CDP-specific branded types
-type SessionId = string & { readonly _brand: 'SessionId' }
-type TargetId = string & { readonly _brand: 'TargetId' }
+// Branded types are defined in shared/src/types/branded.ts
+import type { SessionId } from '@curupira/shared';
 
-// CDP Connection state machine
-const cdpConnectionMachine = createMachine({
-  id: 'cdpConnection',
-  initial: 'disconnected',
-  states: {
-    disconnected: {
-      on: { CONNECT: 'connecting' }
-    },
-    connecting: {
-      invoke: {
-        src: 'establishCDPConnection',
-        onDone: { target: 'connected', actions: 'storeSession' },
-        onError: { target: 'failed', actions: 'logError' }
-      }
-    },
-    connected: {
-      on: { 
-        DISCONNECT: 'disconnected',
-        SESSION_LOST: 'reconnecting'
-      }
-    },
-    reconnecting: {
-      invoke: {
-        src: 'reconnectCDP',
-        onDone: 'connected',
-        onError: 'failed'
-      }
-    },
-    failed: {
-      on: { RETRY: 'connecting' }
-    }
+// Chrome service follows dependency injection pattern
+export class ChromeService extends EventEmitter implements IChromeService {
+  constructor(
+    private readonly config: ChromeConfig,
+    private readonly logger: ILogger,
+    private readonly consoleBufferService?: IConsoleBufferService,
+    networkBufferService?: INetworkBufferService
+  ) {
+    super();
   }
-})
+
+  async connect(options: ConnectionOptions): Promise<IChromeClient> {
+    const client = new ChromeClient(this.logger, this.browserlessDetector, options);
+    await client.connect();
+    this.client = client;
+    
+    // Emit events for dynamic tool registration
+    this.emit('connected', { client, options });
+    
+    return client;
+  }
+}
 ```
 
 ### React Application Detection
 
 ```typescript
-// React-specific detection strategies
-interface ReactDetectionStrategy {
-  detect(session: SessionId): Promise<ReactInfo | null>
-}
-
-class ReactDevToolsStrategy implements ReactDetectionStrategy {
-  constructor(private cdpClient: CDPClient) {}
+// React detection implemented in integrations/react/detector.ts
+export class ReactDetector {
+  constructor(private logger: ILogger) {}
   
-  async detect(session: SessionId): Promise<ReactInfo | null> {
-    // Check for React DevTools global
-    const result = await this.cdpClient.evaluateExpression(
-      session,
-      'window.__REACT_DEVTOOLS_GLOBAL_HOOK__'
-    )
-    
-    if (result.type === 'object') {
-      return this.extractReactInfo(session)
+  async detect(client: IChromeClient, sessionId?: string): Promise<ReactInfo | null> {
+    try {
+      // Simplified detection using Runtime.evaluate
+      const result = await client.send('Runtime.evaluate', {
+        expression: 'typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined"',
+        returnByValue: true
+      }, sessionId);
+      
+      if (result.result?.value === true) {
+        return this.extractReactInfo(client, sessionId);
+      }
+      
+      return null;
+    } catch (error) {
+      this.logger.debug({ error }, 'React detection failed');
+      return null;
     }
-    
-    return null
   }
 }
 ```
 
 ## 🌉 **MCP Protocol Bridge**
 
-### Resource Providers (Curupira-Specific)
+### Resource Providers (Actual Implementation)
 
 ```typescript
-// MCP resource for React component tree
-class ReactComponentTreeProvider implements ResourceProvider {
-  constructor(
-    private cdpClient: CDPClient,
-    private reactDetector: ReactDetectionStrategy
-  ) {}
-  
-  async listResources(): Promise<Resource[]> {
-    const sessions = await this.cdpClient.getActiveSessions()
-    const resources: Resource[] = []
+// Resource providers are created as factory functions
+// See mcp/resources/browser.ts, dom.ts, network.ts, state.ts
+export function createBrowserResourceProvider(
+  chromeService: IChromeService,
+  logger: ILogger
+): IResourceProvider {
+  return {
+    namespace: 'browser',
     
-    for (const session of sessions) {
-      const reactInfo = await this.reactDetector.detect(session.id)
-      if (reactInfo) {
-        resources.push({
-          uri: `chrome://session/${session.id}/react/components`,
-          name: `React Components (${session.title})`,
-          mimeType: 'application/json'
-        })
+    async listResources(): Promise<Resource[]> {
+      if (!chromeService.isConnected()) {
+        return [];
       }
-    }
-    
-    return resources
-  }
-  
-  async readResource(uri: string): Promise<string> {
-    const { sessionId } = this.parseResourceUri(uri)
-    const componentTree = await this.extractComponentTree(sessionId)
-    return JSON.stringify(componentTree, null, 2)
-  }
-}
-```
-
-### Tool Handlers (Curupira-Specific)
-
-```typescript
-// MCP tool for inspecting React components
-class ReactInspectorTool implements ToolHandler {
-  name = 'inspect_react_component'
-  description = 'Inspect React component props, state, and hooks'
-  
-  inputSchema = {
-    type: 'object',
-    properties: {
-      sessionId: { type: 'string' },
-      componentId: { type: 'string' },
-      includeHooks: { type: 'boolean', default: true }
+      
+      try {
+        const client = chromeService.getCurrentClient()!;
+        const targets = await client.send('Target.getTargets', {});
+        
+        return targets.targetInfos.map(target => ({
+          uri: `chrome://browser/target/${target.targetId}`,
+          name: target.title || target.url || 'Untitled',
+          mimeType: 'application/json',
+          description: `Target: ${target.type}`
+        }));
+      } catch (error) {
+        logger.error({ error }, 'Failed to list browser resources');
+        return [];
+      }
     },
-    required: ['sessionId', 'componentId']
-  }
-  
-  async execute(args: any): Promise<ToolResult> {
-    const { sessionId, componentId, includeHooks } = args
     
-    const component = await this.cdpClient.evaluateExpression(
-      SessionId.from(sessionId),
-      `window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getComponentById("${componentId}")`
-    )
-    
-    const result = {
-      props: component.props,
-      state: component.state,
-      ...(includeHooks && { hooks: component.hooks })
+    async readResource(uri: string): Promise<unknown> {
+      // Implementation details...
     }
-    
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(result, null, 2)
-      }]
-    }
-  }
+  };
 }
 ```
 
-## 🧪 **Testing Strategy (Curupira-Specific)**
-
-### CDP Mock Infrastructure
+### Tool Providers (Factory Pattern Implementation)
 
 ```typescript
-// Mock CDP WebSocket for testing
-class MockCDPWebSocket {
-  private eventHandlers = new Map<string, Function[]>()
-  
-  send(message: string): void {
-    const parsed = JSON.parse(message)
-    // Simulate CDP responses based on method
-    this.simulateResponse(parsed)
-  }
-  
-  private simulateResponse(request: any): void {
-    switch (request.method) {
-      case 'Runtime.evaluate':
-        this.emit('message', {
-          id: request.id,
-          result: { type: 'string', value: 'mock result' }
+// Tool providers use factory pattern with dependency injection
+// See mcp/tools/providers/*.factory.ts files
+export class ReactToolProviderFactory extends BaseProviderFactory implements IToolProviderFactory {
+  create(deps: ProviderDependencies): IToolProvider {
+    const provider = new BaseToolProvider(deps, {
+      namespace: 'react',
+      requiresChrome: true,
+      chromeRequiredMessage: 'Chrome browser connection required for React tools'
+    });
+
+    // Register React-specific tools
+    provider.registerTool({
+      name: 'react_component_tree',
+      description: 'Get React component tree',
+      inputSchema: componentTreeSchema,
+      handler: withRetry(
+        withScriptExecution(deps, async (args, result, deps) => {
+          // Tool implementation using Chrome client
+          return { success: true, data: result };
         })
-        break
-      case 'Target.getTargets':
-        this.emit('message', {
-          id: request.id,
-          result: { targetInfos: [mockTargetInfo] }
+      )
+    });
+
+    provider.registerTool({
+      name: 'react_inspect_component',
+      description: 'Inspect specific React component',
+      inputSchema: inspectComponentSchema,
+      handler: withRetry(
+        withScriptExecution(deps, async (args, result, deps) => {
+          // Tool implementation
+          return { success: true, data: result };
         })
-        break
-    }
+      )
+    });
+    
+    return provider;
   }
 }
 ```
 
-### React App Testing Environment
+## 🧪 **Testing Strategy (Actual Implementation)**
+
+### Test Container with Dependency Injection
 
 ```typescript
-// Test React app setup for Curupira testing
-function createTestReactApp(): string {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <body>
-      <div id="root"></div>
-      <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-      <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-      <script>
-        const { useState } = React;
-        
-        function TestComponent() {
-          const [count, setCount] = useState(0);
-          return React.createElement('div', null, 
-            'Count: ', count,
-            React.createElement('button', { 
-              onClick: () => setCount(c => c + 1) 
-            }, 'Increment')
-          );
-        }
-        
-        ReactDOM.render(React.createElement(TestComponent), document.getElementById('root'));
-      </script>
-    </body>
-    </html>
-  `
+// Test container setup - see __tests__/test-container.ts
+export function createTestContainer(): Container {
+  const container = new DIContainer();
+  
+  // Register mock services
+  container.register(ChromeServiceToken, () => new MockChromeService());
+  container.register(LoggerToken, () => new MockLogger());
+  container.register(ValidatorToken, () => new MockValidator());
+  container.register(ResourceRegistryToken, () => new MockResourceRegistry());
+  container.register(ToolRegistryToken, () => new MockToolRegistry());
+  
+  // Register test configurations
+  container.register(ChromeConfigToken, () => ({
+    host: 'localhost',
+    port: 9222,
+    secure: false,
+    defaultTimeout: 5000
+  }));
+  
+  return container;
 }
 ```
 
-## 📊 **Configuration (Curupira-Specific)**
+### Mock Chrome Service Implementation
 
-### Chrome Connection Config
+```typescript
+// See __tests__/mocks/chrome-service.mock.ts
+export class MockChromeService extends EventEmitter implements IChromeService {
+  private connected = false;
+  private mockClient: MockChromeClient | null = null;
+
+  async connect(options: ConnectionOptions): Promise<IChromeClient> {
+    this.connected = true;
+    this.mockClient = new MockChromeClient();
+    this.emit('connected', { client: this.mockClient, options });
+    return this.mockClient;
+  }
+
+  getCurrentClient(): IChromeClient | null {
+    return this.mockClient;
+  }
+
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  async disconnect(): Promise<void> {
+    this.connected = false;
+    this.mockClient = null;
+    this.emit('disconnected');
+  }
+  
+  // Test helpers
+  simulateConnection(): void {
+    this.connected = true;
+    this.mockClient = new MockChromeClient();
+  }
+  
+  getMockClient(): MockChromeClient {
+    if (!this.mockClient) {
+      throw new Error('No mock client - call simulateConnection first');
+    }
+    return this.mockClient;
+  }
+}
+```
+
+### Integration Test Pattern
+
+```typescript
+// Example from __tests__/providers/example-provider-di.test.ts
+describe('CDPToolProvider with Dependency Injection', () => {
+  let container: Container;
+  let chromeService: MockChromeService;
+  let provider: IToolProvider;
+
+  beforeEach(() => {
+    container = createTestContainer();
+    chromeService = container.resolve(ChromeServiceToken) as MockChromeService;
+    
+    const factory = new CDPToolProviderFactory();
+    provider = factory.create({
+      chromeService: container.resolve(ChromeServiceToken),
+      logger: container.resolve(LoggerToken),
+      validator: container.resolve(ValidatorToken)
+    });
+  });
+
+  it('should evaluate JavaScript expression', async () => {
+    chromeService.simulateConnection();
+    
+    const mockClient = chromeService.getMockClient();
+    mockClient.simulateSendResult({
+      result: { type: 'string', value: 'Hello from Chrome!' }
+    });
+
+    const handler = provider.getHandler('cdp_evaluate');
+    const result = await handler!.execute({
+      expression: 'document.title'
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toBe('Hello from Chrome!');
+  });
+});
+```
+
+## 📊 **Configuration (Actual Implementation)**
+
+### Nexus-Compliant Configuration
 
 ```yaml
-# config/curupira.yaml
+# config/base.yaml - Following Nexus configuration hierarchy
+version: "1.0.0"
+
+server:
+  name: "curupira-mcp-server"
+  version: "1.1.3"
+  host: "localhost"
+  port: 8080
+  environment: "development"
+
+logging:
+  level: "info"
+  pretty: true
+  format: "json"
+
 chrome:
-  debugging_port: 9222
-  connection_timeout: 5000
-  reconnect_attempts: 3
-  session_keep_alive: true
+  enabled: true
+  serviceUrl: "http://localhost:3000"  # Browserless Chrome service
+  connectTimeout: 5000
+  pageTimeout: 30000
+  defaultViewport:
+    width: 1920
+    height: 1080
+  discovery:
+    enabled: true
+    hosts: ["localhost", "127.0.0.1"]
+    ports: [3000]
+    timeout: 5000
+    autoConnect: false
 
-mcp:
-  server_name: "curupira"
-  version: "1.0.0"
-  capabilities:
-    resources: true
-    tools: true
-    prompts: false
+transports:
+  websocket:
+    enabled: true
+    path: "/mcp"
+    pingInterval: 30000
+  http:
+    enabled: true
+    path: "/mcp"
+    timeout: 30000
+  sse:
+    enabled: true
+    path: "/mcp/sse"
+    keepAliveInterval: 30000
 
-react_detection:
-  strategies:
-    - "react_devtools"
-    - "react_global_check" 
-    - "fiber_root_detection"
-  timeout: 2000
+storage:
+  minio:
+    enabled: false
+    endPoint: "localhost"
+    port: 9000
+    bucket: "curupira-screenshots"
 ```
 
-### Environment Variable Overrides
+### Environment Variable Overrides (Nexus Pattern)
 
 ```bash
+# Server configuration
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
+SERVER_ENVIRONMENT=production
+
 # Chrome configuration
-CHROME_DEBUGGING_PORT=9222
-CHROME_CONNECTION_TIMEOUT=10000
+CHROME_ENABLED=true
+CHROME_SERVICE_URL=http://browserless:3000
+CHROME_DISCOVERY_ENABLED=true
+CHROME_DISCOVERY_HOSTS=localhost,chrome-service
+CHROME_DISCOVERY_PORTS=3000,9222
 
-# MCP server configuration  
-MCP_SERVER_NAME=curupira-debug
-MCP_LOG_LEVEL=debug
+# Transport configuration
+TRANSPORT_WEBSOCKET_ENABLED=true
+TRANSPORT_HTTP_ENABLED=true
+TRANSPORT_SSE_ENABLED=true
 
-# React detection
-REACT_DETECTION_TIMEOUT=5000
-REACT_DEVTOOLS_REQUIRED=false
+# Logging
+LOGGING_LEVEL=info
+LOGGING_PRETTY=false
+
+# Storage (MinIO for large responses)
+STORAGE_MINIO_ENABLED=true
+STORAGE_MINIO_ENDPOINT=minio.example.com
+STORAGE_MINIO_ACCESS_KEY=your_access_key
+STORAGE_MINIO_SECRET_KEY=your_secret_key
 ```
 
 ## 🚀 **Development Workflow**
 
-1. **Start Chrome with debugging**: `chrome --remote-debugging-port=9222`
-2. **Run Curupira server**: `npm run start:dev`
-3. **Connect Claude**: Use MCP client to connect to Curupira
-4. **Open React app**: Navigate to React application in Chrome
-5. **Debug via Claude**: Ask Claude to inspect React components
+### Local Development Setup
 
-This implementation applies Nexus principles specifically to the unique requirements of Chrome DevTools Protocol bridging and React application debugging.
+1. **Start Browserless Chrome service** (recommended):
+   ```bash
+   docker run -p 3000:3000 browserless/chrome
+   ```
+
+2. **Configure and run Curupira**:
+   ```bash
+   # Set config path (optional - defaults to ./config)
+   export CURUPIRA_CONFIG_PATH=./config/base.yaml
+   
+   # Run in development mode
+   npm run dev
+   
+   # Or run directly with stdio transport
+   npm run start
+   ```
+
+3. **Connect Claude Code**:
+   ```bash
+   # Add to claude_desktop_config.json
+   {
+     "mcpServers": {
+       "curupira": {
+         "command": "node",
+         "args": ["/path/to/curupira/mcp-server/dist/main.js"],
+         "env": {
+           "CHROME_SERVICE_URL": "http://localhost:3000"
+         }
+       }
+     }
+   }
+   ```
+
+### Testing Workflow
+
+```bash
+# Run unit tests with dependency injection
+npm run test
+
+# Run integration tests
+npm run test:integration
+
+# Run E2E tests with real Chrome
+npm run test:e2e
+```
+
+## 🏗️ **Key Architectural Differences from Documentation**
+
+1. **No State Machines**: The implementation doesn't use XState or state machines for connection management
+2. **Factory Pattern**: Tool and resource providers use factory pattern instead of direct class instantiation
+3. **Branded Types**: Defined in shared module, not inline
+4. **Static Tool Registration**: Due to Claude Code limitations, all tools are registered at startup
+5. **Configuration System**: Full Nexus-compliant YAML + env var hierarchy
+6. **Dependency Injection**: Comprehensive DI container for all services
+
+This implementation follows Nexus design principles while adapting to the practical constraints of MCP protocol and Chrome DevTools integration.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Curupira is a comprehensive MCP (Model Context Protocol) debugging tool designed specifically for React applications. It enables AI assistants to seamlessly debug web applications by providing deep integration with browser DevTools, state management libraries, and performance monitoring capabilities.
+Curupira is a comprehensive MCP (Model Context Protocol) debugging tool designed for web applications, with specialized support for React and modern JavaScript frameworks. It enables AI assistants to debug applications through Chrome DevTools Protocol integration, following Nexus design principles with dependency injection and clean architecture.
 
 The name "Curupira" comes from Brazilian folklore - a mythological protector who leaves backwards footprints to confuse hunters. Similarly, Curupira helps developers trace backwards through problems in their applications.
 
@@ -10,92 +10,161 @@ The name "Curupira" comes from Brazilian folklore - a mythological protector who
 
 ```mermaid
 graph TB
-    subgraph "Browser Environment"
-        WP[Web Page/React App]
-        CS[Content Script]
-        BG[Background Script]
-        DT[DevTools Panel]
-        PP[Extension Popup]
+    subgraph "Browser Layer"
+        WB[Web Browser]
+        CDP[Chrome DevTools Protocol]
+        BLS[Browserless Service]
     end
 
-    subgraph "Curupira Server"
+    subgraph "Curupira Core"
+        DIC[DI Container]
+        CS[Chrome Service]
+        TR[Tool Registry]
+        RR[Resource Registry]
+        TM[Transport Manager]
+    end
+
+    subgraph "MCP Layer"
         MS[MCP Server]
-        AR[Auth Router]
-        WS[WebSocket Manager]
-        CDP[CDP Client]
-        ST[State Manager]
+        TP[Tool Providers]
+        RP[Resource Providers]
     end
 
-    subgraph "AI Assistant"
-        AI[Claude/GPT/etc]
+    subgraph "AI Integration"
+        AI[Claude/AI Assistant]
         MC[MCP Client]
     end
 
     subgraph "Infrastructure"
-        K8S[Kubernetes]
-        PROM[Prometheus]
-        GRAF[Grafana]
-        REDIS[Redis]
+        CFG[YAML Config]
+        ENV[Environment Vars]
+        LOG[Logging Service]
+        MIN[MinIO Storage]
     end
 
-    WP <--> CS
-    CS <--> BG
-    BG <--> MS
-    DT <--> BG
-    PP <--> BG
+    WB --> CDP
+    CDP --> BLS
+    BLS <--> CS
 
-    MS <--> CDP
-    MS <--> AR
-    MS <--> WS
-    MS <--> ST
+    DIC --> CS
+    DIC --> TR
+    DIC --> RR
+    DIC --> TM
+
+    CS --> TP
+    CS --> RP
+    TP --> TR
+    RP --> RR
+
+    MS --> TM
+    MS --> TR
+    MS --> RR
 
     AI <--> MC
     MC <--> MS
 
-    MS --> K8S
-    K8S --> PROM
-    PROM --> GRAF
-    MS --> REDIS
+    CFG --> DIC
+    ENV --> DIC
+    LOG --> DIC
+    MIN --> DIC
 ```
 
 ## Component Architecture
 
-### 1. Browser Extension Architecture
+### 1. Dependency Injection Container
 
-```
-Chrome Extension (Manifest V3)
-├── manifest.json
-├── background/
-│   └── service-worker.ts          # Background Script
-├── content/
-│   ├── content-script.ts          # Content Script
-│   └── page-script.ts             # Injected Script
-├── devtools/
-│   ├── panel.html                 # DevTools Panel UI
-│   ├── panel.ts                   # DevTools Logic
-│   └── devtools.ts                # DevTools Entry
-├── popup/
-│   ├── popup.html                 # Extension Popup UI
-│   └── popup.ts                   # Popup Logic
-└── web-accessible-resources/
-    └── bridge.js                  # Page Communication Bridge
-```
+The DI container is the heart of Curupira's architecture, managing all service dependencies:
 
-#### Message Flow in Browser Extension
-
-```
-Page Context (React App)
-    ↓ (window.postMessage)
-Content Script
-    ↓ (chrome.runtime.sendMessage)
-Background Script (Service Worker)
-    ↓ (WebSocket)
-MCP Server
-    ↓ (MCP Protocol)
-AI Assistant
+```typescript
+// Core DI Structure
+DIContainer
+├── Core Services
+│   ├── ChromeService (IChromeService)
+│   ├── Logger (ILogger)
+│   ├── Validator (IValidator)
+│   └── ErrorHandler
+├── MCP Components
+│   ├── ToolRegistry (IToolRegistry)
+│   ├── ResourceRegistry (IResourceRegistry)
+│   └── Transport Manager
+├── Infrastructure
+│   ├── Configuration (YAML + Env)
+│   ├── MinIO Storage (Optional)
+│   └── Buffer Services
+└── Providers
+    ├── Tool Providers (Factory Pattern)
+    └── Resource Providers (Factory Functions)
 ```
 
-### 2. Server-Side Architecture
+### 2. Chrome Service Architecture
+
+The Chrome service manages CDP connections with event-driven patterns:
+
+```typescript
+ChromeService
+├── Connection Management
+│   ├── connect() → IChromeClient
+│   ├── disconnect()
+│   └── isConnected()
+├── Event System
+│   ├── 'connected' → Triggers tool registration
+│   ├── 'disconnected' → Cleanup
+│   └── 'sessionCreated' → Session monitoring
+└── Dependencies
+    ├── ChromeConfig
+    ├── ILogger
+    ├── ConsoleBufferService
+    └── NetworkBufferService
+```
+
+### 3. Tool Provider Architecture
+
+Tools are organized by functionality with factory pattern:
+
+```
+Tool Providers (25+ providers)
+├── Core CDP Tools
+│   ├── cdp_evaluate
+│   ├── cdp_navigate
+│   └── cdp_get_cookies
+├── React Tools
+│   ├── react_component_tree
+│   ├── react_inspect_component
+│   └── react_analyze_rerenders
+├── Framework Tools
+│   ├── Apollo GraphQL
+│   ├── Zustand
+│   ├── TanStack Query
+│   └── XState
+├── Development Tools
+│   ├── Vite
+│   ├── React Router
+│   └── React Hook Form
+└── UI/Animation Tools
+    ├── Framer Motion
+    └── Panda CSS
+```
+
+### 4. Resource Provider Architecture
+
+Resources expose browser state as MCP resources:
+
+```
+Resource Providers
+├── Browser Resources
+│   └── chrome://browser/target/{id}
+├── DOM Resources
+│   └── chrome://dom/tree
+├── Network Resources
+│   ├── chrome://network/requests
+│   └── chrome://network/websockets
+└── State Resources
+    ├── chrome://state/react
+    ├── chrome://state/apollo
+    └── chrome://state/zustand
+```
+
+### 5. Configuration System (Nexus-Compliant)
 
 ```
 Curupira MCP Server
