@@ -788,6 +788,12 @@ export class ChromeClient implements IChromeClient {
     return Array.from(this.targets.values());
   }
 
+  async listTargets(): Promise<any[]> {
+    // Update targets to ensure fresh data
+    await this.updateTargets();
+    return Array.from(this.targets.values());
+  }
+
   getTarget(targetId: string): CDPTarget | undefined {
     return this.targets.get(targetId);
   }

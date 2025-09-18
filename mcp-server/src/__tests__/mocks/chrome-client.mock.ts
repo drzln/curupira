@@ -48,6 +48,10 @@ export class MockChromeClient extends EventEmitter implements IChromeClient {
     return this.targets;
   }
 
+  async listTargets(): Promise<any[]> {
+    return this.targets;
+  }
+
   async send<T = any>(method: string, params?: any, sessionId?: string): Promise<T> {
     this.sendMock(method, params, sessionId);
     

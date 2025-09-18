@@ -122,6 +122,7 @@ export interface IChromeClient {
   createSession(targetId?: string): Promise<any>
   getSessions(): any[]
   getTargets(): any
+  listTargets(): Promise<ChromeTarget[]>
   
   // Direct CDP communication (for legacy compatibility)
   send<T = any>(method: string, params?: any, sessionId?: string): Promise<T>

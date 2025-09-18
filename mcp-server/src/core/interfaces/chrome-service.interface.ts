@@ -28,4 +28,14 @@ export interface IChromeService {
    * Disconnect from Chrome
    */
   disconnect(): Promise<void>;
+
+  /**
+   * Enable console monitoring for a session
+   */
+  enableConsoleMonitoring(sessionId: string): Promise<void>;
+
+  /**
+   * Get the default session ID for Chrome operations
+   */
+  getDefaultSessionId(): Promise<string | null>;
 }

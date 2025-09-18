@@ -160,6 +160,7 @@ export class ChromeService extends EventEmitter implements IChromeService {
       for (const handler of handlers) {
         this.client.offSessionEvent(sessionId, 'Runtime.consoleAPICalled', handler as any);
         this.client.offSessionEvent(sessionId, 'Console.messageAdded', handler as any);
+        this.client.offSessionEvent(sessionId, 'Runtime.exceptionThrown', handler as any);
       }
     }
     this.activeSessionHandlers.clear();
@@ -222,6 +223,13 @@ export class ChromeService extends EventEmitter implements IChromeService {
     }
   }
 
+  /**
+   * Enable console monitoring for a session (public interface)
+   */
+  async enableConsoleMonitoring(sessionId: string): Promise<void> {
+    return this.setupConsoleMonitoring(sessionId);
+  }
+
   private async setupConsoleMonitoring(sessionId: string): Promise<void> {
     if (!this.client || !this.consoleBufferService) return;
 
@@ -276,13 +284,38 @@ export class ChromeService extends EventEmitter implements IChromeService {
         });
       };
 
+      // Handler for Runtime.exceptionThrown events (CRITICAL for JavaScript errors)
+      const exceptionThrownHandler = (params: any) => {
+        this.logger.debug({ sessionId, exception: params.exceptionDetails }, 'Runtime exception thrown');
+        
+        const exception = params.exceptionDetails;
+        const errorText = exception?.exception?.description || exception?.text || 'Unknown error';
+        const url = exception?.url || '';
+        const lineNumber = exception?.lineNumber;
+        const columnNumber = exception?.columnNumber;
+        
+        // Add exception as error-level message
+        this.consoleBufferService?.addMessage({
+          level: 'error',
+          text: errorText,
+          timestamp: exception?.timestamp || Date.now(),
+          source: 'exception',
+          sessionId: sessionId as any,
+          url,
+          lineNumber,
+          columnNumber,
+          stackTrace: exception?.stackTrace,
+        });
+      };
+
       // Register handlers
       this.client.onSessionEvent(sessionId, 'Runtime.consoleAPICalled', consoleAPIHandler);
       this.client.onSessionEvent(sessionId, 'Console.messageAdded', messageAddedHandler);
+      this.client.onSessionEvent(sessionId, 'Runtime.exceptionThrown', exceptionThrownHandler);
 
       // Track handlers for cleanup
       const handlers = this.activeSessionHandlers.get(sessionId) || [];
-      handlers.push(consoleAPIHandler, messageAddedHandler);
+      handlers.push(consoleAPIHandler, messageAddedHandler, exceptionThrownHandler);
       this.activeSessionHandlers.set(sessionId, handlers);
 
       this.logger.info({ sessionId }, 'Console monitoring enabled for session');
@@ -366,6 +399,31 @@ export class ChromeService extends EventEmitter implements IChromeService {
       this.logger.info({ sessionId }, 'Network monitoring enabled for session');
     } catch (error) {
       this.logger.error({ sessionId, error }, 'Failed to set up network monitoring');
+    }
+  }
+
+  /**
+   * Get the default session ID for Chrome operations
+   */
+  async getDefaultSessionId(): Promise<string | null> {
+    if (!this.client) {
+      return null;
+    }
+    
+    try {
+      // Get the first available session or create a new one
+      const targets = await this.client.listTargets();
+      const pageTarget = targets.find((t: any) => t.type === 'page');
+      
+      if (pageTarget) {
+        return pageTarget.id;
+      }
+      
+      // If no page target found, return null
+      return null;
+    } catch (error) {
+      this.logger.error({ error }, 'Failed to get default session ID');
+      return null;
     }
   }
 }

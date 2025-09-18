@@ -164,6 +164,18 @@ class ChromeConnectionToolProvider extends ChromeIndependentToolProvider {
             });
 
             context.logger.info('Chrome connection successful');
+            
+            // Automatically enable console monitoring after connection
+            try {
+              const sessionId = await this.chromeService.getDefaultSessionId();
+              if (sessionId) {
+                await this.chromeService.enableConsoleMonitoring(sessionId);
+                context.logger.info({ sessionId }, 'Console monitoring automatically enabled');
+              }
+            } catch (monitoringError) {
+              context.logger.warn({ error: monitoringError }, 'Failed to auto-enable console monitoring');
+              // Don't fail the connection if monitoring setup fails
+            }
 
             return {
               success: true,

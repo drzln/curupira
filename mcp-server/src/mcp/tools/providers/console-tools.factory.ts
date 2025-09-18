@@ -37,12 +37,13 @@ const executeSchema: Schema<{ expression: string; sessionId?: string }> = {
   }
 };
 
-const getMessagesSchema: Schema<{ limit?: number; sessionId?: string }> = {
+const getMessagesSchema: Schema<{ limit?: number; sessionId?: string; level?: string }> = {
   parse: (value) => {
     const obj = (value || {}) as any;
     return {
       limit: typeof obj.limit === 'number' ? obj.limit : 100,
-      sessionId: obj.sessionId
+      sessionId: obj.sessionId,
+      level: obj.level
     };
   },
   safeParse: (value) => {
@@ -153,6 +154,7 @@ class ConsoleToolProvider extends BaseToolProvider {
           const sessionId = args.sessionId || context.sessionId || 'default';
           let messages = this.consoleBufferService.getMessages({
             sessionId: sessionId as any,
+            level: args.level as any,
             limit: args.limit || 100
           });
           
@@ -160,6 +162,7 @@ class ConsoleToolProvider extends BaseToolProvider {
           if (messages.length === 0 && sessionId !== 'default') {
             messages = this.consoleBufferService.getMessages({
               sessionId: 'default' as any,
+              level: args.level as any,
               limit: args.limit || 100
             });
           }
@@ -167,6 +170,7 @@ class ConsoleToolProvider extends BaseToolProvider {
           // If still no messages, get all messages regardless of session
           if (messages.length === 0) {
             messages = this.consoleBufferService.getMessages({
+              level: args.level as any,
               limit: args.limit || 100
             });
           }

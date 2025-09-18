@@ -44,6 +44,14 @@ export class MockChromeService implements IChromeService {
     this.logger.info('Mock Chrome disconnected');
   }
 
+  async enableConsoleMonitoring(sessionId: string): Promise<void> {
+    this.logger.info({ sessionId }, 'Mock console monitoring enabled');
+  }
+
+  async getDefaultSessionId(): Promise<string | null> {
+    return this.connected ? 'mock-session-id' : null;
+  }
+
   // Test helper methods
   simulateConnection(): void {
     this.connected = true;
