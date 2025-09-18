@@ -1,6 +1,6 @@
 {
   "name": "@curupira/integration",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "Curupira integration layer - WebSocket management, CDP, messaging, and storage",
   "type": "module",
   "main": "dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "curupira",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "Curupira MCP Debugging CLI - AI-assisted React debugging tool",
   "type": "module",
   "main": "./dist/index.js",
