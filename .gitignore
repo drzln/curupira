@@ -80,3 +80,6 @@ debug.log
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# codesearch LMDB index — a build artifact, ~200 MB per regeneration
+.codesearch.db/
